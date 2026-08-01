@@ -2895,13 +2895,20 @@ export default function MaterialTab({
   const { stockFilter, setStockFilter, showStockMenu, setShowStockMenu, menuRef, getStockLabel } =
     useStockFilter();
 
-  // دابل‌کلیک Refresh → ریست فیلتر جستجو و موجودی
+  // Refresh (تک‌ضربه) → ریست کامل فیلتر جستجو/موجودی/گروه‌بندی/هاید به پیش‌فرض
   useEffect(() => {
     if (!refreshResetTick) return;
     setSearch("");
     setStockFilter("all");
     setShowStockMenu(false);
     if (setSortOrder) setSortOrder("name");
+    setMatGroupFilter([]);
+    setShowTypeMenu(false);
+    setCollapsedGroups({});
+    setGroupedView(true);
+    try { localStorage.setItem("material_grouped_view", "true"); } catch (_) {}
+    setShowZeroBalance(false);
+    try { localStorage.setItem("material_show_zero_balance", "false"); } catch (_) {}
   }, [refreshResetTick]);
 
   const toggleZeroBalance = () => {

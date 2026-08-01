@@ -1647,12 +1647,13 @@ export default function GalleryTab({
   const [gallerySearch, setGallerySearch] = useState("");
   const [statusFilter, setStatusFilter] = useState([]); // چند-انتخابی: "debt" | "hasStock"
 
-  // دابل‌کلیک Refresh → ریست فیلترهای گالری
+  // Refresh (تک‌ضربه) → ریست فیلترهای گالری + بستن ردیف‌های بازشده
   useEffect(() => {
     if (!refreshResetTick) return;
     setGallerySearch("");
     setStatusFilter([]);
     if (setSortOrder) setSortOrder("name");
+    setExpandedCardId(null);
   }, [refreshResetTick]);
   useEffect(() => {
     if (!editingCustomer) return;

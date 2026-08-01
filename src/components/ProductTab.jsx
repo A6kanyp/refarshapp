@@ -3268,7 +3268,7 @@ export default function ProductTab({
   const [showTypeFilterMenu, setShowTypeFilterMenu] = useState(false);
   const [expandedProductId, setExpandedProductId] = useState(null);
 
-  // دابل‌کلیک روی Refresh → ریست فیلترها (نه با کلیک ساده)
+  // Refresh (تک‌ضربه) → ریست کامل فیلترها/چیدمان تب محصولات به پیش‌فرض
   useEffect(() => {
     if (!refreshResetTick) return;
     setSearch("");
@@ -3276,6 +3276,7 @@ export default function ProductTab({
     setTypeFilter([]);
     setShowTypeFilterMenu(false);
     setShowStatusMenu(false);
+    setCollapsedGroups({});
   }, [refreshResetTick]);
 
   useEffect(() => {
@@ -3538,10 +3539,11 @@ export default function ProductTab({
     };
   }, [groupedView, stickyTop]);
 
-  // ریست کامل‌تر روی دابل‌کلیک Refresh (مرتب‌سازی + نمای گروهی)
+  // Refresh (تک‌ضربه) → ریست کامل‌تر مرتب‌سازی + حالت گروه‌بندی + نمای گروهی
   useEffect(() => {
     if (!refreshResetTick) return;
     if (setSortOrder) setSortOrder("code");
+    if (setSortMode) setSortMode("code");
     setGroupedView(true);
     try { localStorage.setItem("product_grouped_view", "true"); } catch (_) {}
   }, [refreshResetTick]);
