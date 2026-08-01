@@ -249,6 +249,31 @@ export function serviceROI(profit, finalPrice) {
   const fp = toNum(finalPrice);
   return fp <= 0 ? 0 : Math.round((toNum(profit) / fp) * 100 * 10) / 10;
 }
+// فرمت دسته‌بندی فرش: «فرش (نام)، (طرح (طرح)) (قدمت)ساله» — مثال: «فرش سعادت‌آباد، (طرح شورباخلی) ۶۰ساله»
+// فقط وقتی الگوی «(طرح ...)» و سن «...ساله» به‌وضوح توی اسم پیدا بشه این فرمت اعمال می‌شه؛
+// برای اسم‌های نامتعارف (بدون این دو الگو) فقط پیشوند «فرش» اضافه می‌شه (رفتار قبلی) تا چیزی خراب/گنگ نشه
+function formatFabricGroupLabel(rawName) {
+  const trimmed = (rawName || "").trim();
+  if (!trimmed) return trimmed;
+  const base = trimmed.startsWith("فرش") ? trimmed.slice(3).trim() : trimmed;
+  const ageMatch = base.match(/(\d+)\s*ساله/);
+  const patternMatch = base.match(/\(\s*طرح\s+([^)]+?)\s*\)/);
+  if (ageMatch && patternMatch) {
+    const name = base
+      .replace(patternMatch[0], "")
+      .replace(ageMatch[0], "")
+      .replace(/[،,]/g, " ")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+    if (name) {
+      return `فرش ${name}، (طرح ${patternMatch[1].trim()}) ${ageMatch[1]}ساله`;
+    }
+  }
+  // کاربر دیگه خودش کلمه‌ی «فرش» رو اول اسم متریال تایپ نمی‌کنه، پس اگه از قبل
+  // نداشت خودکار اضافه می‌شه (فقط برای دسته‌بندی محصولات، اسم خودِ متریال دست‌نخورده می‌مونه)
+  return trimmed.startsWith("فرش") ? trimmed : `فرش ${trimmed}`;
+}
+
 /** نام دسته محصول از روی id فرش زنده (نه نام قدیمی ذخیره‌شده) */
 export function resolveProductGroupName(product, materials = []) {
   if (!product) return "";
@@ -260,12 +285,7 @@ export function resolveProductGroupName(product, materials = []) {
     })?.materialId;
   if (fabricId) {
     const m = (materials || []).find((x) => x.id === fabricId);
-    if (m?.name) {
-      const trimmed = m.name.trim();
-      // کاربر دیگه خودش کلمه‌ی «فرش» رو اول اسم متریال تایپ نمی‌کنه، پس اگه از قبل
-      // نداشت خودکار اضافه می‌شه (فقط برای دسته‌بندی محصولات، اسم خودِ متریال دست‌نخورده می‌مونه)
-      return trimmed.startsWith("فرش") ? trimmed : `فرش ${trimmed}`;
-    }
+    if (m?.name) return formatFabricGroupLabel(m.name);
   }
   return product.group || "";
 }
