@@ -6,6 +6,7 @@ import html2canvas from "html2canvas";
 import InvoiceTemplate from "./InvoiceTemplate";
 import { fmt, toNum } from "../mathCore";
 import { saveFile, shareFile, shareText, REFARSH_SAVE_DIRS } from "../utils/nativeSave";
+import { useToast } from "../contexts/ToastContext";
 
 // بخش «بک‌گراند فاکتور بعضی‌وقتا نمیاد» (این تصادفی نبود، یه race condition واقعی بود):
 // paperElement.cloneNode(true) یه کپیِ کاملاً جدید از <img>های سربرگ/واترمارک می‌سازه،
@@ -34,6 +35,7 @@ export default function InvoicePrint({
   autoPrint
 }) {
   useRegisterOpenModal(true);
+  const { showToast } = useToast();
   useEffect(() => {
     if (!onClose) return;
     return pushBackHandler(() => onClose());
@@ -105,6 +107,7 @@ export default function InvoicePrint({
         const safeName = (invoiceData.customer?.name || "Invoice").replace(/[^a-zA-Z0-9؀-\u06FF\s-]/g, '').trim().replace(/\s+/g, '_');
         const pdfBlob = pdf.output("blob");
         await saveFile(pdfBlob, `Factor_${safeName}_${safeId}.pdf`, { subdir: REFARSH_SAVE_DIRS.BILLS_PDF, share: false });
+        showToast("PDF فاکتور ذخیره شد", "success");
         
         document.body.removeChild(cloneContainer);
       }).catch(err => {
@@ -210,6 +213,7 @@ export default function InvoicePrint({
         const safeId = invoiceData.id || "temp";
         const safeName = (invoiceData.customer?.name || "Invoice").replace(/[^a-zA-Z0-9؀-\u06FF\s-]/g, '').trim().replace(/\s+/g, '_');
         await saveFile(canvas.toDataURL("image/png", 1.0), `Factor_${safeName}_${safeId}.png`, { subdir: REFARSH_SAVE_DIRS.BILLS_IMAGE, share: false });
+        showToast("عکس فاکتور ذخیره شد", "success");
         
         // Cleanup cloned elements
         document.body.removeChild(cloneContainer);
@@ -488,7 +492,7 @@ export default function InvoicePrint({
           {/* Elegant vertical divider */}
           <div style={{ width: "1px", height: "20px", background: "#333", margin: "0 2px" }}></div>
 
-          {/* Save as PDF (Red Button, previously print) */}
+          {/* Save as PDF → آبی (ذخیره‌ی خودکار در Documents/refarsh/factor/pdf) */}
           <button 
             onClick={handleSaveAsPDF} 
             style={{ 
@@ -497,9 +501,9 @@ export default function InvoicePrint({
               justifyContent: 'center',
               width: '32px',
               height: '32px',
-              background: '#8B1A1A', 
-              color: '#fff', 
-              border: 'none', 
+              background: '#1a3a5c', 
+              color: '#9ec9f5', 
+              border: '1px solid #2a5080', 
               borderRadius: 6, 
               cursor: 'pointer', 
               transition: "all 0.2s" 
@@ -509,7 +513,7 @@ export default function InvoicePrint({
             <FileDown size={15} />
           </button>
 
-          {/* Save as Image */}
+          {/* Save as Image → آبی (ذخیره‌ی خودکار در Documents/refarsh/factor/image) */}
           <button 
             onClick={handleSaveAsImage} 
             style={{ 
@@ -518,9 +522,9 @@ export default function InvoicePrint({
               justifyContent: 'center',
               width: '32px',
               height: '32px',
-              background: '#232323', 
-              color: '#ddd', 
-              border: '1px solid #333', 
+              background: '#1a3a5c', 
+              color: '#9ec9f5', 
+              border: '1px solid #2a5080', 
               borderRadius: 6, 
               cursor: 'pointer', 
             }}
@@ -549,26 +553,26 @@ export default function InvoicePrint({
             <Copy size={15} />
           </button>
 
-          {/* Share PDF */}
+          {/* Share PDF → قرمز */}
           <button
             onClick={handleSharePDF}
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              width: '32px', height: '32px', background: '#1a3a5c', color: '#9ec9f5',
-              border: '1px solid #2a5080', borderRadius: 6, cursor: 'pointer',
+              width: '32px', height: '32px', background: '#8B1A1A', color: '#fff',
+              border: 'none', borderRadius: 6, cursor: 'pointer',
             }}
             title="اشتراک PDF"
           >
             <FileDown size={15} />
           </button>
 
-          {/* Share Image */}
+          {/* Share Image → مشکی */}
           <button
             onClick={handleShareImage}
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              width: '32px', height: '32px', background: '#1a3a5c', color: '#9ec9f5',
-              border: '1px solid #2a5080', borderRadius: 6, cursor: 'pointer',
+              width: '32px', height: '32px', background: '#232323', color: '#ddd',
+              border: '1px solid #333', borderRadius: 6, cursor: 'pointer',
             }}
             title="اشتراک تصویر"
           >

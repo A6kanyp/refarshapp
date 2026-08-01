@@ -572,6 +572,7 @@ export default function WoodCuttingTab({ stickyTop, materials, products, persist
       const baseName = fileName.replace(/_1d|_2d/, match => match.toUpperCase());
       const subdir = baseName.includes("2d") || baseName.includes("2D") ? REFARSH_SAVE_DIRS.NEST_2D : REFARSH_SAVE_DIRS.NEST_1D;
       await saveFile(canvas.toDataURL("image/jpeg", 0.9), `${baseName}${getJalaliTimestamp()}.jpg`, { subdir });
+      showToast(`عکس ${baseName.includes("2D") ? "۲D" : "۱D"} ذخیره شد`, "success");
     }).catch((e) => {
       if (parent) parent.style.overflowX = prevParentOverflow;
       el.style.width = prevElWidth;
