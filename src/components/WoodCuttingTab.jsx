@@ -1210,18 +1210,25 @@ export default function WoodCuttingTab({ stickyTop, materials, products, persist
                   ضخامت {thicknessKey} — {result.usedSticks} چوب
                 </div>
                 {result.unfulfilledCount > 0 && (
-                  <div style={{ marginBottom: 10, padding: "8px 12px", background: "#3a1d1d", border: "1px solid #8B1A1A", borderRadius: 8 }}>
-                    <span style={{ fontSize: 10, color: "#e08a8a", fontWeight: 500, display: "flex", alignItems: "center", gap: 4 }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
-                      خطای کمبود متریال (بدون چوب مناسب) — {
-                        Array.from(
-                          result.bins.filter((b) => b.unfulfilled).reduce((acc, b) => {
-                            const len = b.cuts[0]?.length;
-                            acc.set(len, (acc.get(len) || 0) + 1);
-                            return acc;
-                          }, new Map())
-                        ).map(([len, qty]) => `${len} سانت (${qty} عدد)`).join(" ، ")
-                      }
+                  // فونت/آیکون هم‌اندازه‌ی خطای کمبود ۲D شد (قبلاً 10px/۱۴px بود،
+                  // بزرگ‌تر از ۲D بود و چون متن روی یک خط بود، عرض کادر ۱D رو با
+                  // خودش می‌کشید بزرگ‌تر — الان maxWidth = عرض واقعی کادر (همون
+                  // plankContainerWidth) گرفته و متن wrap می‌شه، پس دیگه چیزی رو
+                  // کش نمیاد (Ash 🟡)
+                  <div style={{ marginBottom: 10, padding: "6px 10px", background: "#3a1d1d", border: "1px solid #8B1A1A", borderRadius: 6, maxWidth: plankContainerWidth || "100%", boxSizing: "border-box" }}>
+                    <span style={{ fontSize: 9.5, color: "#e08a8a", fontWeight: 500, display: "flex", alignItems: "flex-start", gap: 6 }}>
+                      <svg width="12" height="12" style={{ flexShrink: 0, marginTop: 1 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                      <span style={{ flex: 1, minWidth: 0, whiteSpace: "normal", wordBreak: "break-word" }}>
+                        خطای کمبود متریال (بدون چوب مناسب) — {
+                          Array.from(
+                            result.bins.filter((b) => b.unfulfilled).reduce((acc, b) => {
+                              const len = b.cuts[0]?.length;
+                              acc.set(len, (acc.get(len) || 0) + 1);
+                              return acc;
+                            }, new Map())
+                          ).map(([len, qty]) => `${len} سانت (${qty} عدد)`).join(" ، ")
+                        }
+                      </span>
                     </span>
                   </div>
                 )}
