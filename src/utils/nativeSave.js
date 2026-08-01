@@ -47,7 +47,6 @@ function downloadInBrowser(blob, filename) {
 
 /** زیرپوشه‌های ثابت داخل Documents/refarsh/ */
 export const REFARSH_SAVE_DIRS = {
-  BILLS: "bills",
   BILLS_PDF: "factor/pdf",
   BILLS_IMAGE: "factor/image",
   NEST_1D: "1dnesting",
