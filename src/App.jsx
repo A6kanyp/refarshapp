@@ -1988,6 +1988,38 @@ export default function App() {
       orderedKeys.forEach((k) => { orderedGroups[k] = groups[k]; });
       return orderedGroups;
     }
+    if (sortMode === "type") {
+      // گروه‌بندی بر اساس نوع محصول (productTypeId) — دقیقاً همون الگوی
+      // گروه‌بندی بر اساس فرش (sortMode === "fabric") بالا: هر گروه بر
+      // اساس کمترین کد محصولِ داخلش مرتب می‌شه، «بدون نوع» و «در دست
+      // ساخت» همیشه در انتها می‌مونن (Ash 🟡 — آیتم ۱۲)
+      const groups = {};
+      productTotals.forEach((p) => {
+        if (p.isDraft) {
+          const g = "در دست ساخت";
+          if (!groups[g]) groups[g] = [];
+          groups[g].push(p);
+          return;
+        }
+        const typeName = p.productTypeId ? data.productTypes?.find((t) => t.id === p.productTypeId)?.name : null;
+        const g = typeName || "بدون نوع";
+        if (!groups[g]) groups[g] = [];
+        groups[g].push(p);
+      });
+      Object.keys(groups).forEach((g) => groups[g].sort(orderFn));
+      const rank = (g) => (g === "در دست ساخت" ? 2 : g === "بدون نوع" ? 1 : 0);
+      const orderedKeys = Object.keys(groups).sort((ga, gb) => {
+        const ra = rank(ga), rb = rank(gb);
+        if (ra !== rb) return ra - rb;
+        if (ra !== 0) return 0;
+        const minA = Math.min(...groups[ga].map((p) => toNum(p.code)));
+        const minB = Math.min(...groups[gb].map((p) => toNum(p.code)));
+        return minA - minB;
+      });
+      const orderedGroups = {};
+      orderedKeys.forEach((k) => { orderedGroups[k] = groups[k]; });
+      return orderedGroups;
+    }
     if (sortMode === "stock") {
       const groups = { "موجود": [], "فروخته شده": [] };
       productTotals.forEach((p) => {
@@ -2030,7 +2062,7 @@ export default function App() {
     const orderedGroups = {};
     orderedKeys.forEach((k) => { orderedGroups[k] = groups[k]; });
     return orderedGroups;
-  }, [productTotals, sortMode, sortOrder, data.customers, data.materials]);
+  }, [productTotals, sortMode, sortOrder, data.customers, data.materials, data.productTypes]);
 
   const accounting = useMemo(() => {
     const sold = productTotals.filter((p) => p.status === "sold");

@@ -85,7 +85,7 @@ function cycleSort(current) {
 }
 
 // ── دکمه سورت ──
-function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onToggleGrouped }) {
+function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onToggleGrouped, groupByTypeActive, onGroupByType }) {
   const [showPopup, setShowPopup] = useState(false);
   const wrapRef = useRef(null);
   const baseOrder = String(sortOrder || "").replace(/_desc$/, "");
@@ -172,6 +172,27 @@ function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onTogg
             >
               یکجا
             </button>
+            {onGroupByType && (
+              // گزینه‌ی جدید: گروه‌بندی بر اساس نوع محصول (نه دسته‌بندی/فرش) — آیتم ۱۲ (Ash 🟡)
+              <button
+                style={{
+                  display: "block",
+                  width: "100%",
+                  padding: "8px 10px",
+                  background: groupByTypeActive ? "#2a1414" : "transparent",
+                  border: "none",
+                  borderRadius: 4,
+                  color: groupByTypeActive ? "#d88888" : "#ddd",
+                  fontSize: 11,
+                  fontFamily: "inherit",
+                  cursor: "pointer",
+                  textAlign: "right",
+                }}
+                onClick={onGroupByType}
+              >
+                گروه‌بندی بر اساس نوع محصول
+              </button>
+            )}
             <div style={{ borderTop: "1px solid #2a2a2a", margin: "4px 0" }} />
           </>
         )}
@@ -3784,7 +3805,19 @@ export default function ProductTab({
             </div>
           )}
 
-          <SortButton sortOrder={sortOrder} setSortOrder={setSortOrder} modes={SORT_MODES} style={{}} groupedView={groupedView} onToggleGrouped={toggleGroupedView} />
+          <SortButton
+            sortOrder={sortOrder}
+            setSortOrder={setSortOrder}
+            modes={SORT_MODES}
+            style={{}}
+            groupedView={groupedView}
+            onToggleGrouped={toggleGroupedView}
+            groupByTypeActive={groupedView && sortMode === "type"}
+            onGroupByType={() => {
+              if (setSortMode) setSortMode("type");
+              if (!groupedView) toggleGroupedView();
+            }}
+          />
           <button
             style={{
               ...S.chip,
@@ -3864,6 +3897,8 @@ export default function ProductTab({
               if (b === "بدون فرش") return -1;
               if (a === "بدون دسته") return 1;
               if (b === "بدون دسته") return -1;
+              if (a === "بدون نوع") return 1;
+              if (b === "بدون نوع") return -1;
               if (sortMode === "fabric" || sortMode === "code" || sortMode === "type") return 0; // ترتیب از قبل بر اساس کمترین کد محصول در groupedProducts محاسبه شده
               return a.localeCompare(b, "fa");
             })
