@@ -716,6 +716,56 @@ export function optimizeCutting(sticks, requiredPiecesObj, kerf = 0.3) {
   // صف رو با یه تکه‌ی مناسب‌تر (اگه بود) عوض کنیم و تکه‌ی فعلی رو برای دور بعد نگه داریم.
   const queue = [...pieces];
 
+  // شبیه‌سازی هزینه‌ی یه دنباله‌ی کامل از تکه‌ها روی یه چوب خالی (بدون commit)، برای
+  // مقایسه‌ی چیدمان‌های مختلف همون تکه‌ها روی یه چوب — استفاده در پاس بازچینی زیر.
+  const evaluateSequence = (piecesSeq, stockLength) => {
+    let remaining = stockLength;
+    const cuts = [];
+    for (const p of piecesSeq) {
+      const placement = getPieceCostInBin({ cuts }, p);
+      remaining = r2(remaining - placement.cost);
+      if (remaining < 0) return null;
+      cuts.push({
+        ...p,
+        miterLeft: placement.finalMiterLeft,
+        miterRight: placement.finalMiterRight,
+        kerf: K,
+        overlap: placement.overlap,
+        flipped: placement.flipped,
+      });
+    }
+    return { remaining, cuts };
+  };
+
+  // پاس بازچینی محلی: بعد از چیدن حریصانه‌ی هر چوب، امتحان می‌کنه هر تکه رو تک‌تک به
+  // ابتدا یا انتهای همون چوب منتقل کنه — دقیقاً برای حالتی که یه تکه‌ی ناهم‌نوع (مثلاً
+  // تک‌مایتر/بدون‌مایتر) وسط یه بلوک از تکه‌های هم‌نوع (مثلاً دومایتر) گیر افتاده و
+  // زنجیره‌ی جفت‌شدن رایگان رو قطع کرده؛ بردنش به لبه‌ی چوب (که طبیعتاً فلت/آزاده) این
+  // هزینه‌ی اضافه رو حذف می‌کنه. فقط وقتی چیدمان جدید واقعاً پرتی کمتری داره (باقیمانده‌ی
+  // بیشتر) و هنوز جا می‌شه، جایگزین می‌شه.
+  const reorderBinForLessWaste = (cuts, stockLength) => {
+    if (!cuts || cuts.length <= 1) return null;
+    const base = cuts.map((c) => ({ ...c }));
+    let best = evaluateSequence(base, stockLength);
+    if (!best) return null;
+    let bestOrder = base;
+    for (let i = 0; i < base.length; i++) {
+      const toEnd = [...base.slice(0, i), ...base.slice(i + 1), base[i]];
+      const resEnd = evaluateSequence(toEnd, stockLength);
+      if (resEnd && resEnd.remaining > best.remaining) {
+        best = resEnd;
+        bestOrder = toEnd;
+      }
+      const toStart = [base[i], ...base.slice(0, i), ...base.slice(i + 1)];
+      const resStart = evaluateSequence(toStart, stockLength);
+      if (resStart && resStart.remaining > best.remaining) {
+        best = resStart;
+        bestOrder = toStart;
+      }
+    }
+    return bestOrder === base ? null : { cuts: best.cuts, remaining: best.remaining };
+  };
+
   while (queue.length) {
     let piece = queue.shift();
 
@@ -790,6 +840,15 @@ export function optimizeCutting(sticks, requiredPiecesObj, kerf = 0.3) {
       bins.push({ stockLength: null, remaining: 0, cuts: [{ ...piece, kerf: K, overlap: 0 }], unfulfilled: true });
     }
   }
+
+  bins.forEach((bin) => {
+    if (bin.unfulfilled) return;
+    const improved = reorderBinForLessWaste(bin.cuts, bin.stockLength);
+    if (improved) {
+      bin.cuts = improved.cuts;
+      bin.remaining = improved.remaining;
+    }
+  });
 
   const fulfilled = bins.filter((b) => !b.unfulfilled);
   return {
