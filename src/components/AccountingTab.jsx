@@ -7,7 +7,7 @@ import {
   TrendingUp, TrendingDown, Wallet, PiggyBank,
   Calculator, ChevronDown, ChevronUp,
   Upload, Download, X, Copy, Check, FolderOpen, Save, FileText,
-  Search, Edit3, Trash2, Calendar, Eye, Printer, Gift,
+  Search, Edit3, Trash2, Calendar, Eye, Printer, Gift, Clock, ShoppingCart,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { toNum, fmt, fmtCode, fmtDate, todayISO, safeEvalExpr, calcROI, safeDivide, serviceROI, formatProductDims, qtySuffix, toPersianDigits } from "../mathCore";
@@ -1133,22 +1133,26 @@ function AllInvoicesModal({ invoices, onClose, setData, notify, customers, onVie
               onClick={() => setShowSortPopup((v) => !v)}
               title="تغییر نحوه مرتب‌سازی"
             >
-              {sortOrder === "code" && "⇅ 123"}
-              {sortOrder === "az" && "⇅ A-Z"}
-              {sortOrder === "date" && "⇅ 🕒"}
-              {sortOrder === "items" && "⇅ 🛒"}
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+                {sortOrder === "code" && <span>123⇅</span>}
+                {sortOrder === "az" && <span>A-Z⇅</span>}
+                {sortOrder === "date" && <Clock size={12} />}
+                {sortOrder === "items" && <ShoppingCart size={12} />}
+              </span>
             </button>
             <FilterPopup open={showSortPopup} onClose={() => setShowSortPopup(false)} width={160}>
               {[
-                { key: "date", label: "🕒 تاریخ" },
-                { key: "code", label: "123 مبلغ" },
-                { key: "az", label: "A-Z نام خریدار" },
-                { key: "items", label: "🛒 تعداد اقلام" },
+                { key: "date", label: "تاریخ", Icon: Clock },
+                { key: "code", label: "مبلغ (123)", Icon: null },
+                { key: "az", label: "نام خریدار (A-Z)", Icon: null },
+                { key: "items", label: "تعداد اقلام", Icon: ShoppingCart },
               ].map((opt) => (
                 <button
                   key={opt.key}
                   style={{
-                    display: "block",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
                     width: "100%",
                     padding: "8px 10px",
                     background: sortOrder === opt.key ? "#2a1414" : "transparent",
@@ -1162,6 +1166,7 @@ function AllInvoicesModal({ invoices, onClose, setData, notify, customers, onVie
                   }}
                   onClick={() => { setSortOrder(opt.key); setShowSortPopup(false); }}
                 >
+                  {opt.Icon && <opt.Icon size={12} />}
                   {opt.label}
                 </button>
               ))}
