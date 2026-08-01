@@ -908,13 +908,13 @@ function CustomerCard({
             </div>
           </div>
           <button
-            style={T.iconBtn}
+            style={{ ...T.iconBtn, width: 32, height: 32, justifyContent: "center" }}
             onClick={(e) => { e.stopPropagation(); onEdit(stat); }}
           >
             <Edit3 size={12} color="#555" />
           </button>
           <button
-            style={T.iconBtn}
+            style={{ ...T.iconBtn, width: 32, height: 32, justifyContent: "center" }}
             onClick={(e) => { e.stopPropagation(); onRequestDelete(stat.id); }}
           >
             <Trash2 size={12} color="#e08a8a" />
