@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Hide spin buttons for Chrome, Safari, Edge, Opera */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Hide spin buttons for Firefox */
+input[type=number] {
+  -moz-appearance: textfield;
+}
+
+/* ── انیمیشن اسکرول بین تب‌ها (شبیه تلگرام) — بخش ۱۱ رودمپ ──
+   محتوای تب جدید (چه با سوایپ، چه با تغییر برنامه‌ای activeTab/mgmtTab)
+   از سمت مناسب با یه فید ملایم اسلاید می‌کنه؛ خیلی سبک و بدون کتابخونه‌ی
+   جدا (فقط CSS keyframes)، پس روی گوشی‌های ضعیف‌تر هم مشکلی نداره. */
+@keyframes tabSlideInFromRight {
+  from { opacity: 0; transform: translateX(18px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes tabSlideInFromLeft {
+  from { opacity: 0; transform: translateX(-18px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.tab-slide-in-right {
+  animation: tabSlideInFromRight 220ms cubic-bezier(0.25, 0.1, 0.25, 1) both;
+}
+.tab-slide-in-left {
+  animation: tabSlideInFromLeft 220ms cubic-bezier(0.25, 0.1, 0.25, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tab-slide-in-right,
+  .tab-slide-in-left {
+    animation: none;
+  }
+}
