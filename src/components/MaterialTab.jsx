@@ -1445,8 +1445,8 @@ function MaterialCard({
   const statusColor = (() => {
     if (lockedPct <= 0 && draftPct <= 0 && pendingUnlockPct <= 0) return "#5fd180";
     if (lockedPct >= 99.9) return "#e08a8a"; // فقط قفل کامل → قرمز
-    if (draftPct > 0) return "#f2c94c"; // معلق → زرد
-    return "#f2c94c";
+    if (draftPct > 0) return "#f2a83f"; // معلق → نارنجی‌متمایل (قبلاً #f2c94c زیادی زرد بود)
+    return "#f2a83f";
   })();
 
   const getTypeLabel = (type) => {
@@ -1596,15 +1596,15 @@ function MaterialCard({
             style={{
               height: "100%",
               width: `${Math.min(Math.max(0, 100 - rawLockedPct - pendingUnlockPct), draftPct)}%`,
-              background: "#f2c94c",
+              background: "#f2a83f",
             }}
           />
         )}
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 8.5, margin: "0 12px 8px", gap: 4, flexWrap: "wrap" }}>
         {draftPct > 0 && (
-          <div style={{ color: "#f2c94c" }}>
-            {draftPct.toFixed(1)}% معلق (زرد)
+          <div style={{ color: "#f2a83f" }}>
+            {draftPct.toFixed(1)}% معلق
           </div>
         )}
         {pendingUnlockPct > 0 && (

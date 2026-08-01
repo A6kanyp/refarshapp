@@ -493,10 +493,10 @@ export default function InvoicesTab({
               )}
             </div>
 
-            {/* Filter controls row */}
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {/* Filter controls: خط اول جستجو، خط بعد از‌تاریخ/تا‌تاریخ کنار هم */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {/* Search text filter */}
-              <div style={{ position: "relative", flex: "1 1 150px" }}>
+              <div style={{ position: "relative", width: "100%" }}>
                 <input onFocus={(e) => e.target.select()} 
                   style={{ ...S.input, width: "100%", paddingRight: 28, height: 32, fontSize: 10.5 }}
                   placeholder="جستجوی نام یا کد..."
@@ -507,21 +507,23 @@ export default function InvoicesTab({
               </div>
 
               {/* Date range filter */}
-              <div style={{ position: "relative", flex: "1 1 130px" }}>
-                <div style={{ fontSize: 9, color: "#666", marginBottom: 3 }}>از تاریخ</div>
-                <JalaliDatePicker 
-                  value={filterDateFrom}
-                  onChange={(val) => setFilterDateFrom(val)}
-                  allowEmpty={true}
-                />
-              </div>
-              <div style={{ position: "relative", flex: "1 1 130px" }}>
-                <div style={{ fontSize: 9, color: "#666", marginBottom: 3 }}>تا تاریخ</div>
-                <JalaliDatePicker 
-                  value={filterDateTo}
-                  onChange={(val) => setFilterDateTo(val)}
-                  allowEmpty={true}
-                />
+              <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ position: "relative", flex: "1 1 0" }}>
+                  <div style={{ fontSize: 9, color: "#666", marginBottom: 3 }}>از تاریخ</div>
+                  <JalaliDatePicker 
+                    value={filterDateFrom}
+                    onChange={(val) => setFilterDateFrom(val)}
+                    allowEmpty={true}
+                  />
+                </div>
+                <div style={{ position: "relative", flex: "1 1 0" }}>
+                  <div style={{ fontSize: 9, color: "#666", marginBottom: 3 }}>تا تاریخ</div>
+                  <JalaliDatePicker 
+                    value={filterDateTo}
+                    onChange={(val) => setFilterDateTo(val)}
+                    allowEmpty={true}
+                  />
+                </div>
               </div>
             </div>
 
@@ -537,7 +539,7 @@ export default function InvoicesTab({
                 onClick={() => setFilterSaleType("direct")}
                 style={{ flex: "1 1 70px", padding: "6px 0", fontSize: 10, fontWeight: 600, border: "none", borderRadius: 6, cursor: "pointer", background: filterSaleType === "direct" ? "#2a2a3a" : "transparent", color: filterSaleType === "direct" ? "#a89bd4" : "#888", transition: "all 0.15s" }}
               >
-                مستقیم (پیش خودم)
+                مستقیم
               </button>
               <button
                 onClick={() => setFilterSaleType("customer")}
