@@ -30,8 +30,22 @@ function blobToBase64(blob) {
 }
 
 async function dataUrlToBlob(dataUrl) {
-  const res = await fetch(dataUrl);
-  return await res.blob();
+  // قبلاً از fetch(dataUrl) استفاده می‌شد که روی بعضی نسخه‌های Android
+  // WebView (خصوصاً برای data URL های بزرگ مثل عکس کامل فاکتور/برش با
+  // scale بالا) بدون خطای قابل‌مشاهده fail می‌کنه یا هنگ می‌کنه — دقیقاً
+  // منطبق با گزارش «دکمه Save/Share Image هیچ اتفاقی نمی‌افته». تبدیل
+  // دستی base64→Uint8Array→Blob به fetch وابسته نیست و قابل‌اعتمادتره.
+  const commaIdx = dataUrl.indexOf(",");
+  if (commaIdx === -1) throw new Error("dataUrlToBlob: invalid data URL");
+  const header = dataUrl.slice(0, commaIdx);
+  const base64 = dataUrl.slice(commaIdx + 1);
+  const mimeMatch = /data:([^;]+);base64/.exec(header);
+  const mime = mimeMatch ? mimeMatch[1] : "application/octet-stream";
+  const binary = atob(base64);
+  const len = binary.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: mime });
 }
 
 function downloadInBrowser(blob, filename) {
@@ -115,7 +129,14 @@ export async function saveFile(data, filename, opts = {}) {
       }
       return true;
     } catch (e) {
+      // قبلاً اینجا فقط لاگ می‌شد و بعدش بی‌سروصدا می‌رفت سراغ downloadInBrowser —
+      // که توی یه اپ نیتیو (Capacitor WebView) اصلاً کارساز نیست (نه دانلود
+      // منیجری هست، نه لینک <a download> جایی می‌ره)، یعنی کاربر هیچ خطایی
+      // نمی‌دید و هیچ فایلی هم واقعاً ذخیره نمی‌شد — دقیقاً همون «دکمه کار
+      // نمی‌کنه» که گزارش شده بود. الان خطای واقعی رو پرتاب می‌کنیم تا
+      // caller (که alert خودش رو داره) پیام واقعی رو نشون بده
       console.error("saveFile native failed", e);
+      throw new Error(`ذخیره روی حافظه‌ی دستگاه ناموفق بود: ${e?.message || e}`);
     }
   }
 
@@ -156,7 +177,12 @@ export async function shareFile(data, filename, opts = {}) {
       });
       return true;
     } catch (e) {
+      // کاربر ممکنه شیت اشتراک رو خودش کنسل کرده باشه — این خطا نیست
+      if (e && (e.message === "Share canceled" || /cancel/i.test(String(e?.message || "")))) {
+        return false;
+      }
       console.error("shareFile native failed", e);
+      throw new Error(`اشتراک‌گذاری ناموفق بود: ${e?.message || e}`);
     }
   }
 

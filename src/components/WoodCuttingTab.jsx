@@ -572,6 +572,12 @@ export default function WoodCuttingTab({ stickyTop, materials, products, persist
       const baseName = fileName.replace(/_1d|_2d/, match => match.toUpperCase());
       const subdir = baseName.includes("2d") || baseName.includes("2D") ? REFARSH_SAVE_DIRS.NEST_2D : REFARSH_SAVE_DIRS.NEST_1D;
       await saveFile(canvas.toDataURL("image/jpeg", 0.9), `${baseName}${getJalaliTimestamp()}.jpg`, { subdir });
+    }).catch((e) => {
+      if (parent) parent.style.overflowX = prevParentOverflow;
+      el.style.width = prevElWidth;
+      console.error("handleSaveAsJpg failed", e);
+      showToast(`خطا در ذخیره عکس: ${e?.message || e}`, "error");
+      throw e;
     });
   };
 
@@ -588,8 +594,8 @@ export default function WoodCuttingTab({ stickyTop, materials, products, persist
       showToast("خطا: چیزی برای ذخیره به‌صورت تصویر نیست", "error");
       return;
     }
-    if (has1D) await handleSaveAsJpg(results1DRef, "nesting_1d");
-    if (has2D) await handleSaveAsJpg(results2DRef, "nesting_2d");
+    if (has1D) { try { await handleSaveAsJpg(results1DRef, "nesting_1d"); } catch (_) {} }
+    if (has2D) { try { await handleSaveAsJpg(results2DRef, "nesting_2d"); } catch (_) {} }
   };
 
   const handleSaveLocalSession = () => {
