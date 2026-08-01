@@ -6,11 +6,20 @@ import { loadData, saveData, migrateData } from "../dataModels";
 
 const DELETED_REGISTRY_KEY = "refarsh_deleted_records_v1";
 const SYNC_STATE_KEY = "refarsh_sync_state_v1";
-// روی APK مسیر نسبی /api کار نمی‌کند — آدرس سرور را از env بگیر
-const API_BASE = (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_BASE_URL)
+export const API_BASE_URL_OVERRIDE_KEY = "refarsh_api_base_url_override";
+// روی APK مسیر نسبی /api کار نمی‌کند — آدرس سرور را از env بگیر، مگر این‌که
+// کاربر توی تب سینک یه آدرس دستی ذخیره کرده باشه (که همیشه اولویت داره)
+const ENV_API_BASE = (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_BASE_URL)
   ? String(import.meta.env.VITE_API_BASE_URL).replace(/\/$/, "")
   : "";
-const apiUrl = (path) => `${API_BASE}${path}`;
+export function getApiBase() {
+  try {
+    const saved = localStorage.getItem(API_BASE_URL_OVERRIDE_KEY);
+    if (saved && saved.trim()) return saved.trim().replace(/\/$/, "");
+  } catch (_) {}
+  return ENV_API_BASE;
+}
+const apiUrl = (path) => `${getApiBase()}${path}`;
 
 const AUDIT_LOG_MAX = 300;
 
