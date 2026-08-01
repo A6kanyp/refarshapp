@@ -71,10 +71,10 @@ const S = {
 
 // ── ثابت‌های مرتب‌سازی ──
 const SORT_MODES = [
-  { key: "az", kind: "text", ascText: "Az", descText: "Za" },
-  { key: "code", kind: "text", ascText: "123", descText: "321" },
-  { key: "stock", kind: "icon", Icon: ShoppingBag },
-  { key: "date", kind: "icon", Icon: Clock },
+  { key: "az", kind: "text", ascText: "Az", descText: "Za", label: "الفبا" },
+  { key: "code", kind: "text", ascText: "123", descText: "321", label: "کد محصول" },
+  { key: "stock", kind: "icon", Icon: ShoppingBag, label: "وضعیت موجودی" },
+  { key: "date", kind: "icon", Icon: Clock, label: "تاریخ" },
 ];
 
 function cycleSort(current) {
@@ -179,7 +179,10 @@ function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onTogg
           <button
             key={mode.key}
             style={{
-              display: "block",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 8,
               width: "100%",
               padding: "8px 10px",
               background: baseOrder === mode.key ? "#2a1414" : "transparent",
@@ -199,6 +202,7 @@ function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onTogg
               }
             }}
           >
+            {mode.label && <span>{mode.label}</span>}
             {renderMode(mode, baseOrder === mode.key)}
           </button>
         ))}

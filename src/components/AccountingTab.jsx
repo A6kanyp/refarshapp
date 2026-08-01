@@ -1135,7 +1135,7 @@ function AllInvoicesModal({ invoices, onClose, setData, notify, customers, onVie
             >
               <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
                 {sortOrder === "code" && <span>123⇅</span>}
-                {sortOrder === "az" && <span>A-Z⇅</span>}
+                {sortOrder === "az" && <span>Az⇅</span>}
                 {sortOrder === "date" && <Clock size={12} />}
                 {sortOrder === "items" && <ShoppingCart size={12} />}
               </span>
@@ -1144,7 +1144,7 @@ function AllInvoicesModal({ invoices, onClose, setData, notify, customers, onVie
               {[
                 { key: "date", label: "تاریخ", Icon: Clock },
                 { key: "code", label: "مبلغ (123)", Icon: null },
-                { key: "az", label: "نام خریدار (A-Z)", Icon: null },
+                { key: "az", label: "نام خریدار (Az)", Icon: null },
                 { key: "items", label: "تعداد اقلام", Icon: ShoppingCart },
               ].map((opt) => (
                 <button
