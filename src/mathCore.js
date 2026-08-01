@@ -260,7 +260,12 @@ export function resolveProductGroupName(product, materials = []) {
     })?.materialId;
   if (fabricId) {
     const m = (materials || []).find((x) => x.id === fabricId);
-    if (m?.name) return m.name;
+    if (m?.name) {
+      const trimmed = m.name.trim();
+      // کاربر دیگه خودش کلمه‌ی «فرش» رو اول اسم متریال تایپ نمی‌کنه، پس اگه از قبل
+      // نداشت خودکار اضافه می‌شه (فقط برای دسته‌بندی محصولات، اسم خودِ متریال دست‌نخورده می‌مونه)
+      return trimmed.startsWith("فرش") ? trimmed : `فرش ${trimmed}`;
+    }
   }
   return product.group || "";
 }
