@@ -122,6 +122,19 @@ export function formatProductDims(product) {
   return toNum(h) > toNum(w) ? `${h}×${w}` : `${w}×${h}`;
 }
 
+// نمایش خوانا/انسانی ابعاد برای بزرگ‌نمایی محصول: «64D» → «نیم‌دایره به قطر 64»، «55O» → «دایره به قطر 55».
+// برای ابعاد مستطیلی معمولی (طول×عرض) دست‌نخورده برمی‌گرده.
+export function formatDimsHuman(dimsText) {
+  if (!dimsText) return "";
+  const s = String(dimsText).trim();
+  const upper = s.toUpperCase();
+  const dMatch = upper.match(/^(\d+(?:\.\d+)?)\s*D$/);
+  if (dMatch) return `نیم‌دایره به قطر ${dMatch[1]}`;
+  const oMatch = upper.match(/^(\d+(?:\.\d+)?)\s*O$/);
+  if (oMatch) return `دایره به قطر ${oMatch[1]}`;
+  return s;
+}
+
 // «(۴عدد)» کنار ابعاد برای محصولات ستی (qty > 1)؛ برای qty=1 چیزی برنمی‌گردونه
 export function qtySuffix(product) {
   const q = toNum(product?.qty);

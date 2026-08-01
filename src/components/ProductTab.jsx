@@ -10,7 +10,7 @@ import {
   Copy, Camera, Printer, Gift, Eye, EyeOff, Tag, Clock
 } from "lucide-react";
 import html2canvas from "html2canvas";
-import { toNum, fmt, fmtCode, fmtDate, todayISO, parseDims, dimsArea, getProductArea, normalizeNumericInput, calcProfitFromPrice, calcPriceFromProfit, formatProductDims, qtySuffix } from "../mathCore";
+import { toNum, fmt, fmtCode, fmtDate, todayISO, parseDims, dimsArea, getProductArea, normalizeNumericInput, calcProfitFromPrice, calcPriceFromProfit, formatProductDims, formatDimsHuman, qtySuffix } from "../mathCore";
 
 import { SCRATCH_KEYS, saveScratch, loadScratch, clearScratch } from "../scratchpad";
 import { saveFile, shareText } from "../utils/nativeSave";
@@ -893,7 +893,7 @@ export function ImageLightbox({ products, currentId, onNavigate, onClose, onAddT
               </div>
               {dimsText && (
                 <div style={{ fontSize: 12, color: "#ddd", fontWeight: 600, marginBottom: 4 }}>
-                  {dimsLabel}: {dimsText}
+                  {dimsLabel}: {formatDimsHuman(dimsText)}
                 </div>
               )}
               {product.description && (
@@ -901,6 +901,8 @@ export function ImageLightbox({ products, currentId, onNavigate, onClose, onAddT
                   {product.description}
                 </div>
               )}
+              {/* یک ردیف خط خالی بین آخرین مشخصات محصول و ردیف بها (خواسته‌ی کاربر) */}
+              <div style={{ height: 10 }} />
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontWeight: 700 }}>
                 <span style={{ fontSize: 12, color: "#aaa", fontWeight: 600 }}>بها:</span>
                 {hasDisc ? (
@@ -3854,7 +3856,9 @@ export default function ProductTab({
               if (b === "در دست ساخت") return -1;
               if (a === "بدون فرش") return 1;
               if (b === "بدون فرش") return -1;
-              if (sortMode === "fabric") return 0; // ترتیب از قبل بر اساس کمترین کد محصول در groupedProducts محاسبه شده
+              if (a === "بدون دسته") return 1;
+              if (b === "بدون دسته") return -1;
+              if (sortMode === "fabric" || sortMode === "code" || sortMode === "type") return 0; // ترتیب از قبل بر اساس کمترین کد محصول در groupedProducts محاسبه شده
               return a.localeCompare(b, "fa");
             })
             .map(([groupName, prods]) => {

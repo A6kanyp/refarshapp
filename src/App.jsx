@@ -2016,7 +2016,20 @@ export default function App() {
       if (!groups[g]) groups[g] = [];
       groups[g].push(p);
     });
-    return groups;
+    // ترتیب دسته‌بندی‌ها: هر دسته بر اساس کمترین کد محصولِ داخلش بالاتر می‌آید
+    // (نه بر اساس نام)؛ «بدون دسته» و بعد از آن «در دست ساخت» همیشه در انتها می‌مانند.
+    const rank = (g) => (g === "در دست ساخت" ? 2 : g === "بدون دسته" ? 1 : 0);
+    const orderedKeys = Object.keys(groups).sort((ga, gb) => {
+      const ra = rank(ga), rb = rank(gb);
+      if (ra !== rb) return ra - rb;
+      if (ra !== 0) return 0;
+      const minA = Math.min(...groups[ga].map((p) => toNum(p.code)));
+      const minB = Math.min(...groups[gb].map((p) => toNum(p.code)));
+      return minA - minB;
+    });
+    const orderedGroups = {};
+    orderedKeys.forEach((k) => { orderedGroups[k] = groups[k]; });
+    return orderedGroups;
   }, [productTotals, sortMode, sortOrder, data.customers, data.materials]);
 
   const accounting = useMemo(() => {
