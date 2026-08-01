@@ -3481,6 +3481,8 @@ export default function ProductTab({
 
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const toggleGroup = (name) => setCollapsedGroups(prev => ({ ...prev, [name]: !prev[name] }));
+  const [floatingCatLabel, setFloatingCatLabel] = useState("");
+  const groupSectionRefs = useRef({});
   const [groupedView, setGroupedView] = useState(() => {
     try {
       return localStorage.getItem("product_grouped_view") !== "false"; // پیش‌فرض روشن
@@ -3495,6 +3497,44 @@ export default function ProductTab({
       localStorage.setItem("product_grouped_view", String(next));
     } catch (_) {}
   };
+
+  // لیبل شناور دسته (فرش) هنگام اسکرول — همون منطق تب متریال
+  useEffect(() => {
+    if (!groupedView) { setFloatingCatLabel(""); return; }
+    const onScroll = () => {
+      const panelEl = document.querySelector('div[style*="position: fixed"]');
+      const scrollY = panelEl ? panelEl.scrollTop : (window.scrollY || document.documentElement.scrollTop || 0);
+      if (scrollY <= 0) { setFloatingCatLabel(""); return; }
+
+      const entries = Object.entries(groupSectionRefs.current || {});
+      const headerBottom = (typeof stickyTop !== "undefined" ? stickyTop : 88) + 96;
+      let current = "";
+      let best = -Infinity;
+      for (const [name, el] of entries) {
+        if (!el) continue;
+        const top = el.getBoundingClientRect().top;
+        if (top < headerBottom && top > best) { best = top; current = name; }
+      }
+      if (current) {
+        const el = groupSectionRefs.current[current];
+        const top = el ? el.getBoundingClientRect().top : -Infinity;
+        if (top >= headerBottom) current = "";
+      }
+      setFloatingCatLabel(current);
+    };
+    window.addEventListener("scroll", onScroll, true);
+    document.addEventListener("scroll", onScroll, true);
+    const panel = document.querySelector('div[style*="position: fixed"]');
+    if (panel) panel.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    const t = setInterval(onScroll, 400);
+    return () => {
+      window.removeEventListener("scroll", onScroll, true);
+      document.removeEventListener("scroll", onScroll, true);
+      if (panel) panel.removeEventListener("scroll", onScroll);
+      clearInterval(t);
+    };
+  }, [groupedView, stickyTop]);
 
   // ریست کامل‌تر روی دابل‌کلیک Refresh (مرتب‌سازی + نمای گروهی)
   useEffect(() => {
@@ -3770,6 +3810,40 @@ export default function ProductTab({
             )}
           </button>
         </div>
+
+        {groupedView && floatingCatLabel ? (
+          <div
+            onClick={() => {
+              const el = groupSectionRefs.current[floatingCatLabel];
+              if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}
+            style={{
+              marginTop: 8,
+              zIndex: 14,
+              width: "fit-content",
+              maxWidth: "70%",
+              minHeight: 28,
+              height: 28,
+              background: "rgba(40,40,40,0.92)",
+              color: "#bbb",
+              fontSize: 10,
+              padding: "0 14px",
+              borderRadius: 12,
+              pointerEvents: "auto",
+              textAlign: "center",
+              backdropFilter: "blur(4px)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              border: "1px solid #2a2a2a",
+              boxSizing: "border-box",
+              marginRight: "auto",
+              marginLeft: "auto",
+            }}
+          >
+            {floatingCatLabel}
+          </div>
+        ) : null}
       </div>
 
       {groupedView ? (
@@ -3789,7 +3863,16 @@ export default function ProductTab({
             const isCollapsed = collapsedGroups[groupName];
             return (
               <div key={groupName} style={{ marginBottom: 4 }}>
-                <GroupHeader title={groupName} count={filteredProds.length} isOpen={!isCollapsed} onToggle={() => toggleGroup(groupName)} />
+                <GroupHeader
+                  title={groupName}
+                  count={filteredProds.length}
+                  isOpen={!isCollapsed}
+                  onToggle={() => toggleGroup(groupName)}
+                  sectionRef={(el) => {
+                    if (el) groupSectionRefs.current[groupName] = el;
+                    else delete groupSectionRefs.current[groupName];
+                  }}
+                />
                 {!isCollapsed && filteredProds.map((p) => (
                   <ProductCard
                     key={p.id}
@@ -3991,9 +4074,10 @@ export default function ProductTab({
   );
 }
 
-function GroupHeader({ title, count, isOpen, onToggle }) {
+function GroupHeader({ title, count, isOpen, onToggle, sectionRef }) {
   return (
     <button
+      ref={sectionRef}
       style={{
         width: "100%",
         background: "transparent",

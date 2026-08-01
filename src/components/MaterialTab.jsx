@@ -2972,24 +2972,26 @@ export default function MaterialTab({
   useEffect(() => {
     if (!groupedView) { setFloatingCatLabel(""); return; }
     const onScroll = () => {
+      const panelEl = document.querySelector('div[style*="position: fixed"]');
+      const scrollY = panelEl ? panelEl.scrollTop : (window.scrollY || document.documentElement.scrollTop || 0);
+      // بالای بالا: هیچ گروهی هنوز پشتِ هدر نرفته، لیبل شناور لازم نیست
+      if (scrollY <= 0) { setFloatingCatLabel(""); return; }
+
       const entries = Object.entries(groupSectionRefs.current || {});
+      const headerBottom = (typeof stickyTop !== "undefined" ? stickyTop : 88) + 96; // پایینِ بلوکِ هدرِ sticky (تقریبی)
       let current = "";
       let best = -Infinity;
-      // آستانه: زیر هدر پنل + نوار تب‌ها + نوار فیلتر (~ stickyTop)
-      const threshold = 160;
       for (const [name, el] of entries) {
         if (!el) continue;
         const top = el.getBoundingClientRect().top;
-        if (top <= threshold && top > best) { best = top; current = name; }
+        // فقط گروهی که هدر واقعیش زیر هدر sticky رفته (دیگه دیده نمی‌شه) کاندید می‌شه
+        if (top < headerBottom && top > best) { best = top; current = name; }
       }
-      // اگر هیچ گروهی زیر آستانه نبود، اولین گروه دیده شده
-      if (!current && entries.length) {
-        let minTop = Infinity;
-        for (const [name, el] of entries) {
-          if (!el) continue;
-          const top = el.getBoundingClientRect().top;
-          if (top < minTop) { minTop = top; current = name; }
-        }
+      // اگر گروهِ کاندید هنوز واقعاً روی صفحه دیده می‌شه (هدر خودش زیر sticky نرفته)، لیبل رو نشون نده
+      if (current) {
+        const el = groupSectionRefs.current[current];
+        const top = el ? el.getBoundingClientRect().top : -Infinity;
+        if (top >= headerBottom) current = "";
       }
       setFloatingCatLabel(current);
     };
@@ -3510,43 +3512,43 @@ export default function MaterialTab({
 
           <SortButton sortOrder={sortOrder} setSortOrder={setSortOrder} modes={SORT_MODES} style={{}} groupedView={groupedView} onToggleGrouped={toggleGroupedView} />
         </div>
-      </div>
 
-      
-      {groupedView && floatingCatLabel ? (
-        <div
-          onClick={() => {
-            const el = groupSectionRefs.current[floatingCatLabel];
-            if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-          }}
-          style={{
-            position: "sticky",
-            // دقیقاً زیر ردیف هدر جستجو/سورت
-            top: (typeof stickyTop !== "undefined" ? stickyTop : 88),
-            zIndex: 14,
-            margin: "0 auto",
-            width: "fit-content",
-            maxWidth: "70%",
-            minHeight: 28,
-            height: 28,
-            background: "rgba(40,40,40,0.92)",
-            color: "#bbb",
-            fontSize: 10,
-            padding: "0 14px",
-            borderRadius: 12,
-            pointerEvents: "auto",
-            textAlign: "center",
-            backdropFilter: "blur(4px)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            border: "1px solid #2a2a2a",
-            boxSizing: "border-box",
-          }}
-        >
-          {floatingCatLabel}
-        </div>
-      ) : null}
+        {groupedView && floatingCatLabel ? (
+          <div
+            onClick={() => {
+              const el = groupSectionRefs.current[floatingCatLabel];
+              if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}
+            style={{
+              // دیگه sticky جدا نیست: همون بلوک هدر (که خودش sticky هست) رو حمل می‌کنه،
+              // پس همیشه دقیقاً زیر ردیف Sort می‌شینه و هیچ‌وقت روی هدر جستجو نمیاد
+              marginTop: 8,
+              zIndex: 14,
+              width: "fit-content",
+              maxWidth: "70%",
+              minHeight: 28,
+              height: 28,
+              background: "rgba(40,40,40,0.92)",
+              color: "#bbb",
+              fontSize: 10,
+              padding: "0 14px",
+              borderRadius: 12,
+              pointerEvents: "auto",
+              textAlign: "center",
+              backdropFilter: "blur(4px)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              border: "1px solid #2a2a2a",
+              boxSizing: "border-box",
+              marginRight: "auto",
+              marginLeft: "auto",
+            }}
+          >
+            {floatingCatLabel}
+          </div>
+        ) : null}
+      </div>
 
       {groupedView ? (
 
