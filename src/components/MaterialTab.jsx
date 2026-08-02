@@ -3427,7 +3427,7 @@ export default function MaterialTab({
                   : filterOptions.filter((o) => matGroupFilter.includes(o.key)).map((o) => o.label).join("،")}
               </span>
             </button>
-            <AnchoredFloatingPopup open={showTypeMenu} onClose={() => setShowTypeMenu(false)} anchorRef={typeFilterBtnRef} width={170}>
+            <FilterPopup open={showTypeMenu} onClose={() => setShowTypeMenu(false)} width={220} maxHeight={320}>
               {filterOptions.map((opt) => {
                 const isAllOpt = opt.key === "all";
                 const isSelected = isAllOpt ? matGroupFilter.length === 0 : matGroupFilter.includes(opt.key);
@@ -3464,7 +3464,7 @@ export default function MaterialTab({
                   </button>
                 );
               })}
-            </AnchoredFloatingPopup>
+            </FilterPopup>
           </div>
 
           {allFiltered.some((m) => m.hidden || (() => {

@@ -15,7 +15,7 @@ import { toNum, fmt, fmtCode, fmtDate, todayISO, parseDims, dimsArea, getProduct
 import { SCRATCH_KEYS, saveScratch, loadScratch, clearScratch } from "../scratchpad";
 import { saveFile, shareText } from "../utils/nativeSave";
 import { compressImageFile } from "../utils/imageCompress";
-import { saveImageToFolder, IMAGE_CATEGORIES, useResolvedImageSrc } from "../utils/imageStorage";
+import { saveImageToFolder, IMAGE_CATEGORIES, useResolvedImageSrc, autoDetectImagesForCode } from "../utils/imageStorage";
 import { handleEnterNavigate } from "../utils/formNav";
 import { pushBackHandler } from "../utils/backButton";
 import {
@@ -1727,6 +1727,43 @@ export function ProductEditor({
     }
   };
 
+  // تشخیص خودکار عکس‌های از قبل موجود توی پوشه بر اساس کد محصول — طبق قرارداد
+  // نام‌گذاری «کد+شماره دورقمی» (000401، 000402، ...، تا حداکثر ۹۹ عکس به‌ازای هر
+  // کد). برای عکس‌هایی که کاربر مستقیم با فایل‌منیجر توی پوشه گذاشته (نه از طریق
+  // همین دکمه‌ی «افزودن»)، تا وقتی خودش پیدا نمی‌شد توی محصول نمایش داده نمی‌شدن.
+  const [autoScanning, setAutoScanning] = useState(false);
+  const autoScanForImages = async (opts = {}) => {
+    const codeStr = fmtCode(local.code != null ? local.code : nextCode);
+    setAutoScanning(true);
+    try {
+      const found = await autoDetectImagesForCode(codeStr);
+      if (found.length === 0) {
+        if (opts.manual) showToast("عکسی با این کد در پوشه پیدا نشد", "error");
+        return;
+      }
+      let addedCount = 0;
+      setLocalWithScratch((l) => {
+        const current = l.images || (l.image ? [l.image] : []);
+        const currentSet = new Set(current);
+        const newOnes = found.filter((f) => !currentSet.has(f));
+        addedCount = newOnes.length;
+        if (newOnes.length === 0) return l;
+        const merged = [...current, ...newOnes];
+        return { ...l, image: l.image || merged[0] || null, images: merged };
+      });
+      if (opts.manual) showToast(addedCount > 0 ? `${addedCount} تصویر جدید از پوشه پیدا شد` : "همه‌ی عکس‌های این کد از قبل توی محصول هستن");
+    } finally {
+      setAutoScanning(false);
+    }
+  };
+  // فقط یه‌بار موقع باز شدن فرم (نه با هر تایپ کد) — فقط وقتی محصول کد مشخص داره؛
+  // چیزی رو از لیست عکس‌های موجود حذف نمی‌کنه، فقط جدیدهایی که پیدا می‌شه اضافه می‌کنه
+  useEffect(() => {
+    if (local.code == null && nextCode == null) return;
+    autoScanForImages({ manual: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleRemoveImage = (idx) => {
     setLocalWithScratch((l) => {
       const all = (l.images || []).filter((_, i) => i !== idx);
@@ -2023,6 +2060,16 @@ export function ProductEditor({
               <span style={{ fontSize: 8, color: "#444" }}>افزودن</span>
               <input type="file" accept="image/*" multiple style={{ display: "none" }} onChange={handleImageUpload} />
             </label>
+            <button
+              type="button"
+              title="بررسی خودکار پوشه برای عکس‌های این کد"
+              onClick={() => autoScanForImages({ manual: true })}
+              disabled={autoScanning}
+              style={{ width: 60, height: 60, background: "#1c1c1c", border: "1px dashed #333", borderRadius: 8, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: autoScanning ? "default" : "pointer", flexShrink: 0, gap: 3, fontFamily: "inherit" }}
+            >
+              <RotateCcw size={16} color="#444" style={autoScanning ? { animation: "spin 1s linear infinite" } : undefined} />
+              <span style={{ fontSize: 8, color: "#444" }}>{autoScanning ? "..." : "بررسی پوشه"}</span>
+            </button>
           </div>
 
           <div style={{ display: "flex", gap: 6, marginBottom: 8, alignItems: "flex-end" }}>
@@ -2137,30 +2184,19 @@ export function ProductEditor({
               <input onFocus={(e) => e.target.select()} style={{ ...S.input, borderColor: errors.name ? "#ef4444" : "#232323", background: errors.name ? "#2a1414" : "#1c1c1c" }} value={local.name} onChange={(e) => { setErrors(e => ({...e, name: false})); setLocalWithScratch({ ...local, name: e.target.value }); }} />
             </div>
             {(() => {
-              // آیتم ۷ (روادمپ): دکمه‌ی کوچیک select/deselect «کالیگرافی» — اگه فعال بشه
-              // خودکار «نوع محصول» رو روی نوعی به اسم «کالیگرافی» می‌ذاره (اگه از قبل
-              // نبود می‌سازدش، دقیقاً مثل ساختن نوع جدید از همون پاپ‌آپ «نوع» بالای همین فرم).
-              // چون از همون productTypeId استفاده می‌کنه، توی تب محصولات/کاتالوگ (که با
-              // productType گروه/نمایش می‌شن) و export/import اکسل و JSON خودکار پوشش داده می‌شه.
-              const calligType = (productTypes || []).find((t) => (t.name || "").trim() === "کالیگرافی");
-              const isCalligraphy = !!calligType && local.productTypeId === calligType.id;
+              // آیتم ۷ (روادمپ) — فیکس: قبلاً این دکمه با فعال‌شدن، productTypeId محصول رو
+              // مستقیم روی نوع «کالیگرافی» می‌ذاشت — یعنی *جایگزین* نوع اصلی محصول می‌شد
+              // (مثلاً تابلوفرش پاک می‌شد). طبق تصمیم درست: کالیگرافی صرفاً یه تگ اضافه‌ست؛
+              // محصول می‌تونه هم‌زمان توی نوع اصلی‌ش (productTypeId دست‌نخورده) و هم زیر
+              // «کالیگرافی» دیده بشه. این الان یه فیلد مستقل (`isCalligraphy`) رو toggle می‌کنه.
+              const isCalligraphy = !!local.isCalligraphy;
               return (
                 <div style={{ flexShrink: 0, alignSelf: "flex-end" }}>
                   <button
                     type="button"
-                    title="کالیگرافی"
+                    title="کالیگرافی (تگ اضافه — نوع اصلی محصول رو عوض نمی‌کنه)"
                     onClick={() => {
-                      if (isCalligraphy) {
-                        setLocalWithScratch((l) => ({ ...l, productTypeId: null }));
-                        return;
-                      }
-                      if (calligType) {
-                        setLocalWithScratch((l) => ({ ...l, productTypeId: calligType.id }));
-                      } else {
-                        const newType = { ...emptyProductType(), name: "کالیگرافی" };
-                        setData((d) => ({ ...d, productTypes: [...(d.productTypes || []), newType] }));
-                        setLocalWithScratch((l) => ({ ...l, productTypeId: newType.id }));
-                      }
+                      setLocalWithScratch((l) => ({ ...l, isCalligraphy: !l.isCalligraphy }));
                     }}
                     style={{
                       height: 31,
@@ -2929,7 +2965,7 @@ export function CatalogTab({
       .filter((p) => {
         if (p.isDraft) return false;
         if (p.hiddenFromCatalog) return false;
-        if ((typeFilter || []).length > 0 && !(typeFilter || []).includes(p.productTypeId)) return false;
+        if ((typeFilter || []).length > 0 && !(typeFilter || []).includes(p.productTypeId) && !((typeFilter || []).includes("__calligraphy__") && p.isCalligraphy)) return false;
         if (search.trim() && !p.name?.includes(search) && !String(p.code).includes(search) && !(p.dims && p.dims.includes(search))) return false;
         if (statusFilter.length > 0 && !statusFilter.includes(p.status)) return false;
         let locMatch = false;
@@ -3151,7 +3187,7 @@ export function CatalogTab({
               >
                 <Tag size={13} />
               </button>
-              <AnchoredFloatingPopup open={showTypeFilterMenu} onClose={() => setShowTypeFilterMenu(false)} anchorRef={typeFilterBtnRef} width={160}>
+              <FilterPopup open={showTypeFilterMenu} onClose={() => setShowTypeFilterMenu(false)} width={220} maxHeight={320}>
                   <button
                     style={{ display: "block", width: "100%", textAlign: "right", padding: "8px 8px", background: (typeFilter || []).length === 0 ? "#2a1414" : "transparent", border: "none", color: (typeFilter || []).length === 0 ? "#d88888" : "#ddd", fontSize: 11, fontFamily: "inherit", cursor: "pointer", borderRadius: 4 }}
                     onClick={() => setTypeFilter([])}
@@ -3173,7 +3209,16 @@ export function CatalogTab({
                       </button>
                     );
                   })}
-              </AnchoredFloatingPopup>
+                  {/* کالیگرافی یه تگ اضافه‌ست، نه یه نوع اصلی — به‌همین‌خاطر جدا از productTypes با شناسه‌ی مصنوعی نمایش داده می‌شه، تا با انتخابش محصولات هم‌زمان زیر نوع اصلی‌شون هم قابل‌فیلتر بمونن */}
+                  <button
+                    style={{ display: "block", width: "100%", textAlign: "right", padding: "8px 8px", background: (typeFilter || []).includes("__calligraphy__") ? "#2a1414" : "transparent", border: "none", borderTop: "1px solid #232323", color: (typeFilter || []).includes("__calligraphy__") ? "#d88888" : "#ddd", fontSize: 11, fontFamily: "inherit", cursor: "pointer", borderRadius: 4 }}
+                    onClick={() => {
+                      setTypeFilter((prev) => prev.includes("__calligraphy__") ? prev.filter((id) => id !== "__calligraphy__") : [...prev, "__calligraphy__"]);
+                    }}
+                  >
+                    کالیگرافی
+                  </button>
+              </FilterPopup>
             </div>
           )}
 
@@ -3553,7 +3598,7 @@ export default function ProductTab({
       });
       if (!matchesAny) return false;
     }
-    if ((typeFilter || []).length > 0 && !(typeFilter || []).includes(p.productTypeId)) return false;
+    if ((typeFilter || []).length > 0 && !(typeFilter || []).includes(p.productTypeId) && !((typeFilter || []).includes("__calligraphy__") && p.isCalligraphy)) return false;
     let locMatch = false;
     if (!isLocationSelected()) {
       locMatch = true;
@@ -3842,7 +3887,7 @@ export default function ProductTab({
               >
                 <Tag size={13} />
               </button>
-              <AnchoredFloatingPopup open={showTypeFilterMenu} onClose={() => setShowTypeFilterMenu(false)} anchorRef={typeFilterBtnRef} width={160}>
+              <FilterPopup open={showTypeFilterMenu} onClose={() => setShowTypeFilterMenu(false)} width={220} maxHeight={320}>
                   <button
                     style={{ display: "block", width: "100%", textAlign: "right", padding: "8px 8px", background: (typeFilter || []).length === 0 ? "#2a1414" : "transparent", border: "none", color: (typeFilter || []).length === 0 ? "#d88888" : "#ddd", fontSize: 11, fontFamily: "inherit", cursor: "pointer", borderRadius: 4 }}
                     onClick={() => setTypeFilter([])}
@@ -3864,7 +3909,16 @@ export default function ProductTab({
                       </button>
                     );
                   })}
-              </AnchoredFloatingPopup>
+                  {/* کالیگرافی یه تگ اضافه‌ست، نه یه نوع اصلی — به‌همین‌خاطر جدا از productTypes با شناسه‌ی مصنوعی نمایش داده می‌شه، تا با انتخابش محصولات هم‌زمان زیر نوع اصلی‌شون هم قابل‌فیلتر بمونن */}
+                  <button
+                    style={{ display: "block", width: "100%", textAlign: "right", padding: "8px 8px", background: (typeFilter || []).includes("__calligraphy__") ? "#2a1414" : "transparent", border: "none", borderTop: "1px solid #232323", color: (typeFilter || []).includes("__calligraphy__") ? "#d88888" : "#ddd", fontSize: 11, fontFamily: "inherit", cursor: "pointer", borderRadius: 4 }}
+                    onClick={() => {
+                      setTypeFilter((prev) => prev.includes("__calligraphy__") ? prev.filter((id) => id !== "__calligraphy__") : [...prev, "__calligraphy__"]);
+                    }}
+                  >
+                    کالیگرافی
+                  </button>
+              </FilterPopup>
             </div>
           )}
 

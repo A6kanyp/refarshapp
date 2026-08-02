@@ -12,6 +12,27 @@ function stripGenderPrefix(name) {
   return n.trim();
 }
 
+// ── تصویر آیتم فاکتور ──
+// باگ: item.image توی سیستم جدید ذخیره‌سازی عکس (imageStorage.js) فقط اسم فایله
+// نه یه src مستقیم‌قابل‌استفاده — قبلاً مستقیم توی <img src={item.image}/> ست می‌شد
+// که همیشه شکسته بود (به‌جز عکس‌های خیلی قدیمی base64/URL). این کامپوننت دقیقاً
+// مثل ProductImage (ProductTab.jsx) resolve واقعی (فایل محلی/IndexedDB) رو انجام می‌ده.
+function InvoiceItemImage({ filename }) {
+  const isLegacyInline = !!filename && (filename.startsWith("data:") || filename.startsWith("http") || filename.startsWith("/"));
+  const resolvedSrc = useResolvedImageSrc(isLegacyInline ? null : filename, IMAGE_CATEGORIES.PRODUCT);
+  const src = isLegacyInline ? filename : resolvedSrc;
+  if (!filename || !src) {
+    return (
+      <div style={{ width: "42px", height: "42px", margin: "0 auto", borderRadius: "6px", background: "#f0f0f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "9px", color: "#888", border: "1px dashed #ccc" }}>بدون عکس</div>
+    );
+  }
+  return (
+    <div style={{ width: "42px", height: "42px", margin: "0 auto", borderRadius: "6px", overflow: "hidden", border: "1px solid #ddd", background: "#f0f0f0" }}>
+      <img src={src} style={{ width: "100%", height: "100%", objectFit: "cover" }} referrerPolicy="no-referrer" alt="" />
+    </div>
+  );
+}
+
 export default function InvoiceTemplate({ invoiceData, businessCard }) {
   // بخش «بازطراحی ذخیره‌سازی عکس‌ها» (Wall 🟣): قبل از هر return زودهنگام باید
   // صدا زده بشه (قانون Hooks). qrCode جدید فقط اسم فایله؛ برای داده‌ی قدیمی
@@ -330,13 +351,7 @@ else {
             <tr key={index}>
               <td style={{ textAlign: "center", fontWeight: "bold" }}>{index + 1}</td>
               <td style={{ textAlign: "center" }}>
-                {item.image ? (
-                  <div style={{ width: "42px", height: "42px", margin: "0 auto", borderRadius: "6px", overflow: "hidden", border: "1px solid #ddd", background: "#f0f0f0" }}>
-                    <img src={item.image} style={{ width: "100%", height: "100%", objectFit: "cover" }} referrerPolicy="no-referrer" alt="" />
-                  </div>
-                ) : (
-                  <div style={{ width: "42px", height: "42px", margin: "0 auto", borderRadius: "6px", background: "#f0f0f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "9px", color: "#888", border: "1px dashed #ccc" }}>بدون عکس</div>
-                )}
+                <InvoiceItemImage filename={item.image} />
               </td>
               <td style={{ textAlign: "right" }}>
                 <div style={{ fontWeight: "700", color: "#111", fontSize: "12px" }}>{item.name}</div>

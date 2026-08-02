@@ -14,6 +14,19 @@ import { FilterPopup } from "./FilterPopup";
 import { useToast } from "../contexts/ToastContext.jsx";
 import InvoicePrint from "./InvoicePrint";
 import { useRegisterOpenModal } from "../utils/modalRegistry";
+import { useResolvedImageSrc, IMAGE_CATEGORIES } from "../utils/imageStorage";
+
+// عکس کوچیک محصول توی خط گالری/اکسپورت — قبلاً از یه getImageUrl قدیمی و
+// import‌نشده استفاده می‌شد («getImageUrl is not defined»، همیشه کرش می‌کرد چون
+// عکس‌ها دیگه data URL/مسیر مستقیم نیستن، فقط اسم فایل‌ان). الان از همون سیستم
+// resolve واقعی (فایل محلی/IndexedDB) که ProductTab/InvoiceTemplate استفاده می‌کنن.
+function GalleryProductThumb({ filename, size = 30 }) {
+  const isLegacyInline = !!filename && (filename.startsWith("data:") || filename.startsWith("http") || filename.startsWith("/"));
+  const resolvedSrc = useResolvedImageSrc(isLegacyInline ? null : filename, IMAGE_CATEGORIES.PRODUCT);
+  const src = isLegacyInline ? filename : resolvedSrc;
+  if (!filename || !src) return null;
+  return <img src={src} alt="" style={{ width: size, height: size, borderRadius: 5, objectFit: "cover", flexShrink: 0 }} loading="lazy" />;
+}
 
 // raw window.confirm()/confirm() is unreliable inside the mobile app webview,
 // so invoice-related confirmations use this in-app dialog instead.
@@ -976,7 +989,7 @@ function CustomerCard({
                 <div style={{ fontSize: 9.5, color: "#f2c94c", margin: "10px 0 6px", fontWeight: 600 }}>موجود ({held.length})</div>
                 {held.map((p) => (
                   <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderBottom: "1px solid #1a1a1a" }}>
-                    {p.image && <img src={getImageUrl(p.image)} alt="" style={{ width: 30, height: 30, borderRadius: 5, objectFit: "cover", flexShrink: 0 }} loading="lazy" />}
+                    <GalleryProductThumb filename={p.image} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 11, color: "#ddd" }}>#{fmtCode(p.code)} {p.name}</div>
                     </div>
