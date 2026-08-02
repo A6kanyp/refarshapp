@@ -3937,6 +3937,12 @@ export default function App() {
     reader.onload = (ev) => {
       try {
         const wb = XLSX.read(ev.target.result, { type: "array" });
+        // آیتم ۲: قبلاً یه خطای کوچیک توی هر بخش (مثلاً یه JSON خراب توی یه
+        // سلول) کل ایمپورت رو با یه پیام ثابت و بی‌فایده متوقف می‌کرد. الان هر
+        // بخش (مشتریان/متریال/محصولات/جلسات) جدا try/catch می‌شه؛ اگه یکی
+        // خراب بود، بقیه‌ی بخش‌ها همچنان ایمپورت می‌شن و در پایان دقیقاً گفته
+        // می‌شه کدوم شیت مشکل داشت، به‌جای شکست کامل و کور
+        const sectionErrors = [];
 
         // Find Sheets by Name or fallback to Indices
         let productsSheet = null;
@@ -3970,6 +3976,7 @@ export default function App() {
 
         // ── ۱. پردازش مشتریان و گالری‌ها (Dependency #1) ──
         const importedCustomers = [];
+        try {
         if (customersSheet) {
           const custRows = XLSX.utils.sheet_to_json(customersSheet, { header: 1, defval: "" });
           custRows.forEach((row, idx) => {
@@ -4002,9 +4009,14 @@ export default function App() {
             }
           });
         }
+        } catch (sectionErr) {
+          console.error("import: مشتریان/گالری‌ها", sectionErr);
+          sectionErrors.push(`مشتریان/گالری‌ها: ${sectionErr?.message || sectionErr}`);
+        }
 
         // ── ۲. پردازش متریال‌ها (Dependency #2) ──
         const importedMaterials = [];
+        try {
         if (materialsSheet) {
           const matRows = XLSX.utils.sheet_to_json(materialsSheet, { header: 1, defval: "" });
           matRows.forEach((row, idx) => {
@@ -4223,9 +4235,14 @@ export default function App() {
             });
           });
         }
+        } catch (sectionErr) {
+          console.error("import: متریال‌ها", sectionErr);
+          sectionErrors.push(`متریال‌ها: ${sectionErr?.message || sectionErr}`);
+        }
 
         // ── ۳. پردازش محصولات (Dependency #3) ──
         const importedProducts = [];
+        try {
         if (productsSheet) {
           const prodRows = XLSX.utils.sheet_to_json(productsSheet, { header: 1, defval: "" });
           prodRows.forEach((row, idx) => {
@@ -4353,9 +4370,14 @@ export default function App() {
             });
           });
         }
+        } catch (sectionErr) {
+          console.error("import: محصولات", sectionErr);
+          sectionErrors.push(`محصولات: ${sectionErr?.message || sectionErr}`);
+        }
 
         // ── ۴. پردازش جلسات برش (Dependency #4) ──
         const importedSessions = [];
+        try {
         if (sessionsSheet) {
           const sessRows = XLSX.utils.sheet_to_json(sessionsSheet, { header: 1, defval: "" });
           sessRows.forEach((row, idx) => {
@@ -4395,10 +4417,25 @@ export default function App() {
             }
           });
         }
+        } catch (sectionErr) {
+          console.error("import: جلسات برش", sectionErr);
+          sectionErrors.push(`جلسات برش: ${sectionErr?.message || sectionErr}`);
+        }
 
         // کارت‌ویزیت‌ها (+ کارت خودم)
         const importedBusinessCards = [];
         let importedMyBusinessCard = null;
+        // تجهیزات
+        const importedEquipment = [];
+        // لینک‌های کارگاه
+        const importedWorkshopLinks = [];
+        // ردپای تغییرات
+        const importedAuditLog = [];
+        // انواع محصول
+        const importedProductTypes = [];
+        // پیش‌نویس فاکتور
+        const importedInvoiceDrafts = [];
+        try {
         if (businessCardsSheet) {
           const bcRows = XLSX.utils.sheet_to_json(businessCardsSheet, { header: 1, defval: "" });
           bcRows.forEach((row, idx) => {
@@ -4436,8 +4473,6 @@ export default function App() {
           });
         }
 
-        // تجهیزات
-        const importedEquipment = [];
         if (equipmentSheet) {
           const eqRows = XLSX.utils.sheet_to_json(equipmentSheet, { header: 1, defval: "" });
           eqRows.forEach((row, idx) => {
@@ -4453,8 +4488,6 @@ export default function App() {
           });
         }
 
-        // لینک‌های کارگاه
-        const importedWorkshopLinks = [];
         if (workshopLinksSheet) {
           const wlRows = XLSX.utils.sheet_to_json(workshopLinksSheet, { header: 1, defval: "" });
           wlRows.forEach((row, idx) => {
@@ -4481,8 +4514,6 @@ export default function App() {
           });
         }
 
-        // ردپای تغییرات
-        const importedAuditLog = [];
         if (auditLogSheet) {
           const aRows = XLSX.utils.sheet_to_json(auditLogSheet, { header: 1, defval: "" });
           aRows.forEach((row, idx) => {
@@ -4500,8 +4531,6 @@ export default function App() {
           });
         }
 
-        // انواع محصول
-        const importedProductTypes = [];
         if (productTypesSheet) {
           const ptRows = XLSX.utils.sheet_to_json(productTypesSheet, { header: 1, defval: "" });
           ptRows.forEach((row, idx) => {
@@ -4517,8 +4546,6 @@ export default function App() {
           });
         }
 
-        // پیش‌نویس فاکتور
-        const importedInvoiceDrafts = [];
         if (invoiceDraftsSheet) {
           const invRows = XLSX.utils.sheet_to_json(invoiceDraftsSheet, { header: 1, defval: "" });
           invRows.forEach((row, idx) => {
@@ -4532,6 +4559,10 @@ export default function App() {
               importedInvoiceDrafts.push({ id, updatedAt: row[2] || null });
             }
           });
+        }
+        } catch (sectionErr) {
+          console.error("import: کارت‌ویزیت/تجهیزات/لینک‌کارگاه/ردپا/انواع‌محصول/پیش‌نویس‌فاکتور", sectionErr);
+          sectionErrors.push(`بخش‌های تکمیلی (کارت‌ویزیت/تجهیزات/...): ${sectionErr?.message || sectionErr}`);
         }
 
         // Set pending state to trigger confirmation dialog rather than wiping database automatically
@@ -4548,6 +4579,12 @@ export default function App() {
           workshopLinks: importedWorkshopLinks,
           auditLog: importedAuditLog,
         });
+
+        if (sectionErrors.length > 0) {
+          // بخش‌هایی که خراب بودن رد شدن ولی بقیه‌ی فایل با موفقیت ایمپورت شد —
+          // به‌جای شکست کامل، دقیقاً می‌گیم کدوم بخش(ها) مشکل داشتن
+          notify(`ایمپورت با هشدار انجام شد — این بخش(ها) مشکل داشتن و رد شدن: ${sectionErrors.join(" | ")}`);
+        }
 
       } catch (err) {
         console.error(err);
