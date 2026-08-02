@@ -2311,9 +2311,14 @@ function MaterialCard({
           )}
 
           {/* دکمه‌های بولک/ویرایش/حذف — بالای لیست محصولات لینک‌شده */}
-          <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+          {/* «افزودن به محصولات» قبلاً flex:1 داشت و کل عرض ردیف رو پر می‌کرد،
+              برخلاف دکمه‌های ویرایش/حذف کنارش که باریک (اندازه‌ی محتوا) بودن —
+              همون چیزی که کاربر «باریک نبودن دکمه‌های اکسپند متریال» می‌گفت.
+              الان اونم فقط به اندازه‌ی متنش عرض می‌گیره؛ justifyContent:space-between
+              روی خودِ ردیف باعث می‌شه دکمه‌های ویرایش/حذف سمت راست بمونن (Ash 🟡) */}
+          <div style={{ display: "flex", gap: 6, marginTop: 10, justifyContent: "space-between" }}>
             <button
-              style={{ ...S.chip, flex: 1, color: "#7aa8d8" }}
+              style={{ ...S.chip, color: "#7aa8d8" }}
               onClick={() => onBulkApply(mat)}
             >
               افزودن به محصولات
