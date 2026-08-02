@@ -5,6 +5,7 @@ import {
   Palette, Edit3, Save, RefreshCw, Filter, X
 , Trash2, Edit2, Plus } from "lucide-react";
 import { fmt, fmtCode, fmtDate, toNum, formatProductDims, qtySuffix } from "../mathCore";
+import { uid } from "../dataModels";
 import { JalaliDatePicker } from "./JalaliDatePicker";
 import InvoicePrint from "./InvoicePrint";
 
@@ -155,6 +156,63 @@ export default function InvoicesTab({
     setData((d) => ({ ...d, invoiceDrafts: (d.invoiceDrafts || []).filter((x) => x.id !== id) }));
     if (currentDraftId === id) resetDraftForm();
     notify && notify("پیش‌فاکتور حذف شد");
+  };
+
+  // یه پیش‌فاکتور ذخیره‌شده رو «نهایی» می‌کنه: محصولات واقعیِ توش (که productId دارن) رو
+  // sold می‌کنه (دقیقاً همون قراردادی که سبد خرید تب محصولات برای فروش استفاده می‌کنه)
+  // و خودِ پیش‌فاکتور از لیست پیش‌نویس‌ها حذف می‌شه — از اون به بعد جزو فاکتورهای رسمی‌ست
+  const handleFinalizeDraft = (draft) => {
+    if (!setData) return;
+    const itemsWithProduct = (draft.items || []).filter((it) => it.productId);
+    if (itemsWithProduct.length === 0) {
+      notify && notify("این پیش‌فاکتور هیچ محصول واقعی‌ای نداره که بشه نهایی‌ش کرد");
+      return;
+    }
+    const name = (draft.buyerName || "").trim();
+    const saleDate = draft.date || new Date().toISOString().substring(0, 10);
+    const priceById = {};
+    itemsWithProduct.forEach((it) => { priceById[it.productId] = toNum(it.finalPrice); });
+    const ids = new Set(itemsWithProduct.map((it) => it.productId));
+
+    setData((d) => {
+      let customersList = [...(d.customers || [])];
+      let custId = null;
+      if (name) {
+        const existing = customersList.find((c) => c.kind === "customer" && c.name.toLowerCase() === name.toLowerCase());
+        if (existing) {
+          custId = existing.id;
+        } else {
+          const nc = { id: uid(), name, phone: draft.buyerPhone || "", note: draft.buyerAddress || "", color: "#8B1A1A", kind: "customer" };
+          customersList = [...customersList, nc];
+          custId = nc.id;
+        }
+      }
+      const updatedProducts = d.products.map((p) => {
+        if (!ids.has(p.id)) return p;
+        const orig = toNum(p.salePrice);
+        const fp = priceById[p.id];
+        const discPct = orig > 0 && fp < orig ? Math.round((1 - fp / orig) * 100) : 0;
+        return {
+          ...p,
+          status: "sold",
+          location: custId || p.location,
+          buyerCustomerId: custId,
+          buyerName: name,
+          buyerPhone: draft.buyerPhone || "",
+          buyerAddress: draft.buyerAddress || "",
+          buyerGender: draft.buyerGender || "",
+          saleDate,
+          settled: !!draft.isSettled,
+          settleDate: draft.isSettled ? saleDate : null,
+          discountPercent: discPct,
+          discountedPrice: fp,
+        };
+      });
+      const nextDrafts = (d.invoiceDrafts || []).filter((x) => x.id !== draft.id);
+      return { ...d, products: updatedProducts, customers: customersList, invoiceDrafts: nextDrafts };
+    });
+    if (currentDraftId === draft.id) resetDraftForm();
+    notify && notify("پیش‌فاکتور نهایی و به فاکتور رسمی تبدیل شد");
   };
 
   // Compute Invoices Grouped from Product Totals
@@ -1004,6 +1062,34 @@ export default function InvoicesTab({
               </div>
             </div>
 
+            {/* وضعیت تسویه + ودیعه + مبلغ قابل پرداخت */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, alignItems: "end" }}>
+              <button
+                onClick={() => setCustomIsSettled((s) => !s)}
+                style={{ height: 32, marginTop: 3, borderRadius: 6, border: "none", cursor: "pointer", fontSize: 10.5, fontWeight: 600, background: customIsSettled ? "#1d3a24" : "#3a1d1d", color: customIsSettled ? "#5fd180" : "#e08a8a" }}
+              >
+                {customIsSettled ? "✓ تسویه‌شده" : "⚠ بدهکار / پیش‌پرداخت"}
+              </button>
+              {!customIsSettled && (
+                <div>
+                  <label style={{ fontSize: 9, color: "#888" }}>مبلغ ودیعه (پیش‌پرداخت)</label>
+                  <input onFocus={(e) => e.target.select()}
+                    type="number"
+                    style={{ ...S.input, width: "100%", height: 32, marginTop: 3 }}
+                    value={customDeposit || ""}
+                    placeholder="0"
+                    onChange={(e) => setCustomDeposit(parseInt(e.target.value) || 0)}
+                  />
+                </div>
+              )}
+            </div>
+            {!customIsSettled && (
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, color: "#F5F0EB", background: "#161616", borderRadius: 8, padding: "8px 12px" }}>
+                <span style={{ color: "#888" }}>مبلغ قابل پرداخت (بعد از ودیعه)</span>
+                <span style={{ fontWeight: 700 }}>{fmt(Math.max(0, customItems.reduce((s, x) => s + toNum(x.finalPrice), 0) - toNum(customDeposit)))} ت</span>
+              </div>
+            )}
+
             <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
               <button style={{ ...S.btnOutline, flex: 1, justifyContent: "center" }} onClick={handleSaveDraft}>
                 <Save size={13} />
@@ -1041,6 +1127,13 @@ export default function InvoicesTab({
                       <div style={{ fontSize: 9.5, color: "#666", marginTop: 2 }}>{(draft.items || []).length} قلم — {fmt(total)} ت</div>
                     </div>
                     <button style={{ ...S.chip }} onClick={() => handleLoadDraft(draft)}>باز کردن</button>
+                    <button
+                      style={{ ...S.chip, background: "#1d3a24", color: "#5fd180", border: "none" }}
+                      onClick={() => handleFinalizeDraft(draft)}
+                      title="تبدیل به فاکتور رسمی (محصولاتش sold می‌شن و از پیش‌نویس‌ها حذف می‌شه)"
+                    >
+                      <CheckCircle2 size={12} /> نهایی‌کردن
+                    </button>
                     <button style={{ background: "transparent", border: "none", color: "#8B1A1A", cursor: "pointer", padding: 4 }} onClick={() => handleDeleteDraft(draft.id)}>
                       <Trash2 size={14} />
                     </button>
