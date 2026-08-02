@@ -19,7 +19,8 @@ import {
   API_BASE_URL_OVERRIDE_KEY
 } from "../utils/syncManager";
 import { getDefaultData } from "../dataModels";
-import { getImageFolderName } from "../utils/imageStorage";
+import { getImageFolderName, autoDetectImagesForCode } from "../utils/imageStorage";
+import { fmtCode } from "../mathCore";
 import { useAuth } from "../contexts/AuthContext.jsx";
 
 function formatRelativeTime(timestamp) {
@@ -61,6 +62,48 @@ export default function SyncTab({
   const [showPinInput, setShowPinInput] = useState(false);
   const [showAuditLog, setShowAuditLog] = useState(false);
   const [auditFilter, setAuditFilter] = useState("all");
+  const [bulkImageScanning, setBulkImageScanning] = useState(false);
+  const [bulkImageScanResult, setBulkImageScanResult] = useState(null); // { checked, matched, newImages } | null
+
+  // مثل autoScanForImages توی فرم تک‌محصولی (ProductTab.jsx)، ولی یکجا برای همه‌ی
+  // محصولات: هر محصول رو با کدش توی پوشه‌ی عکس می‌گرده، هر عکس جدیدی که طبق قرارداد
+  // نام‌گذاری (کد+شماره دورقمی) پیدا بشه رو به لیست عکس‌های همون محصول اضافه می‌کنه.
+  // چیزی از عکس‌های موجود حذف نمی‌کنه، فقط جدیدها رو اضافه.
+  const handleBulkScanImages = async () => {
+    if (!data?.products?.length || !setData) return;
+    setBulkImageScanning(true);
+    setBulkImageScanResult(null);
+    try {
+      let matchedCount = 0;
+      let newImagesCount = 0;
+      const updates = {};
+      for (const p of data.products) {
+        if (p.code == null) continue;
+        const codeStr = fmtCode(p.code);
+        const found = await autoDetectImagesForCode(codeStr);
+        if (found.length === 0) continue;
+        const current = p.images || (p.image ? [p.image] : []);
+        const currentSet = new Set(current);
+        const newOnes = found.filter((f) => !currentSet.has(f));
+        if (newOnes.length === 0) continue;
+        matchedCount++;
+        newImagesCount += newOnes.length;
+        const merged = [...current, ...newOnes];
+        updates[p.id] = { image: p.image || merged[0] || null, images: merged };
+      }
+      if (Object.keys(updates).length > 0) {
+        setData((d) => ({
+          ...d,
+          products: d.products.map((p) => (updates[p.id] ? { ...p, ...updates[p.id] } : p)),
+        }));
+      }
+      setBulkImageScanResult({ checked: data.products.length, matched: matchedCount, newImages: newImagesCount });
+      if (notify) notify(matchedCount > 0 ? `${newImagesCount} عکس جدید برای ${matchedCount} محصول پیدا و وصل شد` : "عکس جدیدی که قبلاً وصل نبود پیدا نشد");
+    } finally {
+      setBulkImageScanning(false);
+    }
+  };
+
 
   const auditLog = Array.isArray(data?.auditLog) ? data.auditLog : [];
   const filteredAuditLog = useMemo(() => {
@@ -514,6 +557,23 @@ export default function SyncTab({
                 Documents/{imageFolderName}/1dnesting  ← خروجی عکس برش ۱D<br />
                 Documents/{imageFolderName}/2dnesting  ← خروجی عکس برش ۲D
               </div>
+            </div>
+          )}
+
+          <button
+            className="flex items-center justify-center gap-2 w-full mt-3 py-2.5 px-3 rounded-lg text-[11px] font-inherit cursor-pointer disabled:opacity-60"
+            style={{ background: "#161616", border: "1px solid #2a2a2a", color: "#7aa8d8" }}
+            onClick={handleBulkScanImages}
+            disabled={bulkImageScanning}
+          >
+            {bulkImageScanning ? <RefreshCw size={13} className="animate-spin" /> : <FolderOpen size={13} />}
+            {bulkImageScanning ? "در حال بررسی پوشه..." : "بررسی پوشه‌ی عکس و وصل‌کردن خودکار به همه‌ی محصولات"}
+          </button>
+          {bulkImageScanResult && !bulkImageScanning && (
+            <div className="text-[9.5px] text-[#666] mt-2 leading-relaxed">
+              {bulkImageScanResult.matched > 0
+                ? `از بین ${bulkImageScanResult.checked} محصول، ${bulkImageScanResult.matched} تا عکس جدید پیدا کردن (${bulkImageScanResult.newImages} عکس در کل).`
+                : `از بین ${bulkImageScanResult.checked} محصول، عکس جدیدی که قبلاً وصل نبود پیدا نشد.`}
             </div>
           )}
         </div>

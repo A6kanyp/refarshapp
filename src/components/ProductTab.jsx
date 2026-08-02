@@ -85,7 +85,7 @@ function cycleSort(current) {
 }
 
 // ── دکمه سورت ──
-function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onToggleGrouped, groupByTypeActive, onGroupByType }) {
+function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onToggleGrouped, groupByTypeActive, onGroupByType, onGroupByFabric }) {
   const [showPopup, setShowPopup] = useState(false);
   const wrapRef = useRef(null);
   const baseOrder = String(sortOrder || "").replace(/_desc$/, "");
@@ -141,16 +141,22 @@ function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onTogg
                 display: "block",
                 width: "100%",
                 padding: "8px 10px",
-                background: groupedView ? "#2a1414" : "transparent",
+                background: !groupByTypeActive && groupedView ? "#2a1414" : "transparent",
                 border: "none",
                 borderRadius: 4,
-                color: groupedView ? "#d88888" : "#ddd",
+                color: !groupByTypeActive && groupedView ? "#d88888" : "#ddd",
                 fontSize: 11,
                 fontFamily: "inherit",
                 cursor: "pointer",
                 textAlign: "right",
               }}
-              onClick={() => { if (!groupedView) onToggleGrouped(); }}
+              onClick={() => {
+                // قبلاً وقتی groupedView از قبل true بود (مثلاً چون الان روی «بر اساس نوع»
+                // بودیم) این کلیک هیچ کاری نمی‌کرد، چون فقط groupedView رو روشن می‌کرد نه
+                // sortMode رو برمی‌گردوند به fabric — پس گیر می‌کرد رو نوع. الان صریح برمی‌گرده.
+                if (onGroupByFabric) onGroupByFabric();
+                else if (!groupedView) onToggleGrouped?.();
+              }}
             >
               بر اساس فرش
             </button>
@@ -3930,6 +3936,10 @@ export default function ProductTab({
             groupedView={groupedView}
             onToggleGrouped={toggleGroupedView}
             groupByTypeActive={groupedView && sortMode === "type"}
+            onGroupByFabric={() => {
+              if (setSortMode) setSortMode("fabric");
+              if (!groupedView) toggleGroupedView();
+            }}
             onGroupByType={() => {
               if (setSortMode) setSortMode("type");
               if (!groupedView) toggleGroupedView();
@@ -3984,8 +3994,14 @@ export default function ProductTab({
               }
             }}
             style={{
-              // سمت چپ صفحه (نه وسط) — طبق خواسته‌ی کاربر
-              marginTop: 8,
+              // قبلاً توی flow خودِ بلوک sticky هدر بود، یعنی پس‌زمینه‌ی تیره‌ی همون بلوک
+              // (تمام عرض صفحه) کش می‌اومد پایین‌تر تا این لیبل رو هم بگیره — یه نوار
+              // مشکی عریض به‌جای یه حباب کوچیک شناور. الان با position:absolute کاملاً
+              // مستقل شناوره (مثل دکمه‌ی اسکرول‌به‌بالا یا FAB قرمز +).
+              position: "absolute",
+              top: "100%",
+              left: 14,
+              marginTop: 6,
               zIndex: 14,
               width: "fit-content",
               maxWidth: "70%",
@@ -4004,8 +4020,7 @@ export default function ProductTab({
               justifyContent: "center",
               border: "1px solid #2a2a2a",
               boxSizing: "border-box",
-              marginLeft: 0,
-              marginRight: "auto",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
             }}
           >
             {floatingCatLabel}

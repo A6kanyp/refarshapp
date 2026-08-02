@@ -28,6 +28,29 @@ function waitForImagesToLoad(container, maxWaitMs = 2000) {
   return Promise.race([Promise.all(imgPromises), timeoutPromise]);
 }
 
+// باگ واقعی: عکس محصولات توی فاکتور از یه هوک async (useResolvedImageSrc در
+// InvoiceTemplate.jsx) میان که lookup از IndexedDB/فایل‌سیستم می‌زنه. اگه کاربر
+// همون لحظه‌ی باز شدن پیش‌نمایش دکمه‌ی ذخیره/اشتراک/چاپ رو بزنه، ممکنه هنوز خیلی
+// از این lookupها تموم نشده باشن — و چون paperElement.cloneNode یه اسنپ‌شاته (نه
+// زنده)، هرچی همون لحظه توی DOM واقعی بوده (پلاسهولدر «در حال لود») برای همیشه
+// همون می‌مونه، حتی اگه یه لحظه بعد عکس واقعی لود بشه. پس قبل از هر clone، رو
+// خودِ عنصر زنده (نه کلون) صبر می‌کنیم تا هیچ پلاسهولدر در-حال-لودی نمونده باشه.
+function waitForProductImagesResolved(liveElement, maxWaitMs = 3000) {
+  if (!liveElement) return Promise.resolve();
+  return new Promise((resolve) => {
+    const start = Date.now();
+    const check = () => {
+      const pending = liveElement.querySelectorAll('[data-resolving="true"]').length;
+      if (pending === 0 || Date.now() - start > maxWaitMs) {
+        resolve();
+      } else {
+        requestAnimationFrame(check);
+      }
+    };
+    check();
+  });
+}
+
 export default function InvoicePrint({
   invoiceData, 
   businessCard,
@@ -54,6 +77,7 @@ export default function InvoicePrint({
   const handleSaveAsPDF = () => {
     const paperElement = paperRef.current;
     if (!paperElement) return;
+    waitForProductImagesResolved(paperElement).then(() => {
 
     // Create an off-screen container to render the A4 page at 1x scale
     const cloneContainer = document.createElement("div");
@@ -118,6 +142,7 @@ export default function InvoicePrint({
         }
       });
     });
+    });
   };
 
   useEffect(() => {
@@ -178,6 +203,7 @@ export default function InvoicePrint({
   const handleSaveAsImage = () => {
     const paperElement = paperRef.current;
     if (!paperElement) return;
+    waitForProductImagesResolved(paperElement).then(() => {
 
     // Create an off-screen container to render the A4 page at 1x scale
     // This avoids html2canvas bugs caused by active CSS scale/transform properties
@@ -225,12 +251,14 @@ export default function InvoicePrint({
         }
       });
     });
+    });
   };
 
 
   const captureCanvas = async () => {
     const paperElement = paperRef.current;
     if (!paperElement) return null;
+    await waitForProductImagesResolved(paperElement);
     const cloneContainer = document.createElement("div");
     cloneContainer.style.position = "absolute";
     cloneContainer.style.top = "-9999px";
