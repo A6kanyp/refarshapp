@@ -60,7 +60,7 @@ function ProductImage({ filename, alt = "", style, loading, className, ...rest }
 const S = {
   input: { width:"100%", background:"#1c1c1c", border:"1px solid #2a2a2a", borderRadius:6, padding:"7px 10px", color:"#ddd", fontFamily:"inherit", fontSize:11, outline:"none", boxSizing:"border-box" },
   iconBtn: { background:"transparent", border:"none", cursor:"pointer", padding:"4px 6px", display:"flex", alignItems:"center" },
-  chip: { background:"#1c1c1c", border:"1px solid #2a2a2a", color:"#888", fontSize:10, padding:"6px 9px", borderRadius:12, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap", display:"inline-flex", alignItems:"center", justifyContent:"center", minHeight:32, height:32, boxSizing:"border-box" },
+  chip: { background:"#1c1c1c", border:"1px solid #2a2a2a", color:"#888", fontSize:10, padding:"2px 9px", borderRadius:11, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap", display:"inline-flex", alignItems:"center", justifyContent:"center", minHeight:22, height:22, boxSizing:"border-box" },
   chipActive: { background:"#2a1414", border:"1px solid #8B1A1A", color:"#d88888" },
   chipYellow: { background:"#3a2a10", border:"1px solid #d4b400", color:"#f2c94c" },
   sectionLabel: { fontSize:10, color:"#666", fontWeight:600, letterSpacing:1, textTransform:"uppercase", margin:"14px 0 7px" },

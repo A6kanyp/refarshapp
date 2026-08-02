@@ -58,7 +58,7 @@ const T = {
     outline: "none",
     boxSizing: "border-box",
   },
-  chip: { background:"#1c1c1c", border:"1px solid #2a2a2a", color:"#888", fontSize:10, padding:"6px 9px", borderRadius:12, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap", display:"inline-flex", alignItems:"center", justifyContent:"center", minHeight:32, height:32, boxSizing:"border-box" },
+  chip: { background:"#1c1c1c", border:"1px solid #2a2a2a", color:"#888", fontSize:10, padding:"2px 9px", borderRadius:11, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap", display:"inline-flex", alignItems:"center", justifyContent:"center", minHeight:22, height:22, boxSizing:"border-box" },
   chipActive: {
     background: "#2a1414",
     border: "1px solid #8B1A1A",
@@ -925,13 +925,13 @@ function CustomerCard({
             </div>
           </div>
           <button
-            style={{ ...T.iconBtn, width: 32, height: 32, justifyContent: "center" }}
+            style={{ ...T.iconBtn, width: 22, height: 22, justifyContent: "center" }}
             onClick={(e) => { e.stopPropagation(); onEdit(stat); }}
           >
             <Edit3 size={12} color="#555" />
           </button>
           <button
-            style={{ ...T.iconBtn, width: 32, height: 32, justifyContent: "center" }}
+            style={{ ...T.iconBtn, width: 22, height: 22, justifyContent: "center" }}
             onClick={(e) => { e.stopPropagation(); onRequestDelete(stat.id); }}
           >
             <Trash2 size={12} color="#e08a8a" />

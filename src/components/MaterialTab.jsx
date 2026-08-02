@@ -35,13 +35,13 @@ const S = {
     border: "1px solid #2a2a2a",
     color: "#888",
     fontSize: 10,
-    padding: "6px 9px",
-    borderRadius: 12,
+    padding: "2px 9px",
+    borderRadius: 11,
     cursor: "pointer",
     fontFamily: "inherit",
     whiteSpace: "nowrap",
-    minHeight: 32,
-    height: 32,
+    minHeight: 22,
+    height: 22,
     boxSizing: "border-box",
     display: "inline-flex",
     alignItems: "center",
@@ -1562,7 +1562,7 @@ function MaterialCard({
           </div>
         </div>
         <button
-          style={{ ...S.iconBtn, width: 32, height: 32, justifyContent: "center" }}
+          style={{ ...S.iconBtn, width: 22, height: 22, justifyContent: "center" }}
           onClick={(e) => {
             e.stopPropagation();
             onToggleHidden(mat.id);
