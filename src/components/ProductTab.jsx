@@ -26,7 +26,7 @@ import { useToast } from "../contexts/ToastContext.jsx";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { formatPriceInput, parsePriceInput, formatPhoneInput, parsePhoneInput, getJalaliTimestamp } from "../utils/formatters";
 import { JalaliDatePicker } from "./JalaliDatePicker";
-import { FilterPopup } from "./FilterPopup";
+import { FilterPopup, AnchoredFloatingPopup } from "./FilterPopup";
 import InvoicePrint from "./InvoicePrint";
 import { useRegisterOpenModal } from "../utils/modalRegistry";
 
@@ -2837,6 +2837,7 @@ export function CatalogTab({
   const [showCatalogStatusMenu, setShowCatalogStatusMenu] = useState(false);
   const [typeFilter, setTypeFilter] = useState([]); // چند-انتخابی: آرایه‌ی شناسه‌ی انواع؛ خالی = همه
   const [showTypeFilterMenu, setShowTypeFilterMenu] = useState(false);
+  const typeFilterBtnRef = useRef(null);
   const [lightboxId, setLightboxId] = useState(null);
   const [search, setSearch] = useState("");
 
@@ -3082,6 +3083,7 @@ export function CatalogTab({
           {(productTypes || []).length > 0 && (
             <div style={{ position: "relative" }}>
               <button
+                ref={typeFilterBtnRef}
                 title={(typeFilter || []).length > 0 ? (typeFilter || []).map((id) => productTypes.find((t) => t.id === id)?.name).filter(Boolean).join("، ") : "همه"}
                 style={{
                   ...S.chip,
@@ -3095,7 +3097,7 @@ export function CatalogTab({
               >
                 <Tag size={13} />
               </button>
-              <FilterPopup open={showTypeFilterMenu} onClose={() => setShowTypeFilterMenu(false)} width={160}>
+              <AnchoredFloatingPopup open={showTypeFilterMenu} onClose={() => setShowTypeFilterMenu(false)} anchorRef={typeFilterBtnRef} width={160}>
                   <button
                     style={{ display: "block", width: "100%", textAlign: "right", padding: "8px 8px", background: (typeFilter || []).length === 0 ? "#2a1414" : "transparent", border: "none", color: (typeFilter || []).length === 0 ? "#d88888" : "#ddd", fontSize: 11, fontFamily: "inherit", cursor: "pointer", borderRadius: 4 }}
                     onClick={() => setTypeFilter([])}
@@ -3117,7 +3119,7 @@ export function CatalogTab({
                       </button>
                     );
                   })}
-              </FilterPopup>
+              </AnchoredFloatingPopup>
             </div>
           )}
 
@@ -3291,6 +3293,7 @@ export default function ProductTab({
   };
   const [typeFilter, setTypeFilter] = useState([]); // چند-انتخابی: آرایه‌ی شناسه‌ی انواع؛ خالی = همه
   const [showTypeFilterMenu, setShowTypeFilterMenu] = useState(false);
+  const typeFilterBtnRef = useRef(null);
   const [expandedProductId, setExpandedProductId] = useState(null);
 
   // Refresh (تک‌ضربه) → ریست کامل فیلترها/چیدمان تب محصولات به پیش‌فرض
@@ -3771,6 +3774,7 @@ export default function ProductTab({
           {(productTypes || []).length > 0 && (
             <div style={{ position: "relative" }}>
               <button
+                ref={typeFilterBtnRef}
                 title={(typeFilter || []).length > 0 ? (typeFilter || []).map((id) => productTypes.find((t) => t.id === id)?.name).filter(Boolean).join("، ") : "همه"}
                 style={{
                   ...S.chip,
@@ -3784,7 +3788,7 @@ export default function ProductTab({
               >
                 <Tag size={13} />
               </button>
-              <FilterPopup open={showTypeFilterMenu} onClose={() => setShowTypeFilterMenu(false)} width={160}>
+              <AnchoredFloatingPopup open={showTypeFilterMenu} onClose={() => setShowTypeFilterMenu(false)} anchorRef={typeFilterBtnRef} width={160}>
                   <button
                     style={{ display: "block", width: "100%", textAlign: "right", padding: "8px 8px", background: (typeFilter || []).length === 0 ? "#2a1414" : "transparent", border: "none", color: (typeFilter || []).length === 0 ? "#d88888" : "#ddd", fontSize: 11, fontFamily: "inherit", cursor: "pointer", borderRadius: 4 }}
                     onClick={() => setTypeFilter([])}
@@ -3806,7 +3810,7 @@ export default function ProductTab({
                       </button>
                     );
                   })}
-              </FilterPopup>
+              </AnchoredFloatingPopup>
             </div>
           )}
 
