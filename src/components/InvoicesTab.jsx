@@ -39,6 +39,7 @@ export default function InvoicesTab({
   const [filterSaleType, setFilterSaleType] = useState("all"); // 'all', 'direct', 'customer', 'gallery'
   const [activePrintInvoice, setActivePrintInvoice] = useState(null);
   const [editingId, setEditingId] = useState(null);
+  const [invoiceAddQuery, setInvoiceAddQuery] = useState("");
   const [editBuyerName, setEditBuyerName] = useState("");
   const [editBuyerPhone, setEditBuyerPhone] = useState("");
   const [editDate, setEditDate] = useState("");
@@ -340,6 +341,49 @@ export default function InvoicesTab({
         if (notify) notify("فاکتور با موفقیت حذف شد و محصولات به انبار بازگشتند");
       }
     }
+  };
+
+  // ── ویرایش پیشرفته‌ی فاکتور ثبت‌شده: حذف تک‌قلم + افزودن محصول (آیتم ۱۷، Ash 🟡) ──
+  // یه «فاکتور» اینجا صرفاً یه گروه مجازی از محصولاته (خریدار+تاریخ یکسان)، پس:
+  // - حذف یه قلم یعنی همون محصول رو دقیقاً مثل handleDeleteInvoice ولی فقط برای
+  //   یه محصول (نه کل گروه) به انبار برگردونیم
+  // - افزودن محصول یعنی یه محصول موجود (فروش‌نرفته) رو با همون خریدار/تاریخ/
+  //   وضعیت‌تسویه‌ی همین فاکتور «فروخته‌شده» علامت بزنیم تا وارد همون گروه بشه
+  const handleRemoveItemFromInvoice = (productId) => {
+    if (!setData) return;
+    setData((d) => ({
+      ...d,
+      products: d.products.map((p) =>
+        p.id === productId
+          ? { ...p, status: "available", location: "warehouse", buyerCustomerId: null, buyerName: "", buyerPhone: "", saleDate: null, settled: false, settleDate: null }
+          : p
+      ),
+    }));
+    if (notify) notify("محصول از فاکتور حذف و به انبار برگشت");
+  };
+
+  const handleAddProductToInvoice = (inv, product) => {
+    if (!setData) return;
+    setData((d) => ({
+      ...d,
+      products: d.products.map((p) =>
+        p.id === product.id
+          ? {
+              ...p,
+              status: "sold",
+              location: inv.buyerId === "warehouse" ? "warehouse" : inv.buyerId,
+              buyerCustomerId: inv.buyerId === "warehouse" ? null : inv.buyerId,
+              buyerName: inv.buyerName,
+              buyerPhone: inv.buyerPhone || "",
+              saleDate: inv.date,
+              settled: inv.allSettled,
+              settleDate: inv.allSettled ? inv.date : null,
+            }
+          : p
+      ),
+    }));
+    setInvoiceAddQuery("");
+    if (notify) notify("محصول به فاکتور اضافه شد");
   };
 
   const handleTriggerPrint = (inv, printImmediately = false) => {
@@ -646,7 +690,92 @@ export default function InvoicesTab({
                       </div>
                     </div>
 
-                    {isExpanded && (
+                    {isExpanded && editingId === inv.id && (
+                      <div style={{ padding: "10px 12px", background: "#0a0a0a", borderTop: "1px solid #1e1e1e" }} onClick={(e) => e.stopPropagation()}>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
+                          <div>
+                            <label style={{ fontSize: 9, color: "#888" }}>نام خریدار</label>
+                            <input onFocus={(e) => e.target.select()} style={{ ...S.input, width: "100%", height: 32, marginTop: 3 }} value={editBuyerName} onChange={(e) => setEditBuyerName(e.target.value)} />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: 9, color: "#888" }}>شماره تماس</label>
+                            <input onFocus={(e) => e.target.select()} style={{ ...S.input, width: "100%", height: 32, marginTop: 3 }} value={editBuyerPhone} onChange={(e) => setEditBuyerPhone(e.target.value)} />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: 9, color: "#888" }}>تاریخ</label>
+                            <input onFocus={(e) => e.target.select()} type="date" style={{ ...S.input, width: "100%", height: 32, marginTop: 3 }} value={editDate} onChange={(e) => setEditDate(e.target.value)} />
+                          </div>
+                          <div style={{ display: "flex", alignItems: "flex-end" }}>
+                            <button
+                              style={{ ...S.btn, width: "100%", height: 32, background: editSettled ? "#1d3a24" : "#3a1d1d", color: editSettled ? "#5fd180" : "#e08a8a" }}
+                              onClick={() => setEditSettled((v) => !v)}
+                            >
+                              {editSettled ? "تسویه شده" : "تسویه نشده"}
+                            </button>
+                          </div>
+                        </div>
+
+                        <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 8 }}>
+                          {inv.items.map((p) => (
+                            <div key={p.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 10, color: "#888", paddingBottom: 4, borderBottom: "1px dashed #151515", gap: 6 }}>
+                              <span style={{ flex: 1 }}>#{fmtCode(p.code)} {p.name}</span>
+                              <span style={{ color: "#aaa" }}>{fmt(toNum(p.salePrice))} ت</span>
+                              <button
+                                style={{ background: "#2a1414", border: "none", borderRadius: 4, width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", color: "#e08a8a", cursor: "pointer", flexShrink: 0 }}
+                                title="حذف این قلم از فاکتور (برگشت به انبار)"
+                                onClick={() => {
+                                  if (window.confirm(`«${p.name}» از فاکتور حذف و به انبار برگردونده بشه؟`)) handleRemoveItemFromInvoice(p.id);
+                                }}
+                              >
+                                <Trash2 size={11} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* ردیف افزودن محصول — انتخاب چندتایی از محصولات موجود (فروش‌نرفته) */}
+                        <div style={{ marginBottom: 10 }}>
+                          <label style={{ fontSize: 9, color: "#888" }}>افزودن محصول (از موجودی انبار)</label>
+                          <input
+                            onFocus={(e) => e.target.select()}
+                            style={{ ...S.input, width: "100%", height: 32, marginTop: 3 }}
+                            placeholder="جستجو با نام یا کد..."
+                            value={invoiceAddQuery}
+                            onChange={(e) => setInvoiceAddQuery(e.target.value)}
+                          />
+                          {invoiceAddQuery.trim() && (
+                            <div style={{ marginTop: 4, maxHeight: 160, overflowY: "auto", border: "1px solid #1e1e1e", borderRadius: 6 }}>
+                              {availableProductsForDraft
+                                .filter((p) => p.name?.toLowerCase().includes(invoiceAddQuery.trim().toLowerCase()) || String(p.code).includes(invoiceAddQuery.trim()))
+                                .slice(0, 20)
+                                .map((p) => (
+                                  <button
+                                    key={p.id}
+                                    style={{ display: "flex", width: "100%", justifyContent: "space-between", padding: "6px 8px", background: "transparent", border: "none", borderBottom: "1px solid #151515", color: "#ccc", fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}
+                                    onClick={() => handleAddProductToInvoice(inv, p)}
+                                  >
+                                    <span>#{fmtCode(p.code)} {p.name}</span>
+                                    <span style={{ color: "#5fd180" }}>+ افزودن</span>
+                                  </button>
+                                ))}
+                              {availableProductsForDraft.filter((p) => p.name?.toLowerCase().includes(invoiceAddQuery.trim().toLowerCase()) || String(p.code).includes(invoiceAddQuery.trim())).length === 0 && (
+                                <div style={{ padding: 8, fontSize: 10, color: "#666", textAlign: "center" }}>محصولی پیدا نشد</div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                          <button style={{ ...S.btn, fontSize: 10, padding: "5px 10px", background: "#1c1c1c", color: "#bbb", border: "1px solid #2a2a2a" }} onClick={() => setEditingId(null)}>
+                            انصراف
+                          </button>
+                          <button style={{ ...S.btn, fontSize: 10, padding: "5px 10px", background: "#1d3a24", color: "#5fd180" }} onClick={() => handleSaveInvoiceEdit(inv.id)}>
+                            ذخیره تغییرات
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {isExpanded && editingId !== inv.id && (
                       <div style={{ padding: "10px 12px", background: "#0a0a0a", borderTop: "1px solid #1e1e1e" }}>
                         <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 10 }}>
                           {inv.items.map(p => (
