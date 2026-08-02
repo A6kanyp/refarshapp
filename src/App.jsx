@@ -3145,7 +3145,8 @@ export default function App() {
         "قیمت دستی؟",
         "مخفی از کاتالوگ؟",
         "تعداد",
-        "تصویر اصلی"
+        "تصویر اصلی",
+        "کالیگرافی؟"
       ];
 
       const wsProductsRows = [pHeaders];
@@ -3215,7 +3216,8 @@ export default function App() {
           p.salePriceManual ? "بله" : "خیر",
           p.hiddenFromCatalog ? "بله" : "خیر",
           p.qty != null ? toNum(p.qty) : 1,
-          p.image || ""
+          p.image || "",
+          p.isCalligraphy ? "بله" : "خیر"
         ];
         wsProductsRows.push(rowData);
       });
@@ -4371,7 +4373,8 @@ export default function App() {
                 if (m) return Math.max(1, parseInt(m[1], 10) || 1);
                 return 1;
               })(),
-              image: String(row[34] || "").trim() || null
+              image: String(row[34] || "").trim() || null,
+              isCalligraphy: row[35] === "بله" || row[35] === true
             });
           });
         }
