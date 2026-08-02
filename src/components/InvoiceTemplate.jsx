@@ -30,6 +30,7 @@ export default function InvoiceTemplate({ invoiceData, businessCard }) {
     customer, // { name, phone, address, gender, kind, galleryOwnerName }
     items = [], // array of products
     totals, // { total, discount, final }
+    depositAmount: rawDepositAmount = 0, // آیتم ۲ (نمای پیشرفته‌ی فاکتور): مبلغ ودیعه/پیش‌پرداخت که از مبلغ قابل‌پرداخت کم می‌شه
   } = invoiceData;
 
   const title = type === "sales" ? "فاکتور فروش کالا" : "حساب فاکتور";
@@ -93,7 +94,8 @@ else {
   // تخفیف واقعی فقط روی آیتم‌های غیرِ هدیه حساب می‌شه؛ هدیه‌ها جدا (به‌عنوان «هدیه»، نه تخفیف) گزارش می‌شن
   const totalDiscount = sumOriginal(nonGiftSoldItems) - sumFinal(nonGiftSoldItems);
   const totalGiftValue = sumOriginal(giftSoldItems);
-  const finalPayable = sumFinal(soldUnsettledItems);
+  const finalPayable = Math.max(0, sumFinal(soldUnsettledItems) - toNum(rawDepositAmount));
+  const depositAmount = toNum(rawDepositAmount);
 
   const hasSettledItems = soldSettledItems.length > 0;
   const hasAvailableItems = availableItems.length > 0;
@@ -439,6 +441,12 @@ else {
                   <strong style={{ color: "#555" }}>{fmt(galleryStockValue)} تومان</strong>
                 </div>
               )}
+              {depositAmount > 0 && (
+                <div className="invoice-summary-row" style={{ color: "#1565c0" }}>
+                  <span>مبلغ ودیعه (پیش‌پرداخت):</span>
+                  <strong>{fmt(depositAmount)} تومان</strong>
+                </div>
+              )}
               <div className="invoice-summary-row invoice-summary-final">
                 <span>مبلغ نهایی قابل پرداخت:</span>
                 <span style={{ fontSize: "14px", fontWeight: "bold", color: "#8B1A1A" }}>{fmt(finalPayable)} تومان</span>
@@ -466,6 +474,12 @@ else {
                 <div className="invoice-summary-row" style={{ color: "#9c27b0" }}>
                   <span>مجموع هدیه‌ها ({giftSoldItems.length} قلم):</span>
                   <strong>{fmt(totalGiftValue)} تومان</strong>
+                </div>
+              )}
+              {depositAmount > 0 && (
+                <div className="invoice-summary-row" style={{ color: "#1565c0" }}>
+                  <span>مبلغ ودیعه (پیش‌پرداخت):</span>
+                  <strong>{fmt(depositAmount)} تومان</strong>
                 </div>
               )}
               <div className="invoice-summary-row invoice-summary-final">

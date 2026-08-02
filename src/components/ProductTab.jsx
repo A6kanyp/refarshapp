@@ -26,7 +26,7 @@ import { useToast } from "../contexts/ToastContext.jsx";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { formatPriceInput, parsePriceInput, formatPhoneInput, parsePhoneInput, getJalaliTimestamp } from "../utils/formatters";
 import { JalaliDatePicker } from "./JalaliDatePicker";
-import { FilterPopup } from "./FilterPopup";
+import { FilterPopup, AnchoredFloatingPopup } from "./FilterPopup";
 import InvoicePrint from "./InvoicePrint";
 import { useRegisterOpenModal } from "../utils/modalRegistry";
 
@@ -152,7 +152,7 @@ function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onTogg
               }}
               onClick={() => { if (!groupedView) onToggleGrouped(); }}
             >
-              دسته‌بندی
+              بر اساس فرش
             </button>
             <button
               style={{
@@ -190,7 +190,7 @@ function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onTogg
                 }}
                 onClick={onGroupByType}
               >
-                گروه‌بندی بر اساس نوع محصول
+                بر اساس نوع
               </button>
             )}
             <div style={{ borderTop: "1px solid #2a2a2a", margin: "4px 0" }} />
@@ -223,8 +223,8 @@ function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onTogg
               }
             }}
           >
-            {mode.label && <span>{mode.label}</span>}
             {renderMode(mode, baseOrder === mode.key)}
+            {mode.label && <span>{mode.label}</span>}
           </button>
         ))}
       </FilterPopup>
@@ -396,7 +396,7 @@ function ProductCard({ p, customers, materials, onEdit, onDelete, onImageUpload,
             <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center" }}>
               <label style={{ cursor:"pointer" }} onClick={(e) => e.stopPropagation()}>
                 <ImagePlus size={16} color="#444" />
-                <input type="file" accept="image/*" style={{ display:"none" }} onChange={(e) => onImageUpload(e, p.id)} />
+                <input type="file" accept="image/*" multiple style={{ display:"none" }} onChange={(e) => onImageUpload(e, p.id)} />
               </label>
             </div>
           )}
@@ -1676,9 +1676,9 @@ export function ProductEditor({
     let finalDimW = local.dimW, finalDimH = local.dimH, finalDims = local.dims;
     if (local.shape !== "circle" && local.shape !== "semi-circle" && local.dimW && local.dimH) {
       const a = toNum(local.dimW), b = toNum(local.dimH);
-      // طبق تصمیم تازه‌ی کاربر (برعکسِ تصمیم قبلی همین نشست): حالا باید عدد
-      // کوچیک‌تر اول باشه، بزرگ‌تر دوم — نه برعکس
-      if (a > b) {
+      // طبق تأیید صریح کاربر: عدد بزرگ‌تر اول، کوچیک‌تر دوم (Big×Small) — یه نشست قبلی
+      // این رو اشتباه برعکس کرده بود (Small×Big)، الان دوباره به حالت درست برگشت
+      if (a < b) {
         finalDimW = local.dimH;
         finalDimH = local.dimW;
       }
@@ -1688,8 +1688,8 @@ export function ProductEditor({
   };
 
   const handleImageUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
 
     try {
       // بخش «بازطراحی ذخیره‌سازی عکس‌ها» (Wall 🟣): قبلاً اینجا عکس به یه
@@ -1698,19 +1698,29 @@ export function ProductEditor({
       // امنیتی واقعی داشت (destPath بدون اعتبارسنجی از کلاینت) — حذف شد.
       // الان عکس فشرده می‌شه (مثل قبل) و مستقیم توی پوشه‌ی محلی ذخیره می‌شه؛
       // فقط اسم فایل (نه خودِ عکس) توی رکورد محصول می‌مونه.
-      const compressedDataUrl = await compressImageFile(file);
-      const safeName = (local.name || "Product").replace(/[^a-zA-Z0-9\u0600-\u06FF\s-]/g, '').trim().replace(/\s+/g, '_');
-      const desiredFilename = `${safeName}_${getJalaliTimestamp()}.jpg`;
-      const savedFilename = await saveImageToFolder(compressedDataUrl, IMAGE_CATEGORIES.PRODUCT, desiredFilename);
+      //
+      // آیتم ۸ (روادمپ): قبلاً اسم فایل از روی نام محصول ساخته می‌شد که اگه
+      // فارسی بود، موقع لود فاکتور ذخیره نمی‌شد. الان اسم فایل همیشه بر اساس
+      // کد محصول + شماره‌ی ترتیبی می‌سازه (مثلاً کد ۴ → 000401.jpg, 000402.jpg)،
+      // که هم همیشه لاتین/عددیه، هم چون کد یکتاست تضمین می‌کنه اسم فایل با
+      // هیچ محصول دیگه‌ای تداخل نداره. همچنین حالا چندانتخابی هم پشتیبانی می‌شه.
+      const codeStr = fmtCode(local.code != null ? local.code : nextCode);
+      const startIdx = (local.images || []).length;
+      const savedFilenames = [];
+      for (let i = 0; i < files.length; i++) {
+        const compressedDataUrl = await compressImageFile(files[i]);
+        const seq = String(startIdx + i + 1).padStart(2, "0");
+        const desiredFilename = `${codeStr}${seq}.jpg`;
+        const savedFilename = await saveImageToFolder(compressedDataUrl, IMAGE_CATEGORIES.PRODUCT, desiredFilename);
+        savedFilenames.push(savedFilename);
+      }
 
       setLocalWithScratch((l) => {
         const images = l.images || [];
-        if (!l.image) {
-          return { ...l, image: savedFilename, images: [savedFilename, ...images] };
-        }
-        return { ...l, images: [...images, savedFilename] };
+        const nextImages = [...images, ...savedFilenames];
+        return { ...l, image: l.image || savedFilenames[0], images: nextImages };
       });
-      showToast("تصویر در پوشه‌ی محلی ذخیره شد");
+      showToast(savedFilenames.length > 1 ? `${savedFilenames.length} تصویر در پوشه‌ی محلی ذخیره شد` : "تصویر در پوشه‌ی محلی ذخیره شد");
     } catch (err) {
       console.error("Image upload failed:", err);
       showToast("خطا در ذخیره‌ی عکس", "error");
@@ -2011,7 +2021,7 @@ export function ProductEditor({
             <label style={{ width: 60, height: 60, background: "#1c1c1c", border: "1px dashed #333", borderRadius: 8, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, gap: 3 }}>
               <ImagePlus size={16} color="#444" />
               <span style={{ fontSize: 8, color: "#444" }}>افزودن</span>
-              <input type="file" accept="image/*" style={{ display: "none" }} onChange={handleImageUpload} />
+              <input type="file" accept="image/*" multiple style={{ display: "none" }} onChange={handleImageUpload} />
             </label>
           </div>
 
@@ -2126,6 +2136,50 @@ export function ProductEditor({
               <div style={{ fontSize: 9.5, color: "#666", marginBottom: 4 }}>نام محصول</div>
               <input onFocus={(e) => e.target.select()} style={{ ...S.input, borderColor: errors.name ? "#ef4444" : "#232323", background: errors.name ? "#2a1414" : "#1c1c1c" }} value={local.name} onChange={(e) => { setErrors(e => ({...e, name: false})); setLocalWithScratch({ ...local, name: e.target.value }); }} />
             </div>
+            {(() => {
+              // آیتم ۷ (روادمپ): دکمه‌ی کوچیک select/deselect «کالیگرافی» — اگه فعال بشه
+              // خودکار «نوع محصول» رو روی نوعی به اسم «کالیگرافی» می‌ذاره (اگه از قبل
+              // نبود می‌سازدش، دقیقاً مثل ساختن نوع جدید از همون پاپ‌آپ «نوع» بالای همین فرم).
+              // چون از همون productTypeId استفاده می‌کنه، توی تب محصولات/کاتالوگ (که با
+              // productType گروه/نمایش می‌شن) و export/import اکسل و JSON خودکار پوشش داده می‌شه.
+              const calligType = (productTypes || []).find((t) => (t.name || "").trim() === "کالیگرافی");
+              const isCalligraphy = !!calligType && local.productTypeId === calligType.id;
+              return (
+                <div style={{ flexShrink: 0, alignSelf: "flex-end" }}>
+                  <button
+                    type="button"
+                    title="کالیگرافی"
+                    onClick={() => {
+                      if (isCalligraphy) {
+                        setLocalWithScratch((l) => ({ ...l, productTypeId: null }));
+                        return;
+                      }
+                      if (calligType) {
+                        setLocalWithScratch((l) => ({ ...l, productTypeId: calligType.id }));
+                      } else {
+                        const newType = { ...emptyProductType(), name: "کالیگرافی" };
+                        setData((d) => ({ ...d, productTypes: [...(d.productTypes || []), newType] }));
+                        setLocalWithScratch((l) => ({ ...l, productTypeId: newType.id }));
+                      }
+                    }}
+                    style={{
+                      height: 31,
+                      padding: "0 8px",
+                      borderRadius: 6,
+                      fontSize: 9.5,
+                      fontFamily: "inherit",
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                      background: isCalligraphy ? "#2a1414" : "#1c1c1c",
+                      border: isCalligraphy ? "1px solid #8B1A1A" : "1px solid #2a2a2a",
+                      color: isCalligraphy ? "#d88888" : "#888",
+                    }}
+                  >
+                    کالیگرافی
+                  </button>
+                </div>
+              );
+            })()}
             <div style={{ width: 64 }}>
               <div style={{ fontSize: 9.5, color: "#666", marginBottom: 4 }}>کد</div>
               <input style={{ ...S.input, textAlign: "center", color: errors.code ? "#ef4444" : "#8B1A1A", borderColor: errors.code ? "#ef4444" : "#232323", background: errors.code ? "#2a1414" : "#1c1c1c" }} value={local.code != null ? fmtCode(local.code) : fmtCode(nextCode)} onChange={(e) => { const d = e.target.value.replace(/\D/g, "");
@@ -2837,6 +2891,7 @@ export function CatalogTab({
   const [showCatalogStatusMenu, setShowCatalogStatusMenu] = useState(false);
   const [typeFilter, setTypeFilter] = useState([]); // چند-انتخابی: آرایه‌ی شناسه‌ی انواع؛ خالی = همه
   const [showTypeFilterMenu, setShowTypeFilterMenu] = useState(false);
+  const typeFilterBtnRef = useRef(null);
   const [lightboxId, setLightboxId] = useState(null);
   const [search, setSearch] = useState("");
 
@@ -3082,6 +3137,7 @@ export function CatalogTab({
           {(productTypes || []).length > 0 && (
             <div style={{ position: "relative" }}>
               <button
+                ref={typeFilterBtnRef}
                 title={(typeFilter || []).length > 0 ? (typeFilter || []).map((id) => productTypes.find((t) => t.id === id)?.name).filter(Boolean).join("، ") : "همه"}
                 style={{
                   ...S.chip,
@@ -3095,7 +3151,7 @@ export function CatalogTab({
               >
                 <Tag size={13} />
               </button>
-              <FilterPopup open={showTypeFilterMenu} onClose={() => setShowTypeFilterMenu(false)} width={160}>
+              <AnchoredFloatingPopup open={showTypeFilterMenu} onClose={() => setShowTypeFilterMenu(false)} anchorRef={typeFilterBtnRef} width={160}>
                   <button
                     style={{ display: "block", width: "100%", textAlign: "right", padding: "8px 8px", background: (typeFilter || []).length === 0 ? "#2a1414" : "transparent", border: "none", color: (typeFilter || []).length === 0 ? "#d88888" : "#ddd", fontSize: 11, fontFamily: "inherit", cursor: "pointer", borderRadius: 4 }}
                     onClick={() => setTypeFilter([])}
@@ -3117,7 +3173,7 @@ export function CatalogTab({
                       </button>
                     );
                   })}
-              </FilterPopup>
+              </AnchoredFloatingPopup>
             </div>
           )}
 
@@ -3291,6 +3347,7 @@ export default function ProductTab({
   };
   const [typeFilter, setTypeFilter] = useState([]); // چند-انتخابی: آرایه‌ی شناسه‌ی انواع؛ خالی = همه
   const [showTypeFilterMenu, setShowTypeFilterMenu] = useState(false);
+  const typeFilterBtnRef = useRef(null);
   const [expandedProductId, setExpandedProductId] = useState(null);
 
   // Refresh (تک‌ضربه) → ریست کامل فیلترها/چیدمان تب محصولات به پیش‌فرض
@@ -3771,6 +3828,7 @@ export default function ProductTab({
           {(productTypes || []).length > 0 && (
             <div style={{ position: "relative" }}>
               <button
+                ref={typeFilterBtnRef}
                 title={(typeFilter || []).length > 0 ? (typeFilter || []).map((id) => productTypes.find((t) => t.id === id)?.name).filter(Boolean).join("، ") : "همه"}
                 style={{
                   ...S.chip,
@@ -3784,7 +3842,7 @@ export default function ProductTab({
               >
                 <Tag size={13} />
               </button>
-              <FilterPopup open={showTypeFilterMenu} onClose={() => setShowTypeFilterMenu(false)} width={160}>
+              <AnchoredFloatingPopup open={showTypeFilterMenu} onClose={() => setShowTypeFilterMenu(false)} anchorRef={typeFilterBtnRef} width={160}>
                   <button
                     style={{ display: "block", width: "100%", textAlign: "right", padding: "8px 8px", background: (typeFilter || []).length === 0 ? "#2a1414" : "transparent", border: "none", color: (typeFilter || []).length === 0 ? "#d88888" : "#ddd", fontSize: 11, fontFamily: "inherit", cursor: "pointer", borderRadius: 4 }}
                     onClick={() => setTypeFilter([])}
@@ -3806,7 +3864,7 @@ export default function ProductTab({
                       </button>
                     );
                   })}
-              </FilterPopup>
+              </AnchoredFloatingPopup>
             </div>
           )}
 
@@ -3872,6 +3930,7 @@ export default function ProductTab({
               }
             }}
             style={{
+              // سمت چپ صفحه (نه وسط) — طبق خواسته‌ی کاربر
               marginTop: 8,
               zIndex: 14,
               width: "fit-content",

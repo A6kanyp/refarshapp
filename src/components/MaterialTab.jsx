@@ -15,7 +15,7 @@ import { useToast } from "../contexts/ToastContext.jsx";
 import { useRegisterOpenModal } from "../utils/modalRegistry";
 
 import { JalaliDatePicker } from "./JalaliDatePicker";
-import { FilterPopup } from "./FilterPopup";
+import { FilterPopup, AnchoredFloatingPopup } from "./FilterPopup";
 
 const S = {
   input: {
@@ -242,8 +242,8 @@ function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onTogg
               // پاپ‌آپ عمداً بسته نمی‌شه، تا کاربر بتونه چندبار پشت‌سرهم بین گزینه‌ها سوییچ کنه
             }}
           >
-            {mode.label && <span>{mode.label}</span>}
             {renderMode(mode, baseOrder === mode.key)}
+            {mode.label && <span>{mode.label}</span>}
           </button>
         ))}
       </FilterPopup>
@@ -2880,6 +2880,7 @@ export default function MaterialTab({
   const groupSectionRefs = useRef({});
   const stickyHeaderRef = useRef(null);
   const [showTypeMenu, setShowTypeMenu] = useState(false);
+  const typeFilterBtnRef = useRef(null);
   const [groupedView, setGroupedView] = useState(() => {
     try {
       return localStorage.getItem("material_grouped_view") !== "false"; // پیش‌فرض روشن
@@ -3403,6 +3404,7 @@ export default function MaterialTab({
 
           <div style={{ position: "relative", flexShrink: 0 }}>
             <button
+              ref={typeFilterBtnRef}
               style={{
                 ...S.chip,
                 padding: "6px 8px",
@@ -3425,7 +3427,7 @@ export default function MaterialTab({
                   : filterOptions.filter((o) => matGroupFilter.includes(o.key)).map((o) => o.label).join("،")}
               </span>
             </button>
-            <FilterPopup open={showTypeMenu} onClose={() => setShowTypeMenu(false)} width={170}>
+            <AnchoredFloatingPopup open={showTypeMenu} onClose={() => setShowTypeMenu(false)} anchorRef={typeFilterBtnRef} width={170}>
               {filterOptions.map((opt) => {
                 const isAllOpt = opt.key === "all";
                 const isSelected = isAllOpt ? matGroupFilter.length === 0 : matGroupFilter.includes(opt.key);
@@ -3462,7 +3464,7 @@ export default function MaterialTab({
                   </button>
                 );
               })}
-            </FilterPopup>
+            </AnchoredFloatingPopup>
           </div>
 
           {allFiltered.some((m) => m.hidden || (() => {
@@ -3556,7 +3558,8 @@ export default function MaterialTab({
             }}
             style={{
               // دیگه sticky جدا نیست: همون بلوک هدر (که خودش sticky هست) رو حمل می‌کنه،
-              // پس همیشه دقیقاً زیر ردیف Sort می‌شینه و هیچ‌وقت روی هدر جستجو نمیاد
+              // پس همیشه دقیقاً زیر ردیف Sort می‌شینه و هیچ‌وقت روی هدر جستجو نمیاد.
+              // سمت چپ صفحه (نه وسط) — طبق خواسته‌ی کاربر
               marginTop: 8,
               zIndex: 14,
               width: "fit-content",

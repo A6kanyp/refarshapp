@@ -557,13 +557,18 @@ export default function InvoicesTab({
       items: customItems.map((item) => ({
         ...item,
         originalPrice: item.finalPrice,
-        discountPct: 0
+        discountPct: 0,
+        // آیتم ۲ (نمای پیشرفته): وضعیت تسویه‌ی کل پیش‌فاکتور به هر قلم اعمال می‌شه
+        // (قبلاً هر قلم همیشه isSettled پیش‌فرض/undefined بود، مستقل از تاگل بالای فرم)
+        isSettled: customIsSettled,
       })),
       totals: {
         total: customItems.reduce((s, x) => s + toNum(x.finalPrice), 0),
         discount: 0,
         final: customItems.reduce((s, x) => s + toNum(x.finalPrice), 0)
-      }
+      },
+      // مبلغ ودیعه هم توی چاپ/پیش‌نمایش A4 از مبلغ نهایی کم بشه (InvoiceTemplate.jsx)
+      depositAmount: customIsSettled ? 0 : toNum(customDeposit),
     };
     setAutoPrint(false);
     setActivePrintInvoice(invoiceData);

@@ -22,6 +22,7 @@ import { useNestedModalCount } from "./utils/modalRegistry";
 import { initKeyboardScroll } from "./utils/keyboardScroll";
 import { useSwipeTabNav, useTabSlideClass } from "./utils/swipeTabs";
 import { compressImageFile } from "./utils/imageCompress";
+import { saveImageToFolder, IMAGE_CATEGORIES } from "./utils/imageStorage";
 import { pushBackHandler, consumeBack } from "./utils/backButton";
 import { useAuth } from "./contexts/AuthContext.jsx";
 import { usePendingChanges } from "./contexts/PendingChangesContext.jsx";
@@ -265,7 +266,12 @@ function ManagementPanelModal({ onClose, children, onQuickRefresh, onHoldRefresh
   }, [isPanelUnlocked]);
 
   const handleUnlock = () => setIsPanelUnlocked(true);
-  const handleExit = () => { setIsPanelUnlocked(false); onClose(); };
+  // آیتم ۶: قبلاً «خروج» بدون هیچ تاییدی مستقیم پنل رو می‌بست — الان اول یه
+  // پاپ‌آپ وسط صفحه تایید می‌گیره (همون الگوی «تأیید خروج» که فرم‌های محصول/
+  // متریال/گالری برای تغییرات ذخیره‌نشده استفاده می‌کنن)
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const handleExit = () => setShowExitConfirm(true);
+  const confirmExit = () => { setShowExitConfirm(false); setIsPanelUnlocked(false); onClose(); };
 
   if (!isPanelUnlocked) return <PinScreen onUnlock={handleUnlock} onCancel={onClose} />;
 
@@ -361,6 +367,19 @@ function ManagementPanelModal({ onClose, children, onQuickRefresh, onHoldRefresh
       </div>
 
       <ScrollToTopButton activeTab={activeTab} hide={hideScrollButton} />
+
+      {showExitConfirm && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 400, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ width: "88%", maxWidth: 340, background: "#181818", border: "1px solid #2a2a2a", borderRadius: 14, padding: 20 }} dir="rtl">
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#F5F0EB", marginBottom: 8 }}>از پنل مدیریت خارج شوید؟</div>
+            <div style={{ fontSize: 11, color: "#777", lineHeight: 1.65, marginBottom: 18 }}>برای ورود دوباره باید PIN رو وارد کنی.</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button style={{ flex: 1, background: "transparent", border: "1px solid #2a2a2a", color: "#777", borderRadius: 8, padding: "10px 0", fontFamily: "inherit", fontSize: 11, cursor: "pointer" }} onClick={() => setShowExitConfirm(false)}>انصراف</button>
+              <button style={{ flex: 1, background: "#8B1A1A", border: "none", color: "#fff", borderRadius: 8, padding: "10px 0", fontFamily: "inherit", fontSize: 11, cursor: "pointer" }} onClick={confirmExit}>خروج</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1370,14 +1389,12 @@ export default function App() {
             if (parsed[0]) p.dimW = parseFloat(parsed[0]) || null;
             if (parsed[1]) p.dimH = parseFloat(parsed[1]) || null;
           }
-          // مهاجرت: تا این نشست، محصولات جدید موقع ذخیره نرمالایز می‌شدن (طول یعنی
-          // dimW همیشه بزرگ‌تر یا مساوی عرض/dimH می‌موند)، ولی طبق تصمیم تازه‌ی
-          // کاربر این برعکس شد: حالا باید کوچیک‌تر اول (dimW) و بزرگ‌تر دوم
-          // (dimH) باشه. این نرمالایز برای همه‌ی محصولات مستطیلی (نه دایره/
-          // نیم‌دایره) روی کل دیتای موجود هم اجرا می‌شه، نه فقط موقع ذخیره‌ی بعدی
+          // مهاجرت: عدد بزرگ‌تر همیشه اول (dimW)، کوچیک‌تر دوم (dimH) — Big×Small.
+          // این نرمالایز برای همه‌ی محصولات مستطیلی (نه دایره/نیم‌دایره) روی کل
+          // دیتای موجود هم اجرا می‌شه، نه فقط موقع ذخیره‌ی بعدی
           if (p.shape !== "circle" && p.shape !== "semi-circle" && p.dimW != null && p.dimH != null) {
             const w = parseFloat(p.dimW), h = parseFloat(p.dimH);
-            if (!isNaN(w) && !isNaN(h) && w > h) {
+            if (!isNaN(w) && !isNaN(h) && w < h) {
               p.dimW = h;
               p.dimH = w;
               p.dims = `${h}×${w}`;
@@ -2801,27 +2818,36 @@ export default function App() {
 
   // ── CRUD ──
   const handleImageUpload = useCallback((e, productId) => {
-    const f = e.target.files[0];
-    if (!f) return;
-    compressImageFile(f)
-      .then((dataUrl) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    const product = data.products.find((p) => p.id === productId);
+    const codeStr = fmtCode(product?.code != null ? product.code : 0);
+    const startIdx = (product?.images || []).length;
+    // آیتم ۸ (روادمپ): این مسیر (افزودن سریع عکس از روی کارت محصول، نه فرم ویرایش)
+    // قبلاً دیتای خام base64 رو مستقیم توی p.image/p.images ذخیره می‌کرد (نه فایل
+    // توی پوشه‌ی محلی)، و فقط تک‌عکسی بود. الان دقیقاً هماهنگ با فرم ویرایش محصول:
+    // چندانتخابی + اسم فایل بر اساس کد محصول (نه اسم فارسی که ممکنه موقع لود فاکتور
+    // مشکل ایجاد کنه) + ذخیره‌ی واقعی توی پوشه‌ی محلی عکس‌ها
+    Promise.all(files.map((f, i) =>
+      compressImageFile(f).then((dataUrl) => {
+        const seq = String(startIdx + i + 1).padStart(2, "0");
+        return saveImageToFolder(dataUrl, IMAGE_CATEGORIES.PRODUCT, `${codeStr}${seq}.jpg`);
+      })
+    ))
+      .then((savedFilenames) => {
         setData((d) => ({
           ...d,
           products: d.products.map((p) => {
             if (p.id !== productId) return p;
-            // قبلاً اینجا فقط p.image ست می‌شد و p.images (آرایه‌ی همه‌ی عکس‌ها که
-            // توی ویرایش محصول نمایش داده می‌شه) دست‌نخورده می‌موند؛ یعنی آیکونی که
-            // از لیست محصولات گذاشته می‌شد نه توی ویرایش محصول دیده می‌شد و نه
-            // قابل حذف بود
             const images = p.images || [];
-            return { ...p, image: dataUrl, images: [dataUrl, ...images.filter((im) => im !== p.image)] };
+            return { ...p, image: p.image || savedFilenames[0], images: [...images, ...savedFilenames] };
           })
         }));
       })
       .catch((err) => {
         console.error("Image compress/upload failed:", err);
       });
-  }, []);
+  }, [data.products]);
 
   const addMaterialPurchase = useCallback((id, amount, date, qty) => {
     const amt = toNum(amount);
@@ -3927,6 +3953,12 @@ export default function App() {
     reader.onload = (ev) => {
       try {
         const wb = XLSX.read(ev.target.result, { type: "array" });
+        // آیتم ۲: قبلاً یه خطای کوچیک توی هر بخش (مثلاً یه JSON خراب توی یه
+        // سلول) کل ایمپورت رو با یه پیام ثابت و بی‌فایده متوقف می‌کرد. الان هر
+        // بخش (مشتریان/متریال/محصولات/جلسات) جدا try/catch می‌شه؛ اگه یکی
+        // خراب بود، بقیه‌ی بخش‌ها همچنان ایمپورت می‌شن و در پایان دقیقاً گفته
+        // می‌شه کدوم شیت مشکل داشت، به‌جای شکست کامل و کور
+        const sectionErrors = [];
 
         // Find Sheets by Name or fallback to Indices
         let productsSheet = null;
@@ -3960,6 +3992,7 @@ export default function App() {
 
         // ── ۱. پردازش مشتریان و گالری‌ها (Dependency #1) ──
         const importedCustomers = [];
+        try {
         if (customersSheet) {
           const custRows = XLSX.utils.sheet_to_json(customersSheet, { header: 1, defval: "" });
           custRows.forEach((row, idx) => {
@@ -3992,9 +4025,14 @@ export default function App() {
             }
           });
         }
+        } catch (sectionErr) {
+          console.error("import: مشتریان/گالری‌ها", sectionErr);
+          sectionErrors.push(`مشتریان/گالری‌ها: ${sectionErr?.message || sectionErr}`);
+        }
 
         // ── ۲. پردازش متریال‌ها (Dependency #2) ──
         const importedMaterials = [];
+        try {
         if (materialsSheet) {
           const matRows = XLSX.utils.sheet_to_json(materialsSheet, { header: 1, defval: "" });
           matRows.forEach((row, idx) => {
@@ -4209,9 +4247,14 @@ export default function App() {
             });
           });
         }
+        } catch (sectionErr) {
+          console.error("import: متریال‌ها", sectionErr);
+          sectionErrors.push(`متریال‌ها: ${sectionErr?.message || sectionErr}`);
+        }
 
         // ── ۳. پردازش محصولات (Dependency #3) ──
         const importedProducts = [];
+        try {
         if (productsSheet) {
           const prodRows = XLSX.utils.sheet_to_json(productsSheet, { header: 1, defval: "" });
           prodRows.forEach((row, idx) => {
@@ -4339,9 +4382,14 @@ export default function App() {
             });
           });
         }
+        } catch (sectionErr) {
+          console.error("import: محصولات", sectionErr);
+          sectionErrors.push(`محصولات: ${sectionErr?.message || sectionErr}`);
+        }
 
         // ── ۴. پردازش جلسات برش (Dependency #4) ──
         const importedSessions = [];
+        try {
         if (sessionsSheet) {
           const sessRows = XLSX.utils.sheet_to_json(sessionsSheet, { header: 1, defval: "" });
           sessRows.forEach((row, idx) => {
@@ -4381,10 +4429,25 @@ export default function App() {
             }
           });
         }
+        } catch (sectionErr) {
+          console.error("import: جلسات برش", sectionErr);
+          sectionErrors.push(`جلسات برش: ${sectionErr?.message || sectionErr}`);
+        }
 
         // کارت‌ویزیت‌ها (+ کارت خودم)
         const importedBusinessCards = [];
         let importedMyBusinessCard = null;
+        // تجهیزات
+        const importedEquipment = [];
+        // لینک‌های کارگاه
+        const importedWorkshopLinks = [];
+        // ردپای تغییرات
+        const importedAuditLog = [];
+        // انواع محصول
+        const importedProductTypes = [];
+        // پیش‌نویس فاکتور
+        const importedInvoiceDrafts = [];
+        try {
         if (businessCardsSheet) {
           const bcRows = XLSX.utils.sheet_to_json(businessCardsSheet, { header: 1, defval: "" });
           bcRows.forEach((row, idx) => {
@@ -4422,8 +4485,6 @@ export default function App() {
           });
         }
 
-        // تجهیزات
-        const importedEquipment = [];
         if (equipmentSheet) {
           const eqRows = XLSX.utils.sheet_to_json(equipmentSheet, { header: 1, defval: "" });
           eqRows.forEach((row, idx) => {
@@ -4439,8 +4500,6 @@ export default function App() {
           });
         }
 
-        // لینک‌های کارگاه
-        const importedWorkshopLinks = [];
         if (workshopLinksSheet) {
           const wlRows = XLSX.utils.sheet_to_json(workshopLinksSheet, { header: 1, defval: "" });
           wlRows.forEach((row, idx) => {
@@ -4467,8 +4526,6 @@ export default function App() {
           });
         }
 
-        // ردپای تغییرات
-        const importedAuditLog = [];
         if (auditLogSheet) {
           const aRows = XLSX.utils.sheet_to_json(auditLogSheet, { header: 1, defval: "" });
           aRows.forEach((row, idx) => {
@@ -4486,8 +4543,6 @@ export default function App() {
           });
         }
 
-        // انواع محصول
-        const importedProductTypes = [];
         if (productTypesSheet) {
           const ptRows = XLSX.utils.sheet_to_json(productTypesSheet, { header: 1, defval: "" });
           ptRows.forEach((row, idx) => {
@@ -4503,8 +4558,6 @@ export default function App() {
           });
         }
 
-        // پیش‌نویس فاکتور
-        const importedInvoiceDrafts = [];
         if (invoiceDraftsSheet) {
           const invRows = XLSX.utils.sheet_to_json(invoiceDraftsSheet, { header: 1, defval: "" });
           invRows.forEach((row, idx) => {
@@ -4518,6 +4571,10 @@ export default function App() {
               importedInvoiceDrafts.push({ id, updatedAt: row[2] || null });
             }
           });
+        }
+        } catch (sectionErr) {
+          console.error("import: کارت‌ویزیت/تجهیزات/لینک‌کارگاه/ردپا/انواع‌محصول/پیش‌نویس‌فاکتور", sectionErr);
+          sectionErrors.push(`بخش‌های تکمیلی (کارت‌ویزیت/تجهیزات/...): ${sectionErr?.message || sectionErr}`);
         }
 
         // Set pending state to trigger confirmation dialog rather than wiping database automatically
@@ -4535,9 +4592,19 @@ export default function App() {
           auditLog: importedAuditLog,
         });
 
+        if (sectionErrors.length > 0) {
+          // بخش‌هایی که خراب بودن رد شدن ولی بقیه‌ی فایل با موفقیت ایمپورت شد —
+          // به‌جای شکست کامل، دقیقاً می‌گیم کدوم بخش(ها) مشکل داشتن
+          notify(`ایمپورت با هشدار انجام شد — این بخش(ها) مشکل داشتن و رد شدن: ${sectionErrors.join(" | ")}`);
+        }
+
       } catch (err) {
         console.error(err);
-        notify("خطا در بازخوانی فایل اکسل پشتیبان");
+        // آیتم ۲: قبلاً پیام همیشه ثابت و بی‌فایده بود («خطا در بازخوانی فایل
+        // اکسل پشتیبان») و متن واقعی خطا فقط توی console.error می‌رفت که روی
+        // گوشی/APK اصلاً دیده نمی‌شه — الان خودِ پیام خطا هم توی toast میاد تا
+        // بشه فهمید مشکل واقعاً چیه (شیت گم‌شده، فرمت غلط، JSON خراب، ...)
+        notify(`خطا در بازخوانی فایل اکسل پشتیبان: ${err?.message || err}`);
       }
     };
     reader.readAsArrayBuffer(file);
