@@ -2878,6 +2878,7 @@ export default function MaterialTab({
   const [matGroupFilter, setMatGroupFilter] = useState([]); // آرایه‌ی چند-انتخابی؛ خالی = همه
   const [floatingCatLabel, setFloatingCatLabel] = useState("");
   const groupSectionRefs = useRef({});
+  const stickyHeaderRef = useRef(null);
   const [showTypeMenu, setShowTypeMenu] = useState(false);
   const [groupedView, setGroupedView] = useState(() => {
     try {
@@ -2994,7 +2995,12 @@ export default function MaterialTab({
       if (scrollY <= 0) { setFloatingCatLabel(""); return; }
 
       const entries = Object.entries(groupSectionRefs.current || {});
-      const headerBottom = (typeof stickyTop !== "undefined" ? stickyTop : 88) + 96; // پایینِ بلوکِ هدرِ sticky (تقریبی)
+      // نکته‌ی مهم: stickyTop یه رشته‌ی CSS calc()ه (نه عدد)، پس نمی‌شه بهش +96 کرد
+      // (قبلاً همین‌جا باگ بود: "calc(...)" + 96 => رشته => مقایسه‌ی top < headerBottom
+      // همیشه false می‌شد چون NaN بود، پس لیبل شناور اصلاً هیچ‌وقت نشون داده نمی‌شد).
+      // الان مستقیم از روی خودِ بلوک sticky هدر (که lableهم توشه) لبه‌ی پایینش رو
+      // اندازه می‌گیریم — همیشه درسته، به هیچ عدد/رشته‌ی جداگونه‌ای وابسته نیست.
+      const headerBottom = stickyHeaderRef.current ? stickyHeaderRef.current.getBoundingClientRect().bottom : 184;
       let current = "";
       let best = -Infinity;
       for (const [name, el] of entries) {
@@ -3366,6 +3372,7 @@ export default function MaterialTab({
   return (
     <div style={{ padding: "0 0 100px 0" }} dir="rtl">
       <div
+        ref={stickyHeaderRef}
         style={{
           position: "sticky",
           top: stickyTop,

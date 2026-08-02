@@ -3511,6 +3511,7 @@ export default function ProductTab({
   const toggleGroup = (name) => setCollapsedGroups(prev => ({ ...prev, [name]: !prev[name] }));
   const [floatingCatLabel, setFloatingCatLabel] = useState("");
   const groupSectionRefs = useRef({});
+  const stickyHeaderRef = useRef(null);
   const [groupedView, setGroupedView] = useState(() => {
     try {
       return localStorage.getItem("product_grouped_view") !== "false"; // پیش‌فرض روشن
@@ -3535,7 +3536,10 @@ export default function ProductTab({
       if (scrollY <= 0) { setFloatingCatLabel(""); return; }
 
       const entries = Object.entries(groupSectionRefs.current || {});
-      const headerBottom = (typeof stickyTop !== "undefined" ? stickyTop : 88) + 96;
+      // همون باگ تب متریال: stickyTop رشته‌ی calc()ه نه عدد، +96 بهش رشته می‌سازه و
+      // مقایسه‌ها همیشه false می‌شن (NaN) — لیبل هیچ‌وقت نشون داده نمی‌شد. الان مستقیم
+      // از خودِ بلوک sticky هدر لبه‌ی پایینش اندازه گرفته می‌شه.
+      const headerBottom = stickyHeaderRef.current ? stickyHeaderRef.current.getBoundingClientRect().bottom : 184;
       let current = "";
       let best = -Infinity;
       for (const [name, el] of entries) {
@@ -3576,6 +3580,7 @@ export default function ProductTab({
   return (
     <div style={{ padding: "0 0 100px 0" }} dir="rtl">
       <div
+        ref={stickyHeaderRef}
         style={{
           position: "sticky",
           top: stickyTop,
