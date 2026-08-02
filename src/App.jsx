@@ -2029,7 +2029,15 @@ export default function App() {
           const m = data.materials.find((x) => x.id === l.materialId);
           return m?.type === "fabric";
         });
-        const g = li ? (data.materials.find((m) => m.id === li.materialId)?.name || "فرش نامشخص") : "بدون فرش";
+        const mat = li ? data.materials.find((m) => m.id === li.materialId) : null;
+        let g;
+        if (mat) {
+          g = `فرش ${mat.name || "نامشخص"}`;
+          if (mat.pattern) g += `، (طرح ${mat.pattern})`;
+          if (mat.ageYears != null && mat.ageYears !== "") g += ` ${mat.ageYears} ساله`;
+        } else {
+          g = "بدون فرش";
+        }
         if (!groups[g]) groups[g] = [];
         groups[g].push(p);
       });
@@ -4000,9 +4008,18 @@ export default function App() {
             let procurements = [];
             let linkedProductIds = [];
 
-            if (row[17]) { 
-              try { 
-                batches = JSON.parse(row[17]); 
+            // 🔴 نکته‌ی مهم (باگ واقعی که import رو کلاً می‌ترکوند، fixed شد):
+            // ستون‌های «قدمت (سال)» و «طرح فرش» بین «تاریخ خرید» و «بچ‌های شارژ شده»
+            // به اکسپورت اضافه شده بودن (index ۱۷ و ۱۸)، ولی اینجا هنوز با اندیس قدیمی
+            // (بدون این ۲ ستون) خونده می‌شد — یعنی row[17] که قبلاً batches بود، الان
+            // «قدمت» (یه عدد، مثلاً 50) بود. JSON.parse(50) بدون خطا عدد ۵۰ برمی‌گردوند
+            // (نه آرایه)، و خط بعدی `(batches || []).map(...)` روی یه عدد صدا زده می‌شد
+            // → TypeError خام که کل import رو (نه فقط همون متریال) می‌ترکوند، چون این
+            // forEach توی try/catch جداگونه نبود. با فایل بک‌آپ واقعی تست شد: دقیقاً
+            // همون ۱۰ متریال فرش‌دار (که «قدمت» پر داشتن) باعث کرش می‌شدن.
+            if (row[19]) {
+              try {
+                batches = JSON.parse(row[19]);
                 if (Array.isArray(batches)) {
                   batches = batches.map(b => {
                     const bQty = Math.max(1, toNum(b.qty) || 1);
@@ -4025,12 +4042,14 @@ export default function App() {
                       linkedProductIds: Array.isArray(b.linkedProductIds) ? b.linkedProductIds : [],
                     };
                   });
+                } else {
+                  batches = [];
                 }
               } catch (_) {} 
             }
-            if (row[18]) {
+            if (row[20]) {
               try {
-                sticks = JSON.parse(row[18]);
+                sticks = JSON.parse(row[20]);
                 if (Array.isArray(sticks)) {
                   sticks = sticks.map((s) => {
                     const sQty = Math.max(1, toNum(s.qty) || 1);
@@ -4048,12 +4067,14 @@ export default function App() {
                       date: s.date || null,
                     };
                   });
+                } else {
+                  sticks = [];
                 }
               } catch (_) {}
             }
-            if (row[19]) {
+            if (row[21]) {
               try {
-                procurements = JSON.parse(row[19]);
+                procurements = JSON.parse(row[21]);
                 if (Array.isArray(procurements)) {
                   procurements = procurements.map((pr) => {
                     const prQty = Math.max(1, toNum(pr.qty) || 1);
@@ -4070,10 +4091,12 @@ export default function App() {
                       date: pr.date || null,
                     };
                   });
+                } else {
+                  procurements = [];
                 }
               } catch (_) {}
             }
-            if (row[20]) { try { linkedProductIds = JSON.parse(row[20]); } catch (_) {} }
+            if (row[22]) { try { const p = JSON.parse(row[22]); linkedProductIds = Array.isArray(p) ? p : []; } catch (_) {} }
 
             const purchaseQty = row[4] !== "" ? toNum(row[4]) : 1;
             const unitCost = row[5] !== "" ? toNum(row[5]) : toNum(row[6]);
@@ -4122,36 +4145,17 @@ export default function App() {
               sticks = (sticks || []).map((s) => ({ ...s, date: s.date || purchaseDate }));
             }
 
-            // ── فرش: قدمت و طرح از ستون اکسل یا استخراج از نام ──
-            // ستون‌های جدید (اکسل fixed): قدمت (سال)=index وابسته، طرح فرش
-            // از نام مثل «طرح شاخه شکسته» و «50ساله» هم استخراج می‌شود
-            let ageYears = null;
-            let pattern = null;
-            // اگر هدرهای جدید بعد از ستون‌های قدیمی آمده باشند (row[22]/قدمت در fixed export جداست)
-            // امن‌ترین راه: پارس نام + هر مقدار عددی در ردیف که با header شناخته نشود
-            const ageMatch = String(name || "").match(/(\d+)\s*ساله/);
-            if (ageMatch) ageYears = toNum(ageMatch[1]);
-            const patMatch = String(name || "").match(/طرح\s*([^)٬،\d]+?)(?:\s*[)٬،\d]|$)/);
-            if (patMatch) pattern = String(patMatch[1]).trim().replace(/\s+/g, " ");
-            // ستون‌های صریح اگر در row باشند (اکسل اصلاح‌شده: بعد از timestamp)
-            // در fixed excel: col 22=قدمت, 23=طرح (0-based index 22,23) — ولی اگر remainingCost هم باشد تداخل دارد
-            // پس فقط اگر matType=fabric و مقدار منطقی است
-            if (matType === "fabric") {
-              // جستجو در کل ردیف برای عدد قدمت اگر خالی بود از نام گرفتیم
-              for (let ci = 22; ci < Math.min(row.length, 30); ci++) {
-                const v = row[ci];
-                if (v === "" || v == null) continue;
-                // اگر عدد بین 1 و 300 است و ageYears خالی → احتمالاً قدمت
-                if (ageYears == null && typeof v === "number" && v >= 1 && v <= 300) {
-                  ageYears = v;
-                }
-                if (!pattern && typeof v === "string" && v.trim() && !String(v).match(/^\d+$/) && String(v).length < 80) {
-                  // ممکن است طرح باشد اگر شبیه تاریخ/json نباشد
-                  if (!String(v).startsWith("[") && !String(v).startsWith("{") && !String(v).includes("/")) {
-                    // فقط اگر هنوز pattern نداریم و این ستون بعد از فیلدهای شناخته‌شده است
-                  }
-                }
-              }
+            // ── فرش: قدمت و طرح — الان ستون اختصاصی دارن (۱۷ و ۱۸)، اولویت با اون‌هاست؛
+            // فقط اگه خالی بودن (بک‌آپ قدیمی‌تر از این فیچر) از روی نام حدس زده می‌شه
+            let ageYears = row[17] !== "" && row[17] != null ? toNum(row[17]) : null;
+            let pattern = row[18] ? String(row[18]).trim() : null;
+            if (ageYears == null) {
+              const ageMatch = String(name || "").match(/(\d+)\s*ساله/);
+              if (ageMatch) ageYears = toNum(ageMatch[1]);
+            }
+            if (!pattern) {
+              const patMatch = String(name || "").match(/طرح\s*([^)٬،\d]+?)(?:\s*[)٬،\d]|$)/);
+              if (patMatch) pattern = String(patMatch[1]).trim().replace(/\s+/g, " ");
             }
 
             // تکمیل unitPrice و pattern روی بچ‌ها
@@ -4196,12 +4200,12 @@ export default function App() {
               sticks,
               procurements,
               linkedProductIds,
-              updatedAt: row[21] !== "" ? toNum(row[21]) : null,
-              remainingCost: row[22] !== "" && row[22] != null && typeof row[22] === "number" && row[22] > 300 ? toNum(row[22]) : calculatedRemainingCost,
-              totalQty: row[23] !== "" && row[23] != null && typeof row[23] === "number" ? toNum(row[23]) : purchaseQty,
-              remainingQty: row[24] !== "" && row[24] != null && typeof row[24] === "number" ? toNum(row[24]) : Math.max(0, purchaseQty - consumedQty),
-              creditAllowed: row[25] !== "خیر" && row[25] !== false,
-              isUsableRemaining: row[26] !== "خیر" && row[26] !== false
+              updatedAt: row[23] !== "" ? toNum(row[23]) : null,
+              remainingCost: row[24] !== "" && row[24] != null && typeof row[24] === "number" ? toNum(row[24]) : calculatedRemainingCost,
+              totalQty: row[25] !== "" && row[25] != null && typeof row[25] === "number" ? toNum(row[25]) : purchaseQty,
+              remainingQty: row[26] !== "" && row[26] != null && typeof row[26] === "number" ? toNum(row[26]) : Math.max(0, purchaseQty - consumedQty),
+              creditAllowed: row[27] !== "خیر" && row[27] !== false,
+              isUsableRemaining: row[28] !== "خیر" && row[28] !== false
             });
           });
         }

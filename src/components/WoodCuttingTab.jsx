@@ -5,7 +5,7 @@ import React, { useState, useMemo, memo, useRef, useEffect } from "react";
 import { Trash2, ChevronDown, ChevronUp, RotateCcw, Plus, Eye, EyeOff, Download, X, Package, Save, Upload, Image as ImageIcon, FileText, Clock } from "lucide-react";
 import html2canvas from "html2canvas";
 import { saveFile, REFARSH_SAVE_DIRS } from "../utils/nativeSave";
-import { toNum, normalizeNumericInput, fmtCode } from "../mathCore";
+import { toNum, normalizeNumericInput, fmtCode, formatProductDims } from "../mathCore";
 import { getJalaliTimestamp } from "../utils/formatters";
 import { NestingVisualizer } from "./NestingVisualizer";
 import {
@@ -1114,7 +1114,7 @@ export default function WoodCuttingTab({ stickyTop, materials, products, persist
                       }}>
                     <span style={{ fontSize: 9, color: "#8B1A1A", flexShrink: 0 }}>#{fmtCode(p.code)}</span>
                     <span style={{ fontSize: 11, color: "#ddd", flex: 1 }}>{p.name}</span>
-                    <span style={{ fontSize: 10, color: "#7ec7e8", flexShrink: 0 }}>{p.dims} سانت</span>
+                    <span style={{ fontSize: 10, color: "#7ec7e8", flexShrink: 0 }}>{formatProductDims(p)} سانت</span>
                   </div>
                 ))}
                 {!(products || []).filter((p) => p.dims).length && (

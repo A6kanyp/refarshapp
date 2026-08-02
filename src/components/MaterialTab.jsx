@@ -6,7 +6,7 @@ import {
   Plus, Search, Edit3, Trash2, ChevronDown, ChevronUp,
   Eye, EyeOff, Lock, Unlock, X, RotateCcw, Package, CheckCircle2, Clock, ShoppingBag, Tag
 } from "lucide-react";
-import { toNum, fmt, fmtDate, todayISO, getProductArea } from "../mathCore";
+import { toNum, fmt, fmtDate, todayISO, getProductArea, formatProductDims } from "../mathCore";
 import { emptyMaterial, emptyBatch, emptyStick, uid } from "../dataModels";
 import { formatPriceInput, parsePriceInput } from "../utils/formatters";
 import { pushBackHandler } from "../utils/backButton";
@@ -1055,7 +1055,7 @@ export function BulkApplyMaterialPage({ material, products = [], allMaterials = 
                     <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
                       <span style={{ fontSize: 9, color: "#666", width: 24, flexShrink: 0 }}>#{product.code}</span>
                       <span style={{ fontSize: 11, color: "#ccc", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{product.name}</span>
-                      {product.dims && <span style={{ fontSize: 9.5, color: "#555", flexShrink: 0 }}>({product.dims})</span>}
+                      {product.dims && <span style={{ fontSize: 9.5, color: "#555", flexShrink: 0 }}>({formatProductDims(product)})</span>}
                     </div>
                     <button
                       type="button"
@@ -1245,7 +1245,7 @@ export function BulkApplyMaterialPage({ material, products = [], allMaterials = 
                         <span style={{ fontSize: 10.5, fontWeight: 500, color: "#eee", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: `${nameColCh}ch`, flexShrink: 0 }} title={product.name}>
                           {product.name}
                         </span>
-                        {product.dims && <span style={{ fontSize: 9, color: "#666", flexShrink: 0 }}>({product.dims})</span>}
+                        {product.dims && <span style={{ fontSize: 9, color: "#666", flexShrink: 0 }}>({formatProductDims(product)})</span>}
                       </div>
 
                       {/* سمت چپ (روبرو، در امتداد همون خط): نوار درصد + عدد درصد + × حذف — چون
@@ -3540,7 +3540,19 @@ export default function MaterialTab({
           <div
             onClick={() => {
               const el = groupSectionRefs.current[floatingCatLabel];
-              if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+              if (!el || !stickyHeaderRef.current) return;
+              const headerBottom = stickyHeaderRef.current.getBoundingClientRect().bottom;
+              // به‌جای scrollIntoView (که تا بالای بالا می‌بره و پشت خودِ هدرِ sticky
+              // قایم می‌شه)، دقیقاً به اندازه‌ای اسکرول کن که هدر واقعیِ دسته درست
+              // زیرِ بلوک sticky هدر بیفته — همون لحظه هم لیبل شناور (چون دیگه شرط
+              // «هدر واقعی هنوز دیده نمی‌شه» برقرار نیست) هاید می‌شه، هم اسم دسته دیده می‌شه
+              const delta = el.getBoundingClientRect().top - headerBottom - 4;
+              const panelEl = document.querySelector('div[style*="position: fixed"]');
+              if (panelEl && typeof panelEl.scrollBy === "function") {
+                panelEl.scrollBy({ top: delta, behavior: "smooth" });
+              } else {
+                window.scrollBy({ top: delta, behavior: "smooth" });
+              }
             }}
             style={{
               // دیگه sticky جدا نیست: همون بلوک هدر (که خودش sticky هست) رو حمل می‌کنه،
@@ -3564,8 +3576,9 @@ export default function MaterialTab({
               justifyContent: "center",
               border: "1px solid #2a2a2a",
               boxSizing: "border-box",
+              // سمت چپ صفحه، نه وسط
+              marginLeft: 0,
               marginRight: "auto",
-              marginLeft: "auto",
             }}
           >
             {floatingCatLabel}

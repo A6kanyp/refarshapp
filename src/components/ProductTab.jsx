@@ -3861,7 +3861,15 @@ export default function ProductTab({
           <div
             onClick={() => {
               const el = groupSectionRefs.current[floatingCatLabel];
-              if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+              if (!el || !stickyHeaderRef.current) return;
+              const headerBottom = stickyHeaderRef.current.getBoundingClientRect().bottom;
+              const delta = el.getBoundingClientRect().top - headerBottom - 4;
+              const panelEl = document.querySelector('div[style*="position: fixed"]');
+              if (panelEl && typeof panelEl.scrollBy === "function") {
+                panelEl.scrollBy({ top: delta, behavior: "smooth" });
+              } else {
+                window.scrollBy({ top: delta, behavior: "smooth" });
+              }
             }}
             style={{
               marginTop: 8,
@@ -3883,8 +3891,8 @@ export default function ProductTab({
               justifyContent: "center",
               border: "1px solid #2a2a2a",
               boxSizing: "border-box",
+              marginLeft: 0,
               marginRight: "auto",
-              marginLeft: "auto",
             }}
           >
             {floatingCatLabel}
