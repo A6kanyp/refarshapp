@@ -1676,9 +1676,9 @@ export function ProductEditor({
     let finalDimW = local.dimW, finalDimH = local.dimH, finalDims = local.dims;
     if (local.shape !== "circle" && local.shape !== "semi-circle" && local.dimW && local.dimH) {
       const a = toNum(local.dimW), b = toNum(local.dimH);
-      // طبق تصمیم تازه‌ی کاربر (برعکسِ تصمیم قبلی همین نشست): حالا باید عدد
-      // کوچیک‌تر اول باشه، بزرگ‌تر دوم — نه برعکس
-      if (a > b) {
+      // طبق تأیید صریح کاربر: عدد بزرگ‌تر اول، کوچیک‌تر دوم (Big×Small) — یه نشست قبلی
+      // این رو اشتباه برعکس کرده بود (Small×Big)، الان دوباره به حالت درست برگشت
+      if (a < b) {
         finalDimW = local.dimH;
         finalDimH = local.dimW;
       }
@@ -3861,9 +3861,22 @@ export default function ProductTab({
           <div
             onClick={() => {
               const el = groupSectionRefs.current[floatingCatLabel];
-              if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+              if (!el) return;
+              // به‌جای scrollIntoView (که ممکنه هدر گروه رو دقیقاً پشتِ نوار sticky بندازه و
+              // بازم مخفی بمونه)، دقیقاً به همون مقداری اسکرول می‌کنیم که هدر گروه از پشتِ
+              // نوار sticky بیاد بیرون — هم خودِ لیبل شناور هاید می‌شه، هم اسم دسته دیده می‌شه
+              const headerBottom = stickyHeaderRef.current ? stickyHeaderRef.current.getBoundingClientRect().bottom : 184;
+              const elTop = el.getBoundingClientRect().top;
+              const delta = elTop - headerBottom - 6;
+              const panel = document.querySelector('div[style*="position: fixed"]');
+              if (panel && panel.scrollTop > 0) {
+                panel.scrollBy({ top: delta, behavior: "smooth" });
+              } else {
+                window.scrollBy({ top: delta, behavior: "smooth" });
+              }
             }}
             style={{
+              // سمت چپ صفحه (نه وسط) — طبق خواسته‌ی کاربر
               marginTop: 8,
               zIndex: 14,
               width: "fit-content",
@@ -3884,7 +3897,7 @@ export default function ProductTab({
               border: "1px solid #2a2a2a",
               boxSizing: "border-box",
               marginRight: "auto",
-              marginLeft: "auto",
+              marginLeft: 0,
             }}
           >
             {floatingCatLabel}

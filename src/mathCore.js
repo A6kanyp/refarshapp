@@ -262,25 +262,25 @@ export function serviceROI(profit, finalPrice) {
   const fp = toNum(finalPrice);
   return fp <= 0 ? 0 : Math.round((toNum(profit) / fp) * 100 * 10) / 10;
 }
-// فرمت دسته‌بندی فرش: «فرش (نام)، (طرح (طرح)) (قدمت)ساله» — مثال: «فرش سعادت‌آباد، (طرح شورباخلی) ۶۰ساله»
-// فقط وقتی الگوی «(طرح ...)» و سن «...ساله» به‌وضوح توی اسم پیدا بشه این فرمت اعمال می‌شه؛
-// برای اسم‌های نامتعارف (بدون این دو الگو) فقط پیشوند «فرش» اضافه می‌شه (رفتار قبلی) تا چیزی خراب/گنگ نشه
-function formatFabricGroupLabel(rawName) {
+// فرمت دسته‌بندی فرش: «فرش (نام)، (طرح (طرح)) (قدمت) ساله» — مثال: «فرش یزد، (طرح کاشان) 50 ساله»
+// طرح و قدمت فیلدهای جدا (mat.pattern / mat.ageYears)ن، نه بخشی از اسم — قبلاً این تابع فقط
+// اسم رو می‌گرفت و سعی می‌کرد الگوی «(طرح ...)» و «...ساله» رو از توی خودِ متن اسم پیدا کنه که
+// عملاً هیچ‌وقت جواب نمی‌داد چون این دوتا از اول جدا از اسم ذخیره می‌شن.
+function formatFabricGroupLabel(rawName, pattern, ageYears) {
   const trimmed = (rawName || "").trim();
   if (!trimmed) return trimmed;
-  const base = trimmed.startsWith("فرش") ? trimmed.slice(3).trim() : trimmed;
-  const ageMatch = base.match(/(\d+)\s*ساله/);
-  const patternMatch = base.match(/\(\s*طرح\s+([^)]+?)\s*\)/);
-  if (ageMatch && patternMatch) {
-    const name = base
-      .replace(patternMatch[0], "")
-      .replace(ageMatch[0], "")
-      .replace(/[،,]/g, " ")
-      .replace(/\s{2,}/g, " ")
-      .trim();
-    if (name) {
-      return `فرش ${name}، (طرح ${patternMatch[1].trim()}) ${ageMatch[1]}ساله`;
-    }
+  const name = trimmed.startsWith("فرش") ? trimmed.slice(3).trim().replace(/^[،,]\s*/, "") : trimmed;
+  const patternTrimmed = (pattern || "").trim();
+  const ageNum = ageYears != null ? Number(ageYears) : null;
+  const hasAge = ageNum != null && !isNaN(ageNum) && ageNum > 0;
+  if (name && patternTrimmed && hasAge) {
+    return `فرش ${name}، (طرح ${patternTrimmed}) ${ageNum} ساله`;
+  }
+  if (name && patternTrimmed) {
+    return `فرش ${name}، (طرح ${patternTrimmed})`;
+  }
+  if (name && hasAge) {
+    return `فرش ${name}، ${ageNum} ساله`;
   }
   // کاربر دیگه خودش کلمه‌ی «فرش» رو اول اسم متریال تایپ نمی‌کنه، پس اگه از قبل
   // نداشت خودکار اضافه می‌شه (فقط برای دسته‌بندی محصولات، اسم خودِ متریال دست‌نخورده می‌مونه)
@@ -298,7 +298,7 @@ export function resolveProductGroupName(product, materials = []) {
     })?.materialId;
   if (fabricId) {
     const m = (materials || []).find((x) => x.id === fabricId);
-    if (m?.name) return formatFabricGroupLabel(m.name);
+    if (m?.name) return formatFabricGroupLabel(m.name, m.pattern, m.ageYears);
   }
   return product.group || "";
 }

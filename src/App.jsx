@@ -1388,14 +1388,12 @@ export default function App() {
             if (parsed[0]) p.dimW = parseFloat(parsed[0]) || null;
             if (parsed[1]) p.dimH = parseFloat(parsed[1]) || null;
           }
-          // مهاجرت: تا این نشست، محصولات جدید موقع ذخیره نرمالایز می‌شدن (طول یعنی
-          // dimW همیشه بزرگ‌تر یا مساوی عرض/dimH می‌موند)، ولی طبق تصمیم تازه‌ی
-          // کاربر این برعکس شد: حالا باید کوچیک‌تر اول (dimW) و بزرگ‌تر دوم
-          // (dimH) باشه. این نرمالایز برای همه‌ی محصولات مستطیلی (نه دایره/
-          // نیم‌دایره) روی کل دیتای موجود هم اجرا می‌شه، نه فقط موقع ذخیره‌ی بعدی
+          // مهاجرت: عدد بزرگ‌تر همیشه اول (dimW)، کوچیک‌تر دوم (dimH) — Big×Small.
+          // این نرمالایز برای همه‌ی محصولات مستطیلی (نه دایره/نیم‌دایره) روی کل
+          // دیتای موجود هم اجرا می‌شه، نه فقط موقع ذخیره‌ی بعدی
           if (p.shape !== "circle" && p.shape !== "semi-circle" && p.dimW != null && p.dimH != null) {
             const w = parseFloat(p.dimW), h = parseFloat(p.dimH);
-            if (!isNaN(w) && !isNaN(h) && w > h) {
+            if (!isNaN(w) && !isNaN(h) && w < h) {
               p.dimW = h;
               p.dimH = w;
               p.dims = `${h}×${w}`;
