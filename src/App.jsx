@@ -5,7 +5,7 @@ import React, { useState, useEffect, useLayoutEffect, useMemo, useCallback, useR
 import * as XLSX from "xlsx";
 import { LogOut, Users, RotateCcw, Fingerprint, Lock, Unlock, Undo2 } from "lucide-react";
 
-import { toNum, fmt, fmtCode, fmtDate, todayISO, getProductArea, getProductPerimeter, safeDivide, gregorianToJalali, toPersianDigits, calcPriceFromProfit, resolveProductGroupName } from "./mathCore";
+import { toNum, fmt, fmtCode, fmtDate, todayISO, getProductArea, getProductPerimeter, safeDivide, gregorianToJalali, toPersianDigits, calcPriceFromProfit, resolveProductGroupName, formatFabricGroupLabel } from "./mathCore";
 import { BiometricAuth, BiometryErrorType } from "@aparajita/capacitor-biometric-auth";
 import {
   loadData, saveData, mergeById, refundVanishedDeductions,
@@ -2047,14 +2047,7 @@ export default function App() {
           return m?.type === "fabric";
         });
         const mat = li ? data.materials.find((m) => m.id === li.materialId) : null;
-        let g;
-        if (mat) {
-          g = `فرش ${mat.name || "نامشخص"}`;
-          if (mat.pattern) g += `، (طرح ${mat.pattern})`;
-          if (mat.ageYears != null && mat.ageYears !== "") g += ` ${mat.ageYears} ساله`;
-        } else {
-          g = "بدون فرش";
-        }
+        const g = mat ? formatFabricGroupLabel(mat.name, mat.pattern, mat.ageYears) : "بدون فرش";
         if (!groups[g]) groups[g] = [];
         groups[g].push(p);
       });

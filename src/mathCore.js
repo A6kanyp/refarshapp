@@ -266,7 +266,7 @@ export function serviceROI(profit, finalPrice) {
 // طرح و قدمت فیلدهای جدا (mat.pattern / mat.ageYears)ن، نه بخشی از اسم — قبلاً این تابع فقط
 // اسم رو می‌گرفت و سعی می‌کرد الگوی «(طرح ...)» و «...ساله» رو از توی خودِ متن اسم پیدا کنه که
 // عملاً هیچ‌وقت جواب نمی‌داد چون این دوتا از اول جدا از اسم ذخیره می‌شن.
-function formatFabricGroupLabel(rawName, pattern, ageYears) {
+export function formatFabricGroupLabel(rawName, pattern, ageYears) {
   const trimmed = (rawName || "").trim();
   if (!trimmed) return trimmed;
   const name = trimmed.startsWith("فرش") ? trimmed.slice(3).trim().replace(/^[،,]\s*/, "") : trimmed;
