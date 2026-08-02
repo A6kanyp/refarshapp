@@ -2159,6 +2159,7 @@ export default function App() {
     pct = 100,
     includeWastage = false,
     batchId = null,
+    batchIds = null,
     label = "",
     perProductPctOverride = null,
     consumeRemaining = true,
@@ -2189,11 +2190,20 @@ export default function App() {
       const materials = d.materials.map(m => ({ ...m }));
       let totalRefund = 0;
 
-      // Calculate total area of all products being assigned to this batch (both new and updated)
-      const isBatchArea = (material.type === "area" || material.type === "fabric") && batchId;
+      // چندبچی: ترتیب انتخاب کاربر = ترتیب پرشدن («اول بچ اول پر بشه، بعد بره
+      // سراغ بعدی» — طبق تصمیم صریح کاربر). batchId تکی (قدیمی) هم پشتیبانی
+      // می‌شه تا هیچ صدازننده‌ی قدیمی‌ای نشکنه.
+      const resolvedBatchIds = (Array.isArray(batchIds) && batchIds.length) ? batchIds : (batchId ? [batchId] : []);
+      const isBatchArea = (material.type === "area" || material.type === "fabric") && resolvedBatchIds.length > 0;
       let totalArea = 0;
       const areas = {};
-      let batchAlreadyDeducted = 0;
+      // برای هر بچِ انتخاب‌شده، باقیمانده‌ی واقعی‌اش (بعد از کسر آنچه قبلاً از
+      // همون بچ برای محصولات دیگر که الان قفل‌اند کسر شده) — به همون ترتیبی که
+      // کاربر بچ‌ها رو انتخاب کرده، تا استخر ترکیبی + منطق پرشدن پشت‌سرهم درست کار کنه
+      let batchFillList = [];
+      let combinedRemainingForPreview = 0;
+      let combinedTotalCost = 0;
+      let combinedPhysArea = 0;
       if (isBatchArea) {
         const allSelectedIds = [...productIds, ...linkedUpdates.map(u => u.productId)];
         allSelectedIds.forEach(pid => {
@@ -2206,14 +2216,45 @@ export default function App() {
           areas[pid] = area;
           totalArea += area;
         });
-        // مبلغی که از قبل از همین بچ برای محصولات دیگر (که الان قفل هستند) کسر شده — تا پیش‌نمایش هزینه
-        // با آنچه واقعاً هنگام قفل کسر می‌شود یکسان باشد و بیشتر از باقیمانده‌ی واقعی بچ نشود
-        d.products.forEach(p => (p.lineItems || []).forEach(li => {
-          if (li.materialId === material.id && li.batchId === batchId && li.deductedAt) {
-            batchAlreadyDeducted += toNum(li.deductedCost || 0);
-          }
-        }));
+        batchFillList = resolvedBatchIds.map(bId => {
+          const batch = material.batches?.find(b => b.id === bId);
+          if (!batch) return null;
+          let alreadyDeducted = 0;
+          d.products.forEach(p => (p.lineItems || []).forEach(li => {
+            if (li.materialId === material.id && li.batchId === bId && li.deductedAt) {
+              alreadyDeducted += toNum(li.deductedCost || 0);
+            }
+          }));
+          const remaining = Math.max(0, toNum(batch.totalCost) - alreadyDeducted);
+          const physArea = toNum(batch.width) * toNum(batch.height) * Math.max(1, toNum(batch.qty) || 1);
+          combinedRemainingForPreview += remaining;
+          combinedTotalCost += toNum(batch.totalCost);
+          combinedPhysArea += physArea;
+          return { batchId: bId, batch, remaining, consumedNow: 0 };
+        }).filter(Boolean);
       }
+      // پرکردن پشت‌سرهم: از باقیمانده‌ی اولین بچ توی لیست کم می‌کنه، وقتی تموم شد
+      // می‌ره سراغ بعدی — یه هزینه‌ی واحد ممکنه بین چند بچ تقسیم و چند لاین‌آیتم بشه
+      const splitCostAcrossBatches = (costNeeded) => {
+        let remainingToAllocate = Math.max(0, toNum(costNeeded));
+        const portions = [];
+        for (const entry of batchFillList) {
+          if (remainingToAllocate <= 0) break;
+          const avail = Math.max(0, entry.remaining - entry.consumedNow);
+          if (avail <= 0) continue;
+          const take = Math.min(avail, remainingToAllocate);
+          entry.consumedNow += take;
+          portions.push({ batchId: entry.batchId, cost: take });
+          remainingToAllocate -= take;
+        }
+        // اگه استخر انتخابی کفاف نداد (نباید پیش بیاد چون سقف‌ها قبلاً چک شدن)، باقیمانده رو
+        // به آخرین بچِ لیست می‌چسبونیم که چیزی گم نشه
+        if (remainingToAllocate > 0.001 && batchFillList.length) {
+          const last = batchFillList[batchFillList.length - 1];
+          portions.push({ batchId: last.batchId, cost: remainingToAllocate });
+        }
+        return portions.length ? portions : [{ batchId: resolvedBatchIds[0] || null, cost: costNeeded }];
+      };
 
       // مبتنی بر طول واقعیِ چوب‌های موجود برای متریال خطی، وقتی «پرتی شود/باقی
       // بماند» انتخاب شده — قبلاً این نوع فقط درصدی از استخر هزینه بود و اصلاً
@@ -2262,6 +2303,7 @@ export default function App() {
         }
 
         // B. Update percentage if listed in linkedUpdates
+        const extraLineItemsForP = [];
         const update = linkedUpdates.find(u => u.productId === p.id);
         if (update) {
           lineItems = lineItems.map((li) => {
@@ -2269,33 +2311,51 @@ export default function App() {
             if (li.deductedAt) return li; // Skip locked items
 
             if (isBatchArea) {
-              const batch = material.batches?.find(b => b.id === batchId);
-              if (batch) {
-                const batchRemainingForPreview = Math.max(0, toNum(batch.totalCost) - batchAlreadyDeducted);
+              if (batchFillList.length) {
                 const prodArea = areas[p.id] || 0;
                 let cost;
                 if (includeWastage) {
-                  // پرتی: کل باقیمانده بچ بین محصولات به نسبت مساحت‌شان
+                  // پرتی: کل باقیمانده‌ی استخر ترکیبی بین محصولات به نسبت مساحت‌شان
                   const share = totalArea > 0 ? prodArea / totalArea : (1 / Math.max(1, productIds.length + linkedUpdates.length));
-                  cost = batchRemainingForPreview * share;
+                  cost = combinedRemainingForPreview * share;
                 } else {
-                  // باقی بماند: فقط سهم فیزیکی محصول از مساحت بچ
-                  const batchPhysArea = Math.max(0.0001, toNum(batch.width) * toNum(batch.height) * Math.max(1, toNum(batch.qty) || 1));
-                  const unitCost = toNum(batch.totalCost) / batchPhysArea;
+                  // باقی بماند: سهم فیزیکی محصول از مساحتِ کل بچ‌های انتخابی (میانگین وزنی هزینه‌ی هر متر)
+                  const unitCost = combinedPhysArea > 0 ? (combinedTotalCost / combinedPhysArea) : 0;
                   cost = prodArea * unitCost;
-                  // سقف: از باقیمانده بیشتر نشود
-                  cost = Math.min(cost, batchRemainingForPreview);
+                  cost = Math.min(cost, combinedRemainingForPreview);
                 }
-                return {
+                const portions = splitCostAcrossBatches(cost);
+                const [firstPortion, ...restPortions] = portions;
+                const updatedFirst = {
                   ...li,
-                  cost: cost,
-                  batchId: batchId,
+                  cost: firstPortion.cost,
+                  batchId: firstPortion.batchId,
                   includeWastage: !!includeWastage,
                   pct: null,
                   customPct: null,
                   useAreaRatio: false,
                   pendingSessionId: bulkSubmissionId,
                 };
+                if (restPortions.length) {
+                  extraLineItemsForP.push(...restPortions.map(portion => ({
+                    id: uid(),
+                    label: li.label,
+                    cost: portion.cost,
+                    materialId: material.id,
+                    pct: null,
+                    batchId: portion.batchId,
+                    useAreaRatio: false,
+                    includeWastage: !!includeWastage,
+                    manualArea: null,
+                    deductedCost: null,
+                    deductedAt: null,
+                    woodCuts: null,
+                    woodLocked: false,
+                    customPct: null,
+                    pendingSessionId: bulkSubmissionId,
+                  })));
+                }
+                return updatedFirst;
               }
             }
 
@@ -2320,6 +2380,7 @@ export default function App() {
               distributionMode: distributionMode || li.distributionMode || null,
             };
           });
+          if (extraLineItemsForP.length) lineItems = [...lineItems, ...extraLineItemsForP];
         }
 
         // C. Add new line item if listed in productIds
@@ -2328,35 +2389,36 @@ export default function App() {
           if (!exists) {
             const matType = material.type;
             if (isBatchArea) {
-              const batch = material.batches?.find(b => b.id === batchId);
-              if (batch) {
-                const batchRemainingForPreview = Math.max(0, toNum(batch.totalCost) - batchAlreadyDeducted);
+              if (batchFillList.length) {
                 const prodArea = areas[p.id] || 0;
                 let cost;
                 if (includeWastage) {
                   const share = totalArea > 0 ? prodArea / totalArea : (1 / Math.max(1, productIds.length + linkedUpdates.length));
-                  cost = batchRemainingForPreview * share;
+                  cost = combinedRemainingForPreview * share;
                 } else {
-                  const batchPhysArea = Math.max(0.0001, toNum(batch.width) * toNum(batch.height) * Math.max(1, toNum(batch.qty) || 1));
-                  cost = Math.min(prodArea * (toNum(batch.totalCost) / batchPhysArea), batchRemainingForPreview);
+                  const unitCost = combinedPhysArea > 0 ? (combinedTotalCost / combinedPhysArea) : 0;
+                  cost = Math.min(prodArea * unitCost, combinedRemainingForPreview);
                 }
 
-                lineItems.push({
-                  id: uid(),
-                  label: label || material.name,
-                  cost: cost,
-                  materialId: material.id,
-                  pct: null,
-                  batchId: batchId,
-                  useAreaRatio: false,
-                  includeWastage: !!includeWastage,
-                  manualArea: null,
-                  deductedCost: null,
-                  deductedAt: null,
-                  woodCuts: null,
-                  woodLocked: false,
-                  customPct: null,
-                  pendingSessionId: bulkSubmissionId,
+                const portions = splitCostAcrossBatches(cost);
+                portions.forEach(portion => {
+                  lineItems.push({
+                    id: uid(),
+                    label: label || material.name,
+                    cost: portion.cost,
+                    materialId: material.id,
+                    pct: null,
+                    batchId: portion.batchId,
+                    useAreaRatio: false,
+                    includeWastage: !!includeWastage,
+                    manualArea: null,
+                    deductedCost: null,
+                    deductedAt: null,
+                    woodCuts: null,
+                    woodLocked: false,
+                    customPct: null,
+                    pendingSessionId: bulkSubmissionId,
+                  });
                 });
               }
             } else {
@@ -2410,14 +2472,14 @@ export default function App() {
         }
       }
 
-      // 4. Update the batches' linkedProductIds if it's area/fabric and batchId is selected
-      if ((material.type === "area" || material.type === "fabric") && batchId) {
+      // 4. Update the batches' linkedProductIds if it's area/fabric and batch(es) selected
+      if ((material.type === "area" || material.type === "fabric") && resolvedBatchIds.length) {
         const mIdx = materials.findIndex(m => m.id === material.id);
         if (mIdx !== -1) {
           const m = materials[mIdx];
           const finalLinkedIds = [...productIds, ...linkedUpdates.map(u => u.productId)];
           const batches = (m.batches || []).map(b => {
-            if (b.id === batchId) {
+            if (resolvedBatchIds.includes(b.id)) {
               return { ...b, linkedProductIds: finalLinkedIds };
             } else {
               const filtered = (b.linkedProductIds || []).filter(pid => !finalLinkedIds.includes(pid) && !removedIds.includes(pid));

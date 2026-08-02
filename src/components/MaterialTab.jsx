@@ -443,7 +443,10 @@ export function BulkApplyMaterialPage({ material, products = [], allMaterials = 
   // چندانتخابی بچ — «بدون بچ» نداریم (ensureInitialStock همیشه بچ اولیه می‌سازد)
   const initialBatchIds = () => {
     const bs = material.batches || [];
-    if (bs.length) return [bs[0].id];
+    if (bs.length) {
+      const usable = bs.filter(b => !b.locked);
+      return [(usable[0] || bs[0]).id];
+    }
     const sticks = material.sticks || [];
     if (sticks.length) return [sticks[0].id];
     return [];
@@ -678,6 +681,7 @@ export function BulkApplyMaterialPage({ material, products = [], allMaterials = 
       includeWastage: isWaste,
       isUsableRemaining,
       batchId,
+      batchIds: selectedBatchIds,
       perProductPctOverride,
       linkedUpdates,
       removedIds,
@@ -1109,8 +1113,9 @@ export function BulkApplyMaterialPage({ material, products = [], allMaterials = 
             <div style={{ background: "#111", border: "1px solid #222", borderRadius: 8, padding: "10px" }}>
               <div style={{ fontSize: 10, color: "#aaa", marginBottom: 6 }}>انتخاب بچ محصول</div>
               <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                {/* بدون گزینه «بدون بچ» — چندانتخابی بچ‌ها */}
-                {(material.batches || []).map((b, bi) => {
+                {/* بدون گزینه «بدون بچ» — چندانتخابی بچ‌ها؛ بچ‌های کاملاً مصرف‌شده
+                    (قفل) دیگه به‌عنوان قابل‌استفاده نشون داده نمی‌شن */}
+                {(material.batches || []).filter(b => !b.locked).map((b, bi) => {
                   const active = selectedBatchIds.includes(b.id);
                   const qty = b.qty != null ? b.qty : 1;
                   const cost = b.totalCost != null ? b.totalCost : 0;
