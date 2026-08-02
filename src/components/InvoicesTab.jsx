@@ -5,6 +5,7 @@ import {
   Palette, Edit3, Save, RefreshCw, Filter, X
 , Trash2, Edit2, Plus } from "lucide-react";
 import { fmt, fmtCode, fmtDate, toNum, formatProductDims, qtySuffix } from "../mathCore";
+import { uid } from "../dataModels";
 import { JalaliDatePicker } from "./JalaliDatePicker";
 import InvoicePrint from "./InvoicePrint";
 
@@ -157,85 +158,61 @@ export default function InvoicesTab({
     notify && notify("پیش‌فاکتور حذف شد");
   };
 
-  // آیتم ۳ (نمای پیشرفته‌ی فاکتور): «نهایی‌کردن» یه پیش‌فاکتور ذخیره‌شده — دقیقاً
-  // همون منطق تشخیص/ساخت مشتری که ویرایش فاکتور رسمی استفاده می‌کنه (بالاتر همین
-  // فایل)، فقط این‌بار روی محصولات مرجع‌شده‌ی توی آیتم‌های پیش‌فاکتور. بعد از
-  // موفقیت، پیش‌فاکتور از لیست حذف می‌شه (چون تبدیل به فاکتور رسمی شده)
+  // یه پیش‌فاکتور ذخیره‌شده رو «نهایی» می‌کنه: محصولات واقعیِ توش (که productId دارن) رو
+  // sold می‌کنه (دقیقاً همون قراردادی که سبد خرید تب محصولات برای فروش استفاده می‌کنه)
+  // و خودِ پیش‌فاکتور از لیست پیش‌نویس‌ها حذف می‌شه — از اون به بعد جزو فاکتورهای رسمی‌ست
   const handleFinalizeDraft = (draft) => {
     if (!setData) return;
-    const items = draft.items || [];
-    if (!draft.buyerName?.trim()) {
-      notify && notify("نام خریدار نمی‌تواند خالی باشد");
+    const itemsWithProduct = (draft.items || []).filter((it) => it.productId);
+    if (itemsWithProduct.length === 0) {
+      notify && notify("این پیش‌فاکتور هیچ محصول واقعی‌ای نداره که بشه نهایی‌ش کرد");
       return;
     }
-    if (!items.length) {
-      notify && notify("این پیش‌فاکتور هیچ قلمی ندارد");
-      return;
-    }
-    const productIdSet = new Set((productTotals || []).map(p => p.id));
-    const missingCount = items.filter(it => !it.productId || !productIdSet.has(it.productId)).length;
+    const name = (draft.buyerName || "").trim();
+    const saleDate = draft.date || new Date().toISOString().substring(0, 10);
+    const priceById = {};
+    itemsWithProduct.forEach((it) => { priceById[it.productId] = toNum(it.finalPrice); });
+    const ids = new Set(itemsWithProduct.map((it) => it.productId));
 
     setData((d) => {
       let customersList = [...(d.customers || [])];
       let custId = null;
-      const buyerName = draft.buyerName.trim();
-      const existingCustIdx = customersList.findIndex(c => c.name === buyerName && c.kind === "customer");
-      if (existingCustIdx !== -1) {
-        custId = customersList[existingCustIdx].id;
-        if (draft.buyerPhone && draft.buyerPhone !== customersList[existingCustIdx].phone) {
-          customersList = customersList.map((c, i) => i === existingCustIdx ? { ...c, phone: draft.buyerPhone } : c);
-        }
-      } else {
-        const existingGal = customersList.find(c => c.name === buyerName && c.kind === "gallery");
-        if (existingGal) {
-          custId = existingGal.id;
+      if (name) {
+        const existing = customersList.find((c) => c.kind === "customer" && c.name.toLowerCase() === name.toLowerCase());
+        if (existing) {
+          custId = existing.id;
         } else {
-          const nc = {
-            id: "CUST-" + Date.now() + Math.floor(Math.random() * 1000),
-            name: buyerName,
-            phone: draft.buyerPhone || "",
-            kind: "customer",
-          };
+          const nc = { id: uid(), name, phone: draft.buyerPhone || "", note: draft.buyerAddress || "", color: "#8B1A1A", kind: "customer" };
           customersList = [...customersList, nc];
           custId = nc.id;
         }
       }
-
-      const itemsByProductId = {};
-      items.forEach(it => { if (it.productId) itemsByProductId[it.productId] = it; });
-      const saleDate = draft.date || new Date().toISOString().substring(0, 10);
-      const isSettled = draft.isSettled !== false;
-
       const updatedProducts = d.products.map((p) => {
-        const it = itemsByProductId[p.id];
-        if (!it) return p;
+        if (!ids.has(p.id)) return p;
+        const orig = toNum(p.salePrice);
+        const fp = priceById[p.id];
+        const discPct = orig > 0 && fp < orig ? Math.round((1 - fp / orig) * 100) : 0;
         return {
           ...p,
           status: "sold",
+          location: custId || p.location,
           buyerCustomerId: custId,
-          buyerName,
+          buyerName: name,
           buyerPhone: draft.buyerPhone || "",
-          location: custId || "warehouse",
+          buyerAddress: draft.buyerAddress || "",
+          buyerGender: draft.buyerGender || "",
           saleDate,
-          settled: isSettled,
-          settleDate: isSettled ? (p.settleDate || saleDate) : null,
-          discountedPrice: toNum(it.finalPrice),
+          settled: !!draft.isSettled,
+          settleDate: draft.isSettled ? saleDate : null,
+          discountPercent: discPct,
+          discountedPrice: fp,
         };
       });
-
-      return {
-        ...d,
-        products: updatedProducts,
-        customers: customersList,
-        invoiceDrafts: (d.invoiceDrafts || []).filter(x => x.id !== draft.id),
-      };
+      const nextDrafts = (d.invoiceDrafts || []).filter((x) => x.id !== draft.id);
+      return { ...d, products: updatedProducts, customers: customersList, invoiceDrafts: nextDrafts };
     });
     if (currentDraftId === draft.id) resetDraftForm();
-    if (missingCount > 0 && notify) {
-      notify(`نهایی شد، ولی ${missingCount} قلم دیگه توی انبار موجود نبود و نادیده گرفته شد`);
-    } else {
-      notify && notify("پیش‌فاکتور به فاکتور رسمی تبدیل شد");
-    }
+    notify && notify("پیش‌فاکتور نهایی و به فاکتور رسمی تبدیل شد");
   };
 
   // Compute Invoices Grouped from Product Totals
@@ -582,7 +559,7 @@ export default function InvoicesTab({
         originalPrice: item.finalPrice,
         discountPct: 0,
         // آیتم ۲ (نمای پیشرفته): وضعیت تسویه‌ی کل پیش‌فاکتور به هر قلم اعمال می‌شه
-        // (قبلاً هر قلم همیشه isSettled:true بود، مستقل از تاگل بالای فرم)
+        // (قبلاً هر قلم همیشه isSettled پیش‌فرض/undefined بود، مستقل از تاگل بالای فرم)
         isSettled: customIsSettled,
       })),
       totals: {
@@ -590,6 +567,7 @@ export default function InvoicesTab({
         discount: 0,
         final: customItems.reduce((s, x) => s + toNum(x.finalPrice), 0)
       },
+      // مبلغ ودیعه هم توی چاپ/پیش‌نمایش A4 از مبلغ نهایی کم بشه (InvoiceTemplate.jsx)
       depositAmount: customIsSettled ? 0 : toNum(customDeposit),
     };
     setAutoPrint(false);
@@ -1089,45 +1067,33 @@ export default function InvoicesTab({
               </div>
             </div>
 
-            {/* آیتم ۲ (نمای پیشرفته): وضعیت تسویه + ودیعه + مبلغ قابل پرداخت */}
-            <div style={{ background: "#161616", border: "1px solid #232323", borderRadius: 8, padding: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+            {/* وضعیت تسویه + ودیعه + مبلغ قابل پرداخت */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, alignItems: "end" }}>
               <button
                 onClick={() => setCustomIsSettled((s) => !s)}
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                  width: "100%", padding: "7px 0", borderRadius: 6, border: "1px solid",
-                  borderColor: customIsSettled ? "#3a6a3a" : "#6a3a3a",
-                  background: customIsSettled ? "rgba(95,209,128,0.08)" : "rgba(224,138,138,0.08)",
-                  color: customIsSettled ? "#7fd18a" : "#e08a8a",
-                  fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
-                }}
+                style={{ height: 32, marginTop: 3, borderRadius: 6, border: "none", cursor: "pointer", fontSize: 10.5, fontWeight: 600, background: customIsSettled ? "#1d3a24" : "#3a1d1d", color: customIsSettled ? "#5fd180" : "#e08a8a" }}
               >
-                {customIsSettled ? "✓ تسویه‌شده" : "⚠ تسویه‌نشده"}
+                {customIsSettled ? "✓ تسویه‌شده" : "⚠ بدهکار / پیش‌پرداخت"}
               </button>
               {!customIsSettled && (
                 <div>
-                  <label style={{ fontSize: 9, color: "#888" }}>مبلغ ودیعه (پرداخت‌شده)</label>
+                  <label style={{ fontSize: 9, color: "#888" }}>مبلغ ودیعه (پیش‌پرداخت)</label>
                   <input onFocus={(e) => e.target.select()}
                     type="number"
                     style={{ ...S.input, width: "100%", height: 32, marginTop: 3 }}
-                    value={customDeposit}
+                    value={customDeposit || ""}
+                    placeholder="0"
                     onChange={(e) => setCustomDeposit(parseInt(e.target.value) || 0)}
                   />
                 </div>
               )}
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, paddingTop: 6, borderTop: "1px dashed #262626" }}>
-                <span style={{ color: "#888" }}>جمع کل</span>
-                <span style={{ color: "#ddd", fontWeight: 600 }}>{fmt(customItems.reduce((s, x) => s + toNum(x.finalPrice), 0))} ت</span>
-              </div>
-              {!customIsSettled && (
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
-                  <span style={{ color: "#f2c94c" }}>مبلغ قابل پرداخت</span>
-                  <span style={{ color: "#f2c94c", fontWeight: 700 }}>
-                    {fmt(Math.max(0, customItems.reduce((s, x) => s + toNum(x.finalPrice), 0) - toNum(customDeposit)))} ت
-                  </span>
-                </div>
-              )}
             </div>
+            {!customIsSettled && (
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, color: "#F5F0EB", background: "#161616", borderRadius: 8, padding: "8px 12px" }}>
+                <span style={{ color: "#888" }}>مبلغ قابل پرداخت (بعد از ودیعه)</span>
+                <span style={{ fontWeight: 700 }}>{fmt(Math.max(0, customItems.reduce((s, x) => s + toNum(x.finalPrice), 0) - toNum(customDeposit)))} ت</span>
+              </div>
+            )}
 
             <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
               <button style={{ ...S.btnOutline, flex: 1, justifyContent: "center" }} onClick={handleSaveDraft}>
@@ -1167,15 +1133,11 @@ export default function InvoicesTab({
                     </div>
                     <button style={{ ...S.chip }} onClick={() => handleLoadDraft(draft)}>باز کردن</button>
                     <button
-                      style={{ ...S.chip, borderColor: "#3a6a3a", color: "#7fd18a" }}
-                      onClick={() => {
-                        if (window.confirm(`«${draft.title || "این پیش‌فاکتور"}» نهایی بشه و به فاکتور رسمی تبدیل بشه؟ محصولات اون به «فروخته‌شده» تغییر می‌کنن.`)) {
-                          handleFinalizeDraft(draft);
-                        }
-                      }}
+                      style={{ ...S.chip, background: "#1d3a24", color: "#5fd180", border: "none" }}
+                      onClick={() => handleFinalizeDraft(draft)}
+                      title="تبدیل به فاکتور رسمی (محصولاتش sold می‌شن و از پیش‌نویس‌ها حذف می‌شه)"
                     >
-                      <CheckCircle2 size={12} />
-                      نهایی‌کن
+                      <CheckCircle2 size={12} /> نهایی‌کردن
                     </button>
                     <button style={{ background: "transparent", border: "none", color: "#8B1A1A", cursor: "pointer", padding: 4 }} onClick={() => handleDeleteDraft(draft.id)}>
                       <Trash2 size={14} />

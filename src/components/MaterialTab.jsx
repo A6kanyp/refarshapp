@@ -15,7 +15,7 @@ import { useToast } from "../contexts/ToastContext.jsx";
 import { useRegisterOpenModal } from "../utils/modalRegistry";
 
 import { JalaliDatePicker } from "./JalaliDatePicker";
-import { FilterPopup } from "./FilterPopup";
+import { FilterPopup, AnchoredFloatingPopup } from "./FilterPopup";
 
 const S = {
   input: {
@@ -242,8 +242,8 @@ function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onTogg
               // پاپ‌آپ عمداً بسته نمی‌شه، تا کاربر بتونه چندبار پشت‌سرهم بین گزینه‌ها سوییچ کنه
             }}
           >
-            {mode.label && <span>{mode.label}</span>}
             {renderMode(mode, baseOrder === mode.key)}
+            {mode.label && <span>{mode.label}</span>}
           </button>
         ))}
       </FilterPopup>
@@ -2878,7 +2878,9 @@ export default function MaterialTab({
   const [matGroupFilter, setMatGroupFilter] = useState([]); // آرایه‌ی چند-انتخابی؛ خالی = همه
   const [floatingCatLabel, setFloatingCatLabel] = useState("");
   const groupSectionRefs = useRef({});
+  const stickyHeaderRef = useRef(null);
   const [showTypeMenu, setShowTypeMenu] = useState(false);
+  const typeFilterBtnRef = useRef(null);
   const [groupedView, setGroupedView] = useState(() => {
     try {
       return localStorage.getItem("material_grouped_view") !== "false"; // پیش‌فرض روشن
@@ -2994,7 +2996,12 @@ export default function MaterialTab({
       if (scrollY <= 0) { setFloatingCatLabel(""); return; }
 
       const entries = Object.entries(groupSectionRefs.current || {});
-      const headerBottom = (typeof stickyTop !== "undefined" ? stickyTop : 88) + 96; // پایینِ بلوکِ هدرِ sticky (تقریبی)
+      // نکته‌ی مهم: stickyTop یه رشته‌ی CSS calc()ه (نه عدد)، پس نمی‌شه بهش +96 کرد
+      // (قبلاً همین‌جا باگ بود: "calc(...)" + 96 => رشته => مقایسه‌ی top < headerBottom
+      // همیشه false می‌شد چون NaN بود، پس لیبل شناور اصلاً هیچ‌وقت نشون داده نمی‌شد).
+      // الان مستقیم از روی خودِ بلوک sticky هدر (که lableهم توشه) لبه‌ی پایینش رو
+      // اندازه می‌گیریم — همیشه درسته، به هیچ عدد/رشته‌ی جداگونه‌ای وابسته نیست.
+      const headerBottom = stickyHeaderRef.current ? stickyHeaderRef.current.getBoundingClientRect().bottom : 184;
       let current = "";
       let best = -Infinity;
       for (const [name, el] of entries) {
@@ -3366,6 +3373,7 @@ export default function MaterialTab({
   return (
     <div style={{ padding: "0 0 100px 0" }} dir="rtl">
       <div
+        ref={stickyHeaderRef}
         style={{
           position: "sticky",
           top: stickyTop,
@@ -3396,6 +3404,7 @@ export default function MaterialTab({
 
           <div style={{ position: "relative", flexShrink: 0 }}>
             <button
+              ref={typeFilterBtnRef}
               style={{
                 ...S.chip,
                 padding: "6px 8px",
@@ -3418,7 +3427,7 @@ export default function MaterialTab({
                   : filterOptions.filter((o) => matGroupFilter.includes(o.key)).map((o) => o.label).join("،")}
               </span>
             </button>
-            <FilterPopup open={showTypeMenu} onClose={() => setShowTypeMenu(false)} width={170}>
+            <AnchoredFloatingPopup open={showTypeMenu} onClose={() => setShowTypeMenu(false)} anchorRef={typeFilterBtnRef} width={170}>
               {filterOptions.map((opt) => {
                 const isAllOpt = opt.key === "all";
                 const isSelected = isAllOpt ? matGroupFilter.length === 0 : matGroupFilter.includes(opt.key);
@@ -3455,7 +3464,7 @@ export default function MaterialTab({
                   </button>
                 );
               })}
-            </FilterPopup>
+            </AnchoredFloatingPopup>
           </div>
 
           {allFiltered.some((m) => m.hidden || (() => {
@@ -3533,11 +3542,24 @@ export default function MaterialTab({
           <div
             onClick={() => {
               const el = groupSectionRefs.current[floatingCatLabel];
-              if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+              if (!el) return;
+              // به‌جای scrollIntoView (که ممکنه هدر گروه رو دقیقاً پشتِ نوار sticky بندازه و
+              // بازم مخفی بمونه)، دقیقاً به همون مقداری اسکرول می‌کنیم که هدر گروه از پشتِ
+              // نوار sticky بیاد بیرون — هم خودِ لیبل شناور هاید می‌شه، هم اسم دسته دیده می‌شه
+              const headerBottom = stickyHeaderRef.current ? stickyHeaderRef.current.getBoundingClientRect().bottom : 184;
+              const elTop = el.getBoundingClientRect().top;
+              const delta = elTop - headerBottom - 6;
+              const panel = document.querySelector('div[style*="position: fixed"]');
+              if (panel && panel.scrollTop > 0) {
+                panel.scrollBy({ top: delta, behavior: "smooth" });
+              } else {
+                window.scrollBy({ top: delta, behavior: "smooth" });
+              }
             }}
             style={{
               // دیگه sticky جدا نیست: همون بلوک هدر (که خودش sticky هست) رو حمل می‌کنه،
-              // پس همیشه دقیقاً زیر ردیف Sort می‌شینه و هیچ‌وقت روی هدر جستجو نمیاد
+              // پس همیشه دقیقاً زیر ردیف Sort می‌شینه و هیچ‌وقت روی هدر جستجو نمیاد.
+              // سمت چپ صفحه (نه وسط) — طبق خواسته‌ی کاربر
               marginTop: 8,
               zIndex: 14,
               width: "fit-content",
@@ -3558,7 +3580,7 @@ export default function MaterialTab({
               border: "1px solid #2a2a2a",
               boxSizing: "border-box",
               marginRight: "auto",
-              marginLeft: "auto",
+              marginLeft: 0,
             }}
           >
             {floatingCatLabel}

@@ -180,8 +180,8 @@ function SortButton({ sortOrder, setSortOrder, modes }) {
               // پاپ‌آپ عمداً بسته نمی‌شه، تا کاربر بتونه چندبار پشت‌سرهم بین گزینه‌ها سوییچ کنه
             }}
           >
-            {mode.label && <span>{mode.label}</span>}
             {renderMode(mode, baseOrder === mode.key)}
+            {mode.label && <span>{mode.label}</span>}
           </button>
         ))}
       </FilterPopup>
@@ -1242,6 +1242,8 @@ function InvoiceListModal({ stat, products, onClose, onSetProductSold, onSetProd
   const [selectedInvoices, setSelectedInvoices] = useState({});
   const [confirmDeleteInv, setConfirmDeleteInv] = useState(null);
   const [confirmReturnProduct, setConfirmReturnProduct] = useState(null);
+  const [addItemQuery, setAddItemQuery] = useState("");
+  const [editingId2, setEditingId2] = useState(null); // برای toggle پیکر افزودن محصول، مستقل از editingId (که برای ویرایش تاریخ/تسویه‌ست)
 
   // Get both sold and available products for this gallery
   const galleryProducts = products.filter(p => p.location === stat.id && (p.status === "sold" || p.status === "available"));
@@ -1410,6 +1412,46 @@ function InvoiceListModal({ stat, products, onClose, onSetProductSold, onSetProd
     }));
   };
 
+  // محصولات موجودِ قابل‌افزودن به یه فاکتور ثبت‌شده‌ی این گالری (از انبار/هرجای دیگه)
+  const addItemResults = useMemo(() => {
+    const q = addItemQuery.trim().toLowerCase();
+    const pool = products.filter((p) => p.status === "available");
+    const filtered = q ? pool.filter((p) => p.name?.toLowerCase().includes(q) || String(p.code).includes(q)) : pool;
+    return filtered.slice(0, 30);
+  }, [products, addItemQuery]);
+
+  // یه محصول موجود رو مستقیم به یه فاکتور ثبت‌شده‌ی این گالری اضافه می‌کنه
+  const handleAddItemToInvoice = (inv, product) => {
+    if (!setData) return;
+    const saleDate = (() => {
+      const d = new Date(inv.date);
+      return isNaN(d.getTime()) ? todayISO() : d.toISOString();
+    })();
+    setData((d) => ({
+      ...d,
+      products: d.products.map((p) =>
+        p.id === product.id
+          ? { ...p, status: "sold", location: stat.id, saleDate, settled: inv.allSettled, settleDate: inv.allSettled ? saleDate : null }
+          : p
+      ),
+    }));
+    if (notify) notify("محصول به فاکتور اضافه شد");
+  };
+
+  // تخفیف تک‌تک اقلام — مستقیم روی رکورد محصول می‌نویسه (discountPercent/discountedPrice)
+  // پس تب محصولات و بقیه‌ی جاهایی که همین فاکتور رو نشون می‌دن هم آپدیت‌شده می‌بینن
+  const handleItemDiscountChange = (product, rawValue) => {
+    if (!setData) return;
+    const disc = rawValue === "" ? 0 : Math.min(100, Math.max(0, parseFloat(rawValue) || 0));
+    const sp = toNum(product.salePrice);
+    const dp = disc > 0 ? Math.round(sp * (1 - disc / 100)) : sp;
+    setData((d) => ({
+      ...d,
+      products: d.products.map((p) => (p.id === product.id ? { ...p, discountPercent: disc, discountedPrice: dp } : p)),
+    }));
+  };
+
+
   const handleEditClick = (inv) => {
     setEditingId(inv.id);
     setEditDate(inv.date === "موجود در گالری" ? "" : inv.date);
@@ -1566,26 +1608,68 @@ function InvoiceListModal({ stat, products, onClose, onSetProductSold, onSetProd
                   ) : (
                     <div style={{ margin: "10px 0", padding: "10px", background: "#141414", borderRadius: 8 }}>
                       {inv.items.map(p => (
-                         <div key={p.id} style={{ display: "grid", gridTemplateColumns: "1fr 60px 60px 30px", alignItems: "center", fontSize: 11, color: "#ccc", marginBottom: 6, borderBottom: "1px solid #1e1e1e", paddingBottom: 6 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <button style={{ background: "transparent", border: "none", color: "#8B1A1A", cursor: "pointer", padding: 2 }} onClick={() => setConfirmReturnProduct(p)} title="بازگشت به انبار"><X size={10}/></button>
-                            <span>#{fmtCode(p.code)} {p.name}</span>
+                         <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#ccc", marginBottom: 6, borderBottom: "1px solid #1e1e1e", paddingBottom: 6 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
+                            <button style={{ background: "transparent", border: "none", color: "#8B1A1A", cursor: "pointer", padding: 2, flexShrink: 0 }} onClick={() => setConfirmReturnProduct(p)} title="بازگشت به انبار"><X size={10}/></button>
+                            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>#{fmtCode(p.code)} {p.name}</span>
                             {!p.isAvailableInGallery && (
                                <button 
-                                 style={{ background: p.settled ? "#21965320" : "#d87c1d20", color: p.settled ? "#219653" : "#d87c1d", border: "none", padding: "2px 6px", borderRadius: 4, fontSize: 9, cursor: "pointer", marginRight: 8 }}
+                                 style={{ background: p.settled ? "#21965320" : "#d87c1d20", color: p.settled ? "#219653" : "#d87c1d", border: "none", padding: "2px 6px", borderRadius: 4, fontSize: 9, cursor: "pointer", marginRight: 8, flexShrink: 0 }}
                                  onClick={() => handleToggleItemStatus(p)}
                                >
                                  {p.settled ? "تسویه" : "بدهکار"}
                                </button>
                             )}
                           </div>
-                          <span>{fmt(toNum(p.salePrice) || toNum(p.price))} ت</span>
+                          {!p.isAvailableInGallery && (
+                            <input
+                              type="number" min={0} max={100} onFocus={(e) => e.target.select()}
+                              value={toNum(p.discountPercent) || ""}
+                              placeholder="0٪"
+                              onChange={(e) => handleItemDiscountChange(p, e.target.value)}
+                              title="درصد تخفیف این کالا"
+                              style={{ width: 42, height: 24, padding: "2px 4px", textAlign: "center", fontSize: 10, background: "#1c1c1c", border: "1px solid #2a2a2a", borderRadius: 5, color: "#ddd", flexShrink: 0 }}
+                            />
+                          )}
+                          <span style={{ flexShrink: 0, minWidth: 60, textAlign: "left" }}>{fmt(toNum(p.salePrice) || toNum(p.price))} ت</span>
                         </div>
                       ))}
                       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#fff", fontWeight: 600, marginTop: 10 }}>
                         <span>جمع کل:</span>
                         <span>{fmt(inv.total)} ت</span>
                       </div>
+
+                      {!inv.isAvailableGroup && (
+                        <div style={{ marginTop: 10 }}>
+                          {editingId2 !== inv.id ? (
+                            <button onClick={() => setEditingId2(inv.id)} style={{ width: "100%", justifyContent: "center", display: "flex", alignItems: "center", gap: 6, background: "transparent", border: "1px solid #2a2a2a", color: "#888", borderRadius: 6, padding: "6px 0", fontSize: 10, cursor: "pointer" }}>
+                              <Plus size={12} /> افزودن محصول به این فاکتور
+                            </button>
+                          ) : (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                              <input
+                                autoFocus placeholder="جستجوی محصول موجود..."
+                                value={addItemQuery} onChange={(e) => setAddItemQuery(e.target.value)}
+                                style={{ width: "100%", height: 30, background: "#1c1c1c", border: "1px solid #2a2a2a", borderRadius: 6, color: "#ddd", fontSize: 11, padding: "0 10px", boxSizing: "border-box" }}
+                              />
+                              <div style={{ maxHeight: 140, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
+                                {addItemResults.length === 0 ? (
+                                  <div style={{ fontSize: 9.5, color: "#555", padding: "6px 0" }}>محصول موجودی پیدا نشد</div>
+                                ) : addItemResults.map((p) => (
+                                  <div key={p.id}
+                                    onClick={() => { handleAddItemToInvoice(inv, p); setEditingId2(null); setAddItemQuery(""); }}
+                                    style={{ fontSize: 10, color: "#ccc", padding: "6px 8px", background: "#1c1c1c", borderRadius: 5, cursor: "pointer", display: "flex", justifyContent: "space-between" }}
+                                  >
+                                    <span>#{fmtCode(p.code)} {p.name}</span>
+                                    <span style={{ color: "#5fd180" }}>{fmt(toNum(p.discountedPrice ?? p.salePrice))} ت</span>
+                                  </div>
+                                ))}
+                              </div>
+                              <button onClick={() => { setEditingId2(null); setAddItemQuery(""); }} style={{ alignSelf: "flex-end", background: "transparent", border: "1px solid #2a2a2a", color: "#888", borderRadius: 6, padding: "4px 10px", fontSize: 9.5, cursor: "pointer" }}>بستن</button>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                   
