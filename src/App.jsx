@@ -22,6 +22,7 @@ import { useNestedModalCount } from "./utils/modalRegistry";
 import { initKeyboardScroll } from "./utils/keyboardScroll";
 import { useSwipeTabNav, useTabSlideClass } from "./utils/swipeTabs";
 import { compressImageFile } from "./utils/imageCompress";
+import { saveImageToFolder, IMAGE_CATEGORIES } from "./utils/imageStorage";
 import { pushBackHandler, consumeBack } from "./utils/backButton";
 import { useAuth } from "./contexts/AuthContext.jsx";
 import { usePendingChanges } from "./contexts/PendingChangesContext.jsx";
@@ -2809,27 +2810,36 @@ export default function App() {
 
   // ── CRUD ──
   const handleImageUpload = useCallback((e, productId) => {
-    const f = e.target.files[0];
-    if (!f) return;
-    compressImageFile(f)
-      .then((dataUrl) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    const product = data.products.find((p) => p.id === productId);
+    const codeStr = fmtCode(product?.code != null ? product.code : 0);
+    const startIdx = (product?.images || []).length;
+    // آیتم ۸ (روادمپ): این مسیر (افزودن سریع عکس از روی کارت محصول، نه فرم ویرایش)
+    // قبلاً دیتای خام base64 رو مستقیم توی p.image/p.images ذخیره می‌کرد (نه فایل
+    // توی پوشه‌ی محلی)، و فقط تک‌عکسی بود. الان دقیقاً هماهنگ با فرم ویرایش محصول:
+    // چندانتخابی + اسم فایل بر اساس کد محصول (نه اسم فارسی که ممکنه موقع لود فاکتور
+    // مشکل ایجاد کنه) + ذخیره‌ی واقعی توی پوشه‌ی محلی عکس‌ها
+    Promise.all(files.map((f, i) =>
+      compressImageFile(f).then((dataUrl) => {
+        const seq = String(startIdx + i + 1).padStart(2, "0");
+        return saveImageToFolder(dataUrl, IMAGE_CATEGORIES.PRODUCT, `${codeStr}${seq}.jpg`);
+      })
+    ))
+      .then((savedFilenames) => {
         setData((d) => ({
           ...d,
           products: d.products.map((p) => {
             if (p.id !== productId) return p;
-            // قبلاً اینجا فقط p.image ست می‌شد و p.images (آرایه‌ی همه‌ی عکس‌ها که
-            // توی ویرایش محصول نمایش داده می‌شه) دست‌نخورده می‌موند؛ یعنی آیکونی که
-            // از لیست محصولات گذاشته می‌شد نه توی ویرایش محصول دیده می‌شد و نه
-            // قابل حذف بود
             const images = p.images || [];
-            return { ...p, image: dataUrl, images: [dataUrl, ...images.filter((im) => im !== p.image)] };
+            return { ...p, image: p.image || savedFilenames[0], images: [...images, ...savedFilenames] };
           })
         }));
       })
       .catch((err) => {
         console.error("Image compress/upload failed:", err);
       });
-  }, []);
+  }, [data.products]);
 
   const addMaterialPurchase = useCallback((id, amount, date, qty) => {
     const amt = toNum(amount);
