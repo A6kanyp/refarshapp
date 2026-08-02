@@ -152,7 +152,7 @@ function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onTogg
               }}
               onClick={() => { if (!groupedView) onToggleGrouped(); }}
             >
-              دسته‌بندی
+              بر اساس فرش
             </button>
             <button
               style={{
@@ -190,7 +190,7 @@ function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onTogg
                 }}
                 onClick={onGroupByType}
               >
-                گروه‌بندی بر اساس نوع محصول
+                بر اساس نوع
               </button>
             )}
             <div style={{ borderTop: "1px solid #2a2a2a", margin: "4px 0" }} />
@@ -223,8 +223,8 @@ function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onTogg
               }
             }}
           >
-            {mode.label && <span>{mode.label}</span>}
             {renderMode(mode, baseOrder === mode.key)}
+            {mode.label && <span>{mode.label}</span>}
           </button>
         ))}
       </FilterPopup>

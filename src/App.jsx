@@ -265,7 +265,12 @@ function ManagementPanelModal({ onClose, children, onQuickRefresh, onHoldRefresh
   }, [isPanelUnlocked]);
 
   const handleUnlock = () => setIsPanelUnlocked(true);
-  const handleExit = () => { setIsPanelUnlocked(false); onClose(); };
+  // آیتم ۶: قبلاً «خروج» بدون هیچ تاییدی مستقیم پنل رو می‌بست — الان اول یه
+  // پاپ‌آپ وسط صفحه تایید می‌گیره (همون الگوی «تأیید خروج» که فرم‌های محصول/
+  // متریال/گالری برای تغییرات ذخیره‌نشده استفاده می‌کنن)
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const handleExit = () => setShowExitConfirm(true);
+  const confirmExit = () => { setShowExitConfirm(false); setIsPanelUnlocked(false); onClose(); };
 
   if (!isPanelUnlocked) return <PinScreen onUnlock={handleUnlock} onCancel={onClose} />;
 
@@ -361,6 +366,19 @@ function ManagementPanelModal({ onClose, children, onQuickRefresh, onHoldRefresh
       </div>
 
       <ScrollToTopButton activeTab={activeTab} hide={hideScrollButton} />
+
+      {showExitConfirm && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 400, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ width: "88%", maxWidth: 340, background: "#181818", border: "1px solid #2a2a2a", borderRadius: 14, padding: 20 }} dir="rtl">
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#F5F0EB", marginBottom: 8 }}>از پنل مدیریت خارج شوید؟</div>
+            <div style={{ fontSize: 11, color: "#777", lineHeight: 1.65, marginBottom: 18 }}>برای ورود دوباره باید PIN رو وارد کنی.</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button style={{ flex: 1, background: "transparent", border: "1px solid #2a2a2a", color: "#777", borderRadius: 8, padding: "10px 0", fontFamily: "inherit", fontSize: 11, cursor: "pointer" }} onClick={() => setShowExitConfirm(false)}>انصراف</button>
+              <button style={{ flex: 1, background: "#8B1A1A", border: "none", color: "#fff", borderRadius: 8, padding: "10px 0", fontFamily: "inherit", fontSize: 11, cursor: "pointer" }} onClick={confirmExit}>خروج</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
