@@ -163,10 +163,17 @@ function computePlankRowLayout(cuts, wasteLength, kerfVal, stockLength, targetWi
   const K = r2(kerfVal || 0);
   const totalLen = toNum(stockLength) || (cuts.reduce((s, c) => s + toNum(c.length), 0) + wasteLength);
   const n = cuts.length;
-  // گپ یکسان برای همه اتصال‌ها (سبز/آبی/قرمز) — بدون صفرِ چسبیده
+  // گپ پایه، متناسب با کرف (حداقل ۳پیکسل، حداکثر ۶پیکسل) — طبق درخواست کاربر
+  // (آیتم ۱۵ دامپ رودمپ): برش‌های کج/مایتردار باید نصف این گپ رو بگیرن، برش‌های
+  // صاف (بدون مایتر) گپ کامل رو نگه می‌دارن
   const visibleGap = Math.max(3, Math.min(6, K <= PLANK_KERF_GAP_THRESHOLD_CM ? PLANK_DEFAULT_GAP_PX : (totalLen > 0 ? K * (targetWidthPx / totalLen) : PLANK_DEFAULT_GAP_PX)));
+  const miterGap = visibleGap / 2;
 
-  const jointGapPx = cuts.map((_, i) => (i === 0 ? 0 : visibleGap));
+  const jointGapPx = cuts.map((c, i) => {
+    if (i === 0) return 0;
+    const isMiterJoint = c.miterLeft === true;
+    return isMiterJoint ? miterGap : visibleGap;
+  });
   const wasteGapPx = wasteLength > 0 && n > 0 ? visibleGap : 0;
   const totalGapPx = jointGapPx.reduce((s, g) => s + g, 0) + (wasteLength > 0 ? wasteGapPx : 0);
 

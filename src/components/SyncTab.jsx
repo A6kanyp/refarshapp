@@ -14,7 +14,9 @@ import {
   getDeletedRegistry,
   clearDeletedRegistry,
   getLastSyncTime,
-  setLastSyncTime
+  setLastSyncTime,
+  getApiBase,
+  API_BASE_URL_OVERRIDE_KEY
 } from "../utils/syncManager";
 import { getDefaultData } from "../dataModels";
 import { getImageFolderName } from "../utils/imageStorage";
@@ -83,6 +85,10 @@ export default function SyncTab({
   };
 
   const [showPathEditor, setShowPathEditor] = useState(false);
+  const [showServerEditor, setShowServerEditor] = useState(false);
+  const [serverUrlInput, setServerUrlInput] = useState(() => {
+    try { return localStorage.getItem(API_BASE_URL_OVERRIDE_KEY) || ""; } catch (_) { return ""; }
+  });
   const imageFolderName = getImageFolderName();
 
   // Poll navigator.onLine and local storage deletes
@@ -115,13 +121,8 @@ export default function SyncTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, token]);
 
-  const getApiBase = () => {
-    const raw =
-      typeof import.meta !== "undefined" && import.meta.env?.VITE_API_BASE_URL
-        ? String(import.meta.env.VITE_API_BASE_URL).trim()
-        : "";
-    return raw.replace(/\/$/, "");
-  };
+  // getApiBase از syncManager می‌آد — الان اول localStorage (اگه کاربر توی
+  // همین تب دستی ذخیره کرده باشه) بعد env رو چک می‌کنه
 
   const testConnection = async () => {
     setPinging(true);
@@ -245,7 +246,7 @@ export default function SyncTab({
         notify("لطفاً ابتدا وارد حساب کاربری خود شوید");
         return;
       }
-      const API_BASE_R = (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_BASE_URL) ? String(import.meta.env.VITE_API_BASE_URL).replace(/\/$/, "") : "";
+      const API_BASE_R = getApiBase();
       const res = await fetch(`${API_BASE_R}/api/sync/reset`, {
         method: "POST",
         headers: { Authorization: `Bearer ${freshToken}` },
@@ -512,6 +513,49 @@ export default function SyncTab({
                 Documents/{imageFolderName}/factor/image  ← عکس فاکتورها (ذخیره خودکار)<br />
                 Documents/{imageFolderName}/1dnesting  ← خروجی عکس برش ۱D<br />
                 Documents/{imageFolderName}/2dnesting  ← خروجی عکس برش ۲D
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── تنظیم آدرس سرور (base URL) — آیتم ۱۵۴ رودمپ ── */}
+        <div className="mt-4 pt-4 border-t border-[#1f1f1f]">
+          <button
+            className="flex items-center gap-2 bg-transparent border-none text-[#777] text-[11px] cursor-pointer font-inherit p-1"
+            onClick={() => setShowServerEditor(!showServerEditor)}
+          >
+            <Wifi size={14} />
+            آدرس سرور: <span dir="ltr" className="text-[#999]">{serverUrlInput.trim() || "(همان env پیش‌فرض)"}</span>
+          </button>
+
+          {showServerEditor && (
+            <div className="bg-[#0e0e0e] border border-[#1e1e1e] rounded-xl p-3 mt-2">
+              <div className="text-[9.5px] text-[#666] mb-2 leading-relaxed">
+                این آدرس (مثلاً <span dir="ltr" className="font-mono">http://192.168.1.10:3000</span>) اولویت داره روی هر چیزی که موقع build از فایل .env گرفته شده — یعنی نیازی به build دوباره‌ی APK نیست، فقط همین‌جا ذخیره کن. اگه خالی بذاری، دوباره از مقدار پیش‌فرض build استفاده می‌شه.
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  dir="ltr"
+                  value={serverUrlInput}
+                  onChange={(e) => setServerUrlInput(e.target.value)}
+                  placeholder="http://192.168.1.10:3000"
+                  className="flex-1 bg-[#141414] border border-[#252525] rounded-lg px-2.5 py-2 text-[10.5px] text-[#ddd] outline-none focus:border-[#3a3a3a]"
+                />
+                <button
+                  onClick={() => {
+                    try {
+                      const v = serverUrlInput.trim();
+                      if (v) localStorage.setItem(API_BASE_URL_OVERRIDE_KEY, v);
+                      else localStorage.removeItem(API_BASE_URL_OVERRIDE_KEY);
+                    } catch (_) {}
+                    notify(serverUrlInput.trim() ? "آدرس سرور ذخیره شد" : "آدرس دستی پاک شد، از env پیش‌فرض استفاده می‌شه");
+                    testConnection();
+                  }}
+                  className="py-2 px-3 bg-[#1a1a1a] border border-[#2a2a2a] hover:border-[#3a3a3a] rounded-lg text-[10px] text-[#ccc] hover:text-white transition-all cursor-pointer whitespace-nowrap"
+                >
+                  ذخیره
+                </button>
               </div>
             </div>
           )}
