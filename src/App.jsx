@@ -826,16 +826,52 @@ function runLockUnlockPass(srcMaterials, srcProducts, pendingBulkChangesList, mo
       if (batch.locked) return;
       const batchArea = toNum(batch.width) * toNum(batch.height) * (toNum(batch.qty) || 1);
       const itemOps = [];
+
+      // آیتم‌های قفل‌نشده‌ی همین بچ که قراره همین الان قفل بشن
+      const toLock = [];
       (batch.linkedProductIds || []).forEach((pid) => {
         const pIdx = products.findIndex(p => p.id === pid);
         if (pIdx === -1) return;
         const p = products[pIdx];
         const liIdx = p.lineItems.findIndex(li => li.materialId === change.materialId && li.batchId === change.batchId && !li.deductedAt);
         if (liIdx === -1) return;
+        const li = p.lineItems[liIdx];
+        const area = li.manualArea != null ? toNum(li.manualArea) : getProductArea(p);
+        toLock.push({ pid, pIdx, liIdx, li, area });
+      });
+
+      // مبلغ/مساحتِ از قبل قفل‌شده‌ی همین بچ (اگه بخشی از محصولات این بچ زودتر جدا قفل شده باشن)
+      let alreadyLockedCost = 0, alreadyLockedArea = 0;
+      products.forEach((p) => (p.lineItems || []).forEach((li) => {
+        if (li.materialId === change.materialId && li.batchId === change.batchId && li.deductedAt) {
+          alreadyLockedCost += toNum(li.deductedCost || 0);
+          alreadyLockedArea += li.manualArea != null ? toNum(li.manualArea) : getProductArea(p);
+        }
+      }));
+
+      const remainingCapacityCost = Math.max(0, toNum(batch.totalCost) - alreadyLockedCost);
+      const remainingCapacityArea = Math.max(0, batchArea - alreadyLockedArea);
+      const totalAreaToLock = toLock.reduce((s, x) => s + x.area, 0);
+      // آیتم ۱۳ (روادمپ): همون فرمولِ لحظه‌ی نمایش زنده رو موقع قفل‌کردن هم استفاده می‌کنیم —
+      // اگه سهم فیزیکیِ محصولاتِ درحال‌قفل‌شدن از ظرفیتِ باقیمانده‌ی بچ بیشتر بشه (پرتی خودکار)،
+      // یا اگه صراحتاً حالت «پرتی» روی این آیتم‌ها انتخاب شده، به نسبت مساحت از باقیمانده‌ی
+      // بچ سهم می‌گیرن؛ وگرنه دقیقاً سهم فیزیکی خودشون (لایو/باقی بماند). این مقدار همون لحظه
+      // برای همیشه توی deductedCost فریز می‌شه و دیگه (نه با تغییر بعدی هزینه‌ی متریال، نه با
+      // رفرش) بازمحاسبه نمی‌شه — فقط با Undo دقیقاً به prevLi (مقدار قبل از قفل) برمی‌گرده.
+      const anyWastage = toLock.some((x) => x.li.includeWastage);
+      const overAllocated = totalAreaToLock > remainingCapacityArea + 0.0001;
+      const useWasteFormula = anyWastage || overAllocated;
+      const costPerArea = batchArea > 0 ? toNum(batch.totalCost) / batchArea : 0;
+
+      toLock.forEach(({ pid, pIdx, liIdx, li, area }) => {
         const prevLi = { ...products[pIdx].lineItems[liIdx] };
-        const productArea = getProductArea(p);
-        const share = batchArea > 0 ? productArea / batchArea : 0;
-        const amount = toNum(batch.totalCost) * share;
+        let amount;
+        if (useWasteFormula) {
+          const share = totalAreaToLock > 0 ? area / totalAreaToLock : (1 / Math.max(1, toLock.length));
+          amount = remainingCapacityCost * share;
+        } else {
+          amount = area * costPerArea;
+        }
         products[pIdx].lineItems[liIdx] = {
           ...products[pIdx].lineItems[liIdx],
           deductedAt: todayISO(),
@@ -1791,26 +1827,49 @@ export default function App() {
         const linkedProds = isVirtual
           ? directLinked
           : (batch.linkedProductIds || []).map((pid) => data.products.find((p) => p.id === pid)).filter(Boolean);
+        const getLi = (p) => (p.lineItems || []).find((l) => isVirtual ? (l.materialId === m.id && !l.batchId) : (l.batchId === batch.id && l.materialId === m.id));
         const getArea = (p) => {
-          const li = (p.lineItems || []).find((l) => isVirtual ? (l.materialId === m.id && !l.batchId) : (l.batchId === batch.id && l.materialId === m.id));
+          const li = getLi(p);
           return li?.manualArea != null ? toNum(li.manualArea) : getProductArea(p);
         };
-        const usedArea = linkedProds.reduce((s, p) => s + getArea(p), 0);
-        const leftoverArea = Math.max(0, batchArea - usedArea);
         const costPerArea = batchCost / batchArea;
-        const wastageProds = linkedProds.filter((p) => {
-          const li = (p.lineItems || []).find((l) => isVirtual ? (l.materialId === m.id && !l.batchId) : (l.batchId === batch.id && l.materialId === m.id));
-          return li?.includeWastage;
-        });
+
+        // آیتم‌های قفل‌شده (deductedAt) هزینه‌شون یک‌بار برای همیشه فریز شده و از resolveLineCost
+        // مستقیم deductedCost خودشون رو می‌گیرن، نه از اینجا — ولی مساحت/هزینه‌شون باید از ظرفیت
+        // باقیمانده‌ی بچ برای بقیه (هنوز قفل‌نشده‌ها) کم بشه
+        const lockedProds = linkedProds.filter((p) => getLi(p)?.deductedAt);
+        const unlockedProds = linkedProds.filter((p) => !getLi(p)?.deductedAt);
+        const lockedArea = lockedProds.reduce((s, p) => s + getArea(p), 0);
+        const lockedCostActual = lockedProds.reduce((s, p) => s + toNum(getLi(p)?.deductedCost || 0), 0);
+        const remainingCapacityArea = Math.max(0, batchArea - lockedArea);
+        const remainingCapacityCost = Math.max(0, batchCost - lockedCostActual);
+        const unlockedUsedArea = unlockedProds.reduce((s, p) => s + getArea(p), 0);
+
+        // آیتم ۵ (روادمپ): اگه سهم فیزیکیِ محصولاتِ هنوز-قفل‌نشده از ظرفیت واقعیِ باقیمانده‌ی
+        // بچ بیشتر بشه (بیش از ۱۰۰٪)، به‌جای محاسبه‌ی مستقیم (که می‌تونه جمعاً از هزینه‌ی
+        // باقیمانده‌ی بچ بیشتر بشه)، خودکار به روش «پرتی» (تقسیم نسبی باقیمانده بین همه بر اساس
+        // مساحت‌شون) سوییچ می‌کنه — همیشه جمع هزینه‌ها دقیقاً برابر باقیمانده‌ی بچه، نه بیشتر.
+        // اگه زیر ۱۰۰٪ بود، دقیقاً همون منطق لایوِ قبلی (سهم فیزیکی + پخش leftover بین آیتم‌های
+        // «پرتی شود») دست‌نخورده باقی می‌مونه.
+        const overAllocated = unlockedUsedArea > remainingCapacityArea + 0.0001;
+
+        const leftoverArea = Math.max(0, batchArea - (lockedArea + unlockedUsedArea));
+        const wastageProds = unlockedProds.filter((p) => getLi(p)?.includeWastage);
         const totalWastageArea = wastageProds.reduce((s, p) => s + getArea(p), 0);
-        linkedProds.forEach((p) => {
-          const li = (p.lineItems || []).find((l) => isVirtual ? (l.materialId === m.id && !l.batchId) : (l.batchId === batch.id && l.materialId === m.id));
+
+        unlockedProds.forEach((p) => {
+          const li = getLi(p);
           const ownArea = getArea(p);
-          const getsWaste = li?.includeWastage;
-          const wasteShare = (getsWaste && totalWastageArea > 0) ? (ownArea / totalWastageArea) * leftoverArea : 0;
-          const totalArea = ownArea + wasteShare;
           if (!result[p.id]) result[p.id] = {};
-          result[p.id][m.id] = totalArea * costPerArea;
+          if (overAllocated) {
+            const share = unlockedUsedArea > 0 ? ownArea / unlockedUsedArea : (1 / Math.max(1, unlockedProds.length));
+            result[p.id][m.id] = remainingCapacityCost * share;
+          } else {
+            const getsWaste = li?.includeWastage;
+            const wasteShare = (getsWaste && totalWastageArea > 0) ? (ownArea / totalWastageArea) * leftoverArea : 0;
+            const totalAreaForP = ownArea + wasteShare;
+            result[p.id][m.id] = totalAreaForP * costPerArea;
+          }
         });
       });
     });
@@ -2194,6 +2253,7 @@ export default function App() {
       let totalArea = 0;
       const areas = {};
       let batchAlreadyDeducted = 0;
+      let batchOverAllocated = false; // آیتم ۵ (روادمپ): اگه توی حالت «باقی بماند» جمعِ سهم فیزیکی محصولات از ظرفیت واقعیِ باقیمانده‌ی بچ بیشتر بشه، دیگه نباید مجموع هزینه از ۱۰۰٪ باقیمانده بیشتر بشه
       if (isBatchArea) {
         const allSelectedIds = [...productIds, ...linkedUpdates.map(u => u.productId)];
         allSelectedIds.forEach(pid => {
@@ -2213,6 +2273,14 @@ export default function App() {
             batchAlreadyDeducted += toNum(li.deductedCost || 0);
           }
         }));
+        const batchForCheck = material.batches?.find(b => b.id === batchId);
+        if (batchForCheck) {
+          const batchPhysArea = Math.max(0.0001, toNum(batchForCheck.width) * toNum(batchForCheck.height) * Math.max(1, toNum(batchForCheck.qty) || 1));
+          const batchRemainingForCheck = Math.max(0, toNum(batchForCheck.totalCost) - batchAlreadyDeducted);
+          // ظرفیت فیزیکیِ باقیمانده‌ی واقعیِ بچ (نه کل ظرفیت بچ) — چون بخشی از بچ ممکنه قبلاً قفل و مصرف شده باشه
+          const remainingPhysArea = batchPhysArea * (batchRemainingForCheck / Math.max(0.0001, toNum(batchForCheck.totalCost)));
+          batchOverAllocated = totalArea > remainingPhysArea + 0.0001;
+        }
       }
 
       // مبتنی بر طول واقعیِ چوب‌های موجود برای متریال خطی، وقتی «پرتی شود/باقی
@@ -2274,8 +2342,8 @@ export default function App() {
                 const batchRemainingForPreview = Math.max(0, toNum(batch.totalCost) - batchAlreadyDeducted);
                 const prodArea = areas[p.id] || 0;
                 let cost;
-                if (includeWastage) {
-                  // پرتی: کل باقیمانده بچ بین محصولات به نسبت مساحت‌شان
+                if (includeWastage || batchOverAllocated) {
+                  // پرتی (یا باقی بماند ولی مجموع سهم فیزیکی از باقیمانده‌ی واقعی بچ بیشتر شده): کل باقیمانده بچ بین محصولات به نسبت مساحت‌شان
                   const share = totalArea > 0 ? prodArea / totalArea : (1 / Math.max(1, productIds.length + linkedUpdates.length));
                   cost = batchRemainingForPreview * share;
                 } else {
@@ -2333,7 +2401,7 @@ export default function App() {
                 const batchRemainingForPreview = Math.max(0, toNum(batch.totalCost) - batchAlreadyDeducted);
                 const prodArea = areas[p.id] || 0;
                 let cost;
-                if (includeWastage) {
+                if (includeWastage || batchOverAllocated) {
                   const share = totalArea > 0 ? prodArea / totalArea : (1 / Math.max(1, productIds.length + linkedUpdates.length));
                   cost = batchRemainingForPreview * share;
                 } else {
