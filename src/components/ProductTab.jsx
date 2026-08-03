@@ -395,7 +395,7 @@ function ProductCard({ p, customers, materials, onEdit, onDelete, onImageUpload,
     <div style={{ background:"#161616", border:"1px solid #232323", borderRadius:10, marginBottom:7, overflow:"hidden", opacity: p.hiddenFromCatalog ? 0.55 : 1 }}>
       <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", cursor:"pointer" }} onClick={() => onToggleExpand(p.id)}>
         <div style={{ width:40, height:40, borderRadius:6, background:"#111", overflow:"hidden", flexShrink:0, cursor:"pointer", position:"relative" }}
-          onClick={(e) => { e.stopPropagation(); if (p.image) onOpenLightbox(p.id); }}>
+          onClick={(e) => { e.stopPropagation(); onOpenLightbox(p.id); }}>
           {p.image ? (
             <ProductImage filename={p.image} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
           ) : (
@@ -741,6 +741,18 @@ export function ImageLightbox({ products, currentId, onNavigate, onClose, onAddT
     const remaining = Object.keys(ptrsRef.current).length;
 
     if (remaining < 2) lastDistRef.current = null;
+    // باگ pinch-zoom: وقتی با دو انگشت زوم می‌کردیم، `lastPanRef` هیچ‌وقت
+    // آپدیت نمی‌شد (فقط توی حالت تک‌انگشتی آپدیت می‌شه) — پس مقدارش از قبل از
+    // شروع pinch (یا حتی قدیمی‌تر) باقی می‌موند. با ول‌کردن یکی از دو انگشت،
+    // یه پوینتر تنها می‌مونه؛ حرکت بعدیش `dx/dy` رو نسبت به همون موقعیت خیلی
+    // قدیمی حساب می‌کرد → یه جهش ناگهانی چندسانتی توی تصویر. فیکس: وقتی از ۲
+    // انگشت به ۱ انگشت می‌رسیم، `lastPanRef` رو به موقعیت *فعلی* همون انگشتِ
+    // باقی‌مونده sync می‌کنیم، نه این‌که دست‌نخورده از قبل بمونه.
+    if (remaining === 1) {
+      const remainingId = Object.keys(ptrsRef.current)[0];
+      const pt = ptrsRef.current[remainingId];
+      if (pt) lastPanRef.current = { x: pt.x, y: pt.y };
+    }
     if (remaining === 0) {
       lastPanRef.current = null;
       if (swipeStartRef.current && scaleRef.current <= 1) {
@@ -792,7 +804,7 @@ export function ImageLightbox({ products, currentId, onNavigate, onClose, onAddT
         <button style={S.iconBtn} onClick={onClose} onPointerDown={(e) => e.stopPropagation()}>
           <X size={18} color="#fff" />
         </button>
-        <span style={{ flex: 1, fontSize: 12, color: "#ccc" }}>#{fmtCode(product.code)} · {product.name}</span>
+        <span style={{ flex: 1, fontSize: 14, color: "#F5F0EB", fontWeight: 700 }}>#{fmtCode(product.code)} · {product.name}</span>
         {onAddToBasket && product.status !== "sold" && (
           <button
             style={{ ...S.iconBtn, width: 44, height: 44, borderRadius: "50%", background: "rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center" }}
@@ -928,9 +940,12 @@ export function ImageLightbox({ products, currentId, onNavigate, onClose, onAddT
                 </div>
               )}
               {product.description && (
-                <div style={{ fontSize: 11.5, color: "#ccc", marginBottom: 8, whiteSpace: "pre-wrap", lineHeight: 1.65, fontWeight: 500 }}>
-                  {product.description}
-                </div>
+                <>
+                  <div style={{ height: 10 }} />
+                  <div style={{ fontSize: 11.5, color: "#ccc", marginBottom: 8, whiteSpace: "pre-wrap", lineHeight: 1.65, fontWeight: 500 }}>
+                    {product.description}
+                  </div>
+                </>
               )}
               {/* یک ردیف خط خالی بین آخرین مشخصات محصول و ردیف بها (خواسته‌ی کاربر) */}
               <div style={{ height: 10 }} />
