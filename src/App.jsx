@@ -3215,7 +3215,11 @@ export default function App() {
           p.salePriceManual ? "بله" : "خیر",
           p.hiddenFromCatalog ? "بله" : "خیر",
           p.qty != null ? toNum(p.qty) : 1,
-          p.image || ""
+          p.image || "",
+          // ستون جدید همیشه در انتها اضافه می‌شه، نه وسط — دقیقاً برای این‌که
+          // باگ حیاتیِ column-shift که قبلاً کل import رو می‌ترکوند (مستند
+          // بالای همین فایل) دوباره تکرار نشه (Ash 🟡، آیتم ۷ - تکمیل export/import)
+          p.isCalligraphy ? "بله" : "خیر"
         ];
         wsProductsRows.push(rowData);
       });
@@ -4371,7 +4375,10 @@ export default function App() {
                 if (m) return Math.max(1, parseInt(m[1], 10) || 1);
                 return 1;
               })(),
-              image: String(row[34] || "").trim() || null
+              image: String(row[34] || "").trim() || null,
+              // ستون ۳۵ (انتهایی، امن) — فایل‌های قدیمی‌تر که این ستون رو
+              // ندارن، خودکار false می‌گیرن (Ash 🟡)
+              isCalligraphy: row[35] === "بله" || row[35] === true
             });
           });
         }
