@@ -1129,7 +1129,7 @@ function AllInvoicesModal({ invoices, onClose, setData, notify, customers, onVie
             <button
               style={{
                 ...T.chip,
-                padding: "7px 11px",
+                padding: "2px 11px",
                 fontSize: 10.5,
                 background: "transparent",
                 border: "1px solid #2a2a2a",

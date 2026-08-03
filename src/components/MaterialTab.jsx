@@ -162,7 +162,7 @@ function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onTogg
       <button
         style={{
           ...S.chip,
-          padding: "6px 10px",
+          padding: "2px 10px",
           fontSize: 10,
           position: "relative",
           ...style,
@@ -971,10 +971,10 @@ export function BulkApplyMaterialPage({ material, products = [], allMaterials = 
 
             {/* جستجوگر کوچک + فیلتر دسته‌بندی فرش */}
             <div style={{ display: "flex", gap: 6, marginBottom: showFabricFilter ? 4 : 8 }}>
-              <div style={{ display: "flex", alignItems: "center", background: "#161616", border: "1px solid #232323", borderRadius: 6, padding: "4px 8px", gap: 6, flex: 1 }}>
+              <div style={{ display: "flex", alignItems: "center", background: "#161616", border: "1px solid #232323", borderRadius: 6, padding: "4px 8px", gap: 6, flex: 1, minWidth: 0 }}>
                 <Search size={12} color="#444" />
                 <input onFocus={(e) => e.target.select()}
-                  style={{ background: "transparent", border: "none", outline: "none", color: "#ddd", fontSize: 10.5, flex: 1, fontFamily: "inherit" }}
+                  style={{ background: "transparent", border: "none", outline: "none", color: "#ddd", fontSize: 10.5, flex: 1, minWidth: 0, fontFamily: "inherit" }}
                   placeholder="جستجوی سریع محصول..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -3411,7 +3411,7 @@ export default function MaterialTab({
               ref={typeFilterBtnRef}
               style={{
                 ...S.chip,
-                padding: "6px 8px",
+                padding: "2px 8px",
                 fontSize: 10,
                 position: "relative",
                 display: "flex",
@@ -3498,7 +3498,7 @@ export default function MaterialTab({
             <button
               style={{
                 ...S.chip,
-                padding: "6px 10px",
+                padding: "2px 10px",
                 fontSize: 10,
                 position: "relative",
                 background: stockFilter !== "all" ? "#2a1414" : "#1c1c1c",
