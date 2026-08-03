@@ -804,7 +804,7 @@ export function ImageLightbox({ products, currentId, onNavigate, onClose, onAddT
         <button style={S.iconBtn} onClick={onClose} onPointerDown={(e) => e.stopPropagation()}>
           <X size={18} color="#fff" />
         </button>
-        <span style={{ flex: 1, fontSize: 14, color: "#F5F0EB", fontWeight: 700 }}>#{fmtCode(product.code)} · {product.name}</span>
+        <span style={{ flex: 1, fontSize: 16, color: "#F5F0EB", fontWeight: 800 }}>#{fmtCode(product.code)} · {product.name}</span>
         {onAddToBasket && product.status !== "sold" && (
           <button
             style={{ ...S.iconBtn, width: 44, height: 44, borderRadius: "50%", background: "rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center" }}
