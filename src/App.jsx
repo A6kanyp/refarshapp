@@ -812,6 +812,21 @@ function resolveLineCostPure(materials, areaBatchMap, ratioMap, p, li) {
     const base = mat.remainingCost != null ? toNum(mat.remainingCost) : toNum(mat.totalCost);
     return (toNum(li.pct) / 100) * base;
   }
+  // متریال «فرش» (fabric): درصد مصرف موقع قفل واقعی از رو مساحت محصول/مساحت فرش
+  // محاسبه می‌شه (نه از یه li.pct ذخیره‌شده)، پس قبل از قفل شدن اینجا هیچ‌وقت
+  // هزینه‌ای محاسبه نمی‌شد و متریال معلق فرش توی حسابداری زنده صفر نشون داده
+  // می‌شد. الان همون فرمول دقیق پاس قفل رو اینجا هم زنده اجرا می‌کنیم.
+  if (li.materialId && !li.batchId && !li.useAreaRatio) {
+    const mat = materials.find((m) => m.id === li.materialId);
+    if (mat && mat.type === "fabric") {
+      const productArea = getProductArea(p);
+      const coverage = toNum(p.fabricCoveragePct ?? 100) / 100;
+      const fabricArea = toNum(mat.dimW) * toNum(mat.dimH);
+      const pct = (fabricArea > 0 && productArea > 0) ? ((productArea * coverage) / fabricArea) * 100 : 100;
+      const base = mat.remainingCost != null ? toNum(mat.remainingCost) : toNum(mat.totalCost);
+      if (pct > 0) return (pct / 100) * base;
+    }
+  }
   return toNum(li.cost);
 }
 
@@ -1292,7 +1307,15 @@ function reverseOperation(srcMaterials, srcProducts, op) {
     const pIdx = products.findIndex(p => p.id === productId);
     if (pIdx === -1) return;
     const liIdx = products[pIdx].lineItems.findIndex(li => li.id === lineItemId);
-    if (liIdx === -1) return;
+    if (liIdx === -1) {
+      // باگ واقعی بود: بعد از یه unlock واقعی، خودِ لاین‌آیتم کاملاً از محصول
+      // حذف می‌شه (نه فقط pendingUnlock می‌شه) — پس اینجا هیچ‌وقت پیدا نمی‌شد و
+      // این تابع بی‌صدا هیچ کاری نمی‌کرد. یعنی موجودی متریال (deductCostQty)
+      // برمی‌گشت ولی خودِ محصول دیگه هیچ ردی از این متریال نداشت — undo از نظر
+      // کاربر «کار نمی‌کرد». الان اگه لاین‌آیتم پیدا نشه، دوباره به محصول اضافه‌ش می‌کنیم.
+      products[pIdx] = { ...products[pIdx], lineItems: [...products[pIdx].lineItems, { ...prevLi }] };
+      return;
+    }
     products[pIdx].lineItems[liIdx] = { ...prevLi };
   };
 
@@ -1979,6 +2002,17 @@ export default function App() {
       if (!mat) return toNum(li.cost);
       const base = mat.remainingCost != null ? toNum(mat.remainingCost) : toNum(mat.totalCost);
       return (toNum(li.pct) / 100) * base;
+    }
+    if (li.materialId && !li.batchId && !li.useAreaRatio) {
+      const mat = data.materials.find((m) => m.id === li.materialId);
+      if (mat && mat.type === "fabric") {
+        const productArea = getProductArea(p);
+        const coverage = toNum(p.fabricCoveragePct ?? 100) / 100;
+        const fabricArea = toNum(mat.dimW) * toNum(mat.dimH);
+        const pct = (fabricArea > 0 && productArea > 0) ? ((productArea * coverage) / fabricArea) * 100 : 100;
+        const base = mat.remainingCost != null ? toNum(mat.remainingCost) : toNum(mat.totalCost);
+        if (pct > 0) return (pct / 100) * base;
+      }
     }
     return toNum(li.cost);
   }, [areaBatchCostByProduct, ratioByAreaCostByProduct, data.materials]);

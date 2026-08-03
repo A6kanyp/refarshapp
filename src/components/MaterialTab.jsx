@@ -378,6 +378,33 @@ export function BulkApplyMaterialPage({ material, products = [], allMaterials = 
     return initialLinked.map((p) => p.id);
   });
 
+  // صف آزادسازی محصولات قفل‌شده — فقط لوکاله، تا «ذخیره» زده نشه هیچی روی
+  // دیتای واقعی commit نمی‌شه (برخلاف قبل که خودِ کلیک X مستقیم setData می‌زد).
+  // کلید: `${sessionId}:${productId}`
+  const [queuedReleaseIds, setQueuedReleaseIds] = useState(() => new Set());
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const hasUnsavedChanges = () => {
+    if (queuedReleaseIds.size > 0) return true;
+    const initialIdsSet = new Set(initialLinked.map(p => p.id));
+    const finalSelectedSet = new Set(selectedIds);
+    if (initialIdsSet.size !== finalSelectedSet.size) return true;
+    for (const id of initialIdsSet) if (!finalSelectedSet.has(id)) return true;
+    return false;
+  };
+  const requestClose = () => {
+    if (hasUnsavedChanges()) setShowExitConfirm(true);
+    else onClose();
+  };
+  const toggleQueuedRelease = (sessionId, productId) => {
+    const key = `${sessionId}:${productId}`;
+    setQueuedReleaseIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
   const [distributionMode, setDistributionMode] = useState(() => {
     if (initialLinked.length > 0) {
       // اگه همه‌ی لینک‌های قبلی با یه حالت توزیع مشخص (مساوی/نسبت‌مساحت) ذخیره شده بودن، همونو یادآوری کن
@@ -455,10 +482,6 @@ export function BulkApplyMaterialPage({ material, products = [], allMaterials = 
   const batchId = selectedBatchIds[0] || null; // سازگاری با onApply فعلی (اولین بچ)
   const [isWaste, setIsWaste] = useState(material.isWaste ?? false);
   const [expandedLockedSessions, setExpandedLockedSessions] = useState({});
-  // آیتم ۶: مجموعه‌ی «آیدی سشن::آیدی محصول» هایی که کاربر با X علامت زده تا
-  // موقع «ذخیره» آزاد بشن — چیزی به دیتای اصلی نمی‌ره تا اون لحظه
-  const [pendingReleaseSet, setPendingReleaseSet] = useState(() => new Set());
-  const [showBulkDiscardConfirm, setShowBulkDiscardConfirm] = useState(false);
   const [isUsableRemaining, setIsUsableRemaining] = useState(material.isUsableRemaining ?? true);
   const [applyMessage, setApplyMessage] = useState("");
   // همیشه نوار درصد و حالت سه‌گانه — حتی با انتخاب بچ (قبلاً فقط «بدون بچ» نشان می‌داد)
@@ -647,27 +670,6 @@ export function BulkApplyMaterialPage({ material, products = [], allMaterials = 
   };
 
   const handleApply = () => {
-    // آیتم ۶: اول آیتم‌های علامت‌خورده برای آزادسازی رو finalize کن — فقط
-    // pendingUnlock بذار (تا دکمه‌ی رفرش واقعاً آزادش کنه)، هیچ لاین‌آیتم دیگه‌ای
-    // (بقیه‌ی اعضای همون سشن) دست نمی‌خوره، هیچ بازتقسیمی نیست
-    if (pendingReleaseSet.size > 0 && setData) {
-      const keys = pendingReleaseSet;
-      setData((d) => {
-        const products2 = d.products.map((p) => ({
-          ...p,
-          lineItems: (p.lineItems || []).map((li) => {
-            if (li.materialId !== material.id || !li.deductedAt || li.pendingUnlock) return li;
-            const sKey = getSessionKey(li);
-            if (keys.has(`${sKey}::${p.id}`)) {
-              return { ...li, pendingUnlock: true, deductedAt: null };
-            }
-            return li;
-          }),
-        }));
-        return { ...d, products: products2 };
-      });
-    }
-
     const initialIdsSet = new Set(initialLinked.map(p => p.id));
     const finalSelectedSet = new Set(selectedIds);
 
@@ -689,13 +691,36 @@ export function BulkApplyMaterialPage({ material, products = [], allMaterials = 
       }
     });
 
-    if (productIds.length === 0 && linkedUpdates.length === 0 && removedIds.length === 0) {
-      if (pendingReleaseSet.size > 0) {
-        // فقط آزادسازی بود، هیچ تغییر دیگه‌ای — همینم کافیه، ببند
-        onClose();
-        return;
-      }
+    if (productIds.length === 0 && linkedUpdates.length === 0 && removedIds.length === 0 && queuedReleaseIds.size === 0) {
       setApplyMessage("هیچ تغییری برای اعمال وجود ندارد");
+      return;
+    }
+
+    // صف آزادسازیِ محصولات قفل‌شده رو همین‌جا commit می‌کنیم — مستقیم روی همون
+    // لاین‌آیتم‌های صف‌شده pendingUnlock می‌ذاریم (بعداً با نگه‌داشتن دکمه رفرش
+    // واقعاً آزاد می‌شن)، بدون این‌که سهم/درصدِ بقیه‌ی اعضای همون سشن قفل رو دست
+    // بزنیم — چون قفل‌شدن یعنی درصدها قبلاً حساب و فیکس شدن، حذف یکی نباید
+    // خودکار بین بقیه بازتقسیم بشه
+    if (queuedReleaseIds.size > 0 && setData) {
+      setData((d) => {
+        const products2 = d.products.map((p) => ({ ...p, lineItems: (p.lineItems || []).map((li) => ({ ...li })) }));
+        queuedReleaseIds.forEach((key) => {
+          const [sessionId, productId] = key.split(":");
+          const pIdx = products2.findIndex((x) => x.id === productId);
+          if (pIdx === -1) return;
+          const liIdx = products2[pIdx].lineItems.findIndex(
+            (li) => li.materialId === material.id && getSessionKey(li) === sessionId && li.deductedAt && !li.pendingUnlock
+          );
+          if (liIdx === -1) return;
+          products2[pIdx].lineItems[liIdx] = { ...products2[pIdx].lineItems[liIdx], pendingUnlock: true, deductedAt: null };
+        });
+        return { ...d, products: products2 };
+      });
+    }
+
+    if (productIds.length === 0 && linkedUpdates.length === 0 && removedIds.length === 0) {
+      // فقط آزادسازی صف‌شده تغییر کرده بود، چیز دیگه‌ای برای onApply نیست
+      onClose();
       return;
     }
 
@@ -721,6 +746,7 @@ export function BulkApplyMaterialPage({ material, products = [], allMaterials = 
 
     onClose();
   };
+
 
   // ── تنظیم زنده‌ی درصد بین اعضای یک سشن قفل‌شده — فقط بین خودشان جابه‌جا می‌شود، نیازی به رفرش ندارد ──
   const adjustSessionShare = (sessionId, changedProductId, newPct) => {
@@ -753,21 +779,8 @@ export function BulkApplyMaterialPage({ material, products = [], allMaterials = 
     });
   };
 
-  // ── حذف یک محصول از سشن قفل‌شده — آیتم ۶ (فیدبک صریح کاربر): این دیگه
-  // مستقیم setData نمی‌زنه (قبلاً بلافاصله و دائمی اعمال می‌شد، حتی با زدن لغو
-  // برنمی‌گشت) و دیگه هزینه‌ی محصول حذف‌شده رو بین بقیه‌ی اعضای سشن بازتقسیم
-  // نمی‌کنه (طبق تشخیص صریح مالک: وقتی متریال قفله یعنی درصد هر محصول ثابت و
-  // حساب‌شده‌ست؛ حذف یکی نباید درصد بقیه رو عوض کنه). فقط یه toggle لوکاله —
-  // ردیف آبی/هایلایت می‌شه، هیچی به دیتای اصلی نمی‌ره تا «ذخیره» زده بشه
-  const toggleSessionReleaseStaging = (sessionId, productId) => {
-    setPendingReleaseSet((prev) => {
-      const key = `${sessionId}::${productId}`;
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  };
+  // نکته: منطق آزادسازی محصولات قفل‌شده الان توی toggleQueuedRelease (لوکال) +
+  // commitQueuedReleases (که موقع «ذخیره» صدا زده می‌شه) هست — پایین‌تر از handleApply.
 
   const selectedProductsList = products.filter(p => selectedIds.includes(p.id));
   const availableProductsList = products.filter(p => !selectedIds.includes(p.id) &&
@@ -777,18 +790,11 @@ export function BulkApplyMaterialPage({ material, products = [], allMaterials = 
 
   const remainingCostVal = toNum(material.remainingCost);
 
-  // آیتم ۶ (ادامه): X یا «لغو» — اگه چیزی برای آزادسازی علامت خورده، اول تایید بگیر؛
-  // با تایید، همه‌چیز کاملاً دور ریخته می‌شه (چون تا این لحظه هیچ setDataای نزده بودیم)
-  const requestBulkClose = () => {
-    if (pendingReleaseSet.size > 0) setShowBulkDiscardConfirm(true);
-    else onClose();
-  };
-
   return (
     <div style={S.overlay}>
       <div style={{ ...S.sheet, maxWidth: 540 }} dir="rtl">
         <div style={S.sheetHeader}>
-          <button style={S.iconBtn} onClick={requestBulkClose}>
+          <button style={S.iconBtn} onClick={requestClose}>
             <X size={15} color="#aaa" />
           </button>
           <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#F5F0EB" }}>
@@ -796,7 +802,7 @@ export function BulkApplyMaterialPage({ material, products = [], allMaterials = 
           </span>
           <div style={{ display: "flex", gap: 6 }}>
             <button
-              onClick={requestBulkClose}
+              onClick={onClose}
               style={{ background: "transparent", border: "1px solid #2a2a2a", color: "#888", padding: "6px 12px", borderRadius: 4, fontSize: 11, cursor: "pointer" }}
             >
               لغو
@@ -810,8 +816,24 @@ export function BulkApplyMaterialPage({ material, products = [], allMaterials = 
           </div>
         </div>
 
+        {showExitConfirm && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 400, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={() => setShowExitConfirm(false)}>
+            <div style={{ background: "#181818", border: "1px solid #2a2a2a", borderRadius: 12, padding: 18, maxWidth: 320, width: "100%" }} onClick={(e) => e.stopPropagation()}>
+              <div style={{ fontSize: 12.5, color: "#F5F0EB", fontWeight: 600, marginBottom: 6 }}>خروج بدون ذخیره؟</div>
+              <div style={{ fontSize: 11, color: "#999", marginBottom: 16, lineHeight: 1.6 }}>
+                تغییراتی که دادی (از جمله صف آزادسازی) ذخیره نشدن. اگه خارج بشی، همه‌شون بی‌خیال می‌شن و چیزی روی متریال اعمال نمی‌شه.
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => setShowExitConfirm(false)} style={{ flex: 1, background: "transparent", border: "1px solid #2a2a2a", color: "#888", borderRadius: 8, padding: "9px 0", fontFamily: "inherit", fontSize: 11, cursor: "pointer" }}>ادامه‌ی ویرایش</button>
+                <button onClick={() => { setShowExitConfirm(false); onClose(); }} style={{ flex: 1, background: "#8B1A1A", border: "none", color: "#fff", borderRadius: 8, padding: "9px 0", fontFamily: "inherit", fontSize: 11, cursor: "pointer" }}>خروج بی‌خیال تغییرات</button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div style={{ padding: "14px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: 12 }}>
           {/* اطلاعات متریال */}
+
           <div style={{ background: "#1a1a1a", border: "1px solid #252525", borderRadius: 8, padding: "10px 12px" }}>
             <div style={{ fontSize: 10, color: "#666", marginBottom: 4 }}>اطلاعات متریال</div>
             <div style={{ fontSize: 11, color: "#ddd", display: "flex", flexWrap: "wrap", gap: "8px 12px" }}>
@@ -845,38 +867,33 @@ export function BulkApplyMaterialPage({ material, products = [], allMaterials = 
                     </div>
                     {isSessionOpen && session.items.map(({ product, li }) => {
                       const pct = sessionTotal > 0 ? Math.round((toNum(li.deductedCost) / sessionTotal) * 100) : 0;
-                      const releaseKey = `${session.sessionId}::${product.id}`;
-                      const isStagedForRelease = pendingReleaseSet.has(releaseKey);
+                      const releaseKey = `${session.sessionId}:${product.id}`;
+                      const isQueued = queuedReleaseIds.has(releaseKey);
                       return (
-                        <div
-                          key={product.id}
-                          style={{
-                            display: "flex", alignItems: "center", gap: 6, marginBottom: 4,
-                            padding: isStagedForRelease ? "4px 6px" : 0,
-                            borderRadius: 6,
-                            background: isStagedForRelease ? "rgba(90,150,220,0.14)" : "transparent",
-                            border: isStagedForRelease ? "1px solid #3a6a9a" : "1px solid transparent",
-                          }}
-                        >
-                          <span style={{ flex: 1, fontSize: 10.5, color: isStagedForRelease ? "#7aa8d8" : "#ddd", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {product.name}{isStagedForRelease ? " — آماده‌ی آزادسازی" : ""}
-                          </span>
-                          <span style={{ fontSize: 9.5, color: "#888", minWidth: 62, textAlign: "left" }}>{fmt(toNum(li.deductedCost))} ت</span>
-                          <input
-                            style={{ ...S.input, width: 44, padding: "3px 4px", fontSize: 10, textAlign: "center" }}
-                            type="text"
-                            value={pct}
-                            onFocus={(e) => e.target.select()}
-                            onChange={(e) => adjustSessionShare(session.sessionId, product.id, toNum(e.target.value))}
-                            disabled={session.items.length <= 1 || isStagedForRelease}
-                          />
-                          <span style={{ fontSize: 9, color: "#666" }}>%</span>
+                        <div key={product.id} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, opacity: isQueued ? 0.6 : 1 }}>
+                          <span style={{ flex: 1, fontSize: 10.5, color: isQueued ? "#5b9bd5" : "#ddd", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: isQueued ? "line-through" : "none" }}>{product.name}</span>
+                          {isQueued ? (
+                            <span style={{ fontSize: 9, color: "#5b9bd5" }}>در صف آزادسازی</span>
+                          ) : (
+                            <>
+                              <span style={{ fontSize: 9.5, color: "#888", minWidth: 62, textAlign: "left" }}>{fmt(toNum(li.deductedCost))} ت</span>
+                              <input
+                                style={{ ...S.input, width: 44, padding: "3px 4px", fontSize: 10, textAlign: "center" }}
+                                type="text"
+                                value={pct}
+                                onFocus={(e) => e.target.select()}
+                                onChange={(e) => adjustSessionShare(session.sessionId, product.id, toNum(e.target.value))}
+                                disabled={session.items.length <= 1}
+                              />
+                              <span style={{ fontSize: 9, color: "#666" }}>%</span>
+                            </>
+                          )}
                           <button
                             style={{ ...S.iconBtn, padding: 3 }}
-                            title={isStagedForRelease ? "انصراف از آزادسازی" : "حذف از این تخصیص (با زدن «ذخیره» بالای صفحه، آماده‌ی آزادسازی می‌شه)"}
-                            onClick={() => toggleSessionReleaseStaging(session.sessionId, product.id)}
+                            title={isQueued ? "بی‌خیال آزادسازی (تا وقتی ذخیره نزنی چیزی عوض نمی‌شه)" : "صف آزادسازی — تا «ذخیره» نزنی چیزی روی متریال اعمال نمی‌شه"}
+                            onClick={() => toggleQueuedRelease(session.sessionId, product.id)}
                           >
-                            {isStagedForRelease ? <RotateCcw size={11} color="#7aa8d8" /> : <X size={11} color="#8B1A1A" />}
+                            <X size={11} color={isQueued ? "#5b9bd5" : "#8B1A1A"} />
                           </button>
                         </div>
                       );
@@ -1357,20 +1374,6 @@ export function BulkApplyMaterialPage({ material, products = [], allMaterials = 
 
         </div>
       </div>
-      {showBulkDiscardConfirm && (
-        <div style={{ ...S.overlay, zIndex: 250, alignItems: "center", justifyContent: "center" }} onClick={(e) => e.stopPropagation()}>
-          <div style={{ width: "88%", maxWidth: 340, background: "#181818", border: "1px solid #2a2a2a", borderRadius: 14, padding: 20 }} dir="rtl">
-            <div style={{ fontSize: 13, fontWeight: 600, color: "#F5F0EB", marginBottom: 8 }}>لغو کنید؟</div>
-            <div style={{ fontSize: 11, color: "#777", lineHeight: 1.65, marginBottom: 18 }}>
-              {pendingReleaseSet.size} محصول برای آزادسازی علامت‌گذاری کردی که هنوز ذخیره نشده — با لغو، این علامت‌ها هم از بین می‌رن و متریال قفل‌شده باقی می‌مونه.
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button style={{ flex: 1, background: "transparent", border: "1px solid #2a2a2a", color: "#777", borderRadius: 8, padding: "10px 0", fontFamily: "inherit", fontSize: 11, cursor: "pointer" }} onClick={() => setShowBulkDiscardConfirm(false)}>ادامه ویرایش</button>
-              <button style={{ flex: 1, background: "#8B1A1A", border: "none", color: "#fff", borderRadius: 8, padding: "10px 0", fontFamily: "inherit", fontSize: 11, cursor: "pointer" }} onClick={() => { setShowBulkDiscardConfirm(false); onClose(); }}>لغو کن</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -3534,7 +3537,7 @@ export default function MaterialTab({
             </button>
           )}
 
-          <div style={{ position: "relative", flexShrink: 0 }} ref={menuRef}>
+          <div style={{ position: "relative" }} ref={menuRef}>
             <button
               style={{
                 ...S.chip,
