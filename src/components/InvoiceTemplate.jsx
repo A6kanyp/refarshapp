@@ -22,8 +22,16 @@ function InvoiceItemImage({ filename }) {
   const resolvedSrc = useResolvedImageSrc(isLegacyInline ? null : filename, IMAGE_CATEGORIES.PRODUCT);
   const src = isLegacyInline ? filename : resolvedSrc;
   if (!filename || !src) {
+    // نکته‌ی مهم برای Save/Share/Print (InvoicePrint.jsx): وقتی filename هست ولی src
+    // هنوز resolve نشده (useResolvedImageSrc در حال lookup از IndexedDB/فایل‌سیستمه)،
+    // این یه پلاسهولدر موقته نه «واقعاً بدون عکس». قبلاً این دو حالت از نظر DOM
+    // غیرقابل‌تشخیص بودن، پس اگه کاربر سریع دکمه‌ی ذخیره/اشتراک/چاپ رو می‌زد، اسنپ‌شاتی
+    // که گرفته می‌شد همین پلاسهولدر رو برای همیشه توی عکس/PDF نهایی ثبت می‌کرد، حتی اگه
+    // یه لحظه بعد عکس واقعی لود می‌شد. الان با data-resolving مشخصش می‌کنیم تا
+    // InvoicePrint.jsx قبل از گرفتن اسنپ‌شات صبر کنه تا همه‌شون تموم بشن.
+    const stillResolving = !!filename && resolvedSrc === undefined && !isLegacyInline;
     return (
-      <div style={{ width: "42px", height: "42px", margin: "0 auto", borderRadius: "6px", background: "#f0f0f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "9px", color: "#888", border: "1px dashed #ccc" }}>بدون عکس</div>
+      <div data-resolving={stillResolving ? "true" : undefined} style={{ width: "42px", height: "42px", margin: "0 auto", borderRadius: "6px", background: "#f0f0f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "9px", color: "#888", border: "1px dashed #ccc" }}>{stillResolving ? "" : "بدون عکس"}</div>
     );
   }
   return (

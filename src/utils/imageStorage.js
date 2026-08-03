@@ -194,25 +194,21 @@ export async function getImageSrc(filename, category) {
   return src;
 }
 
-/** لیست تمام فایل‌های موجود توی یه دسته (category) — روی هر دو پلتفرم (اندروید/وب) */
+/** لیست تمام فایل‌های موجود توی یه دسته (category) — روی هر دو پلتفرم (اندروید/وب).
+ * قبلاً هر خطای native (پوشه وجود نداره، دسترسی رد شده، ...) بی‌صدا catch می‌شد
+ * و [] برمی‌گشت — یعنی از دید کاربر «هیچ عکسی پیدا نشد» با «خطای واقعی دسترسی
+ * به پوشه» قابل‌تشخیص نبودن. الان خطای native رو با پیام اصلی‌ش دوباره throw
+ * می‌کنیم تا صدازننده (autoDetectImagesForCode) بتونه واقعاً نشونش بده. */
 async function listFilesInCategory(category) {
   if (isNativePlatform()) {
-    try {
-      const { Filesystem, Directory } = await import("@capacitor/filesystem");
-      const folder = getImageFolderName();
-      const res = await Filesystem.readdir({ path: `${folder}/${category}`, directory: Directory.Documents });
-      return (res.files || []).map((f) => (typeof f === "string" ? f : f.name)).filter(Boolean);
-    } catch (_) {
-      return [];
-    }
+    const { Filesystem, Directory } = await import("@capacitor/filesystem");
+    const folder = getImageFolderName();
+    const res = await Filesystem.readdir({ path: `${folder}/${category}`, directory: Directory.Documents });
+    return (res.files || []).map((f) => (typeof f === "string" ? f : f.name)).filter(Boolean);
   }
-  try {
-    const keys = await idbListKeys();
-    const prefix = `${category}/`;
-    return keys.filter((k) => k.startsWith(prefix)).map((k) => k.slice(prefix.length));
-  } catch (_) {
-    return [];
-  }
+  const keys = await idbListKeys();
+  const prefix = `${category}/`;
+  return keys.filter((k) => k.startsWith(prefix)).map((k) => k.slice(prefix.length));
 }
 
 /**
@@ -226,7 +222,20 @@ async function listFilesInCategory(category) {
 export async function autoDetectImagesForCode(code) {
   const codeStr = String(code || "").trim();
   if (!codeStr) return [];
-  const files = await listFilesInCategory(IMAGE_CATEGORIES.PRODUCT);
+  let files;
+  try {
+    files = await listFilesInCategory(IMAGE_CATEGORIES.PRODUCT);
+  } catch (err) {
+    // اگه پوشه هنوز اصلاً وجود نداره (اولین‌باره، هیچ عکسی هنوز ذخیره نشده)،
+    // این یه خطای واقعی نیست — فقط یعنی چیزی برای پیدا کردن نیست.
+    const msg = String(err?.message || err || "").toLowerCase();
+    if (msg.includes("not exist") || msg.includes("not found") || msg.includes("enoent")) {
+      return [];
+    }
+    // هر خطای دیگه (دسترسی رد شده، مسیر نامعتبر، ...) واقعیه — به صدازننده پاس
+    // داده می‌شه تا کاربر واقعاً پیام خطا رو ببینه، نه این‌که بی‌صدا قورت داده بشه
+    throw err;
+  }
   const re = new RegExp(`^${codeStr}(\\d{2})\\.[a-zA-Z0-9]+$`);
   const matches = [];
   for (const f of files) {
