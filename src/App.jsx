@@ -273,6 +273,26 @@ function ManagementPanelModal({ onClose, children, onQuickRefresh, onHoldRefresh
   const handleExit = () => setShowExitConfirm(true);
   const confirmExit = () => { setShowExitConfirm(false); setIsPanelUnlocked(false); onClose(); };
 
+  // آیتم ۹ (دامپ اخیر کاربر): دکمه‌ی بک سخت‌افزاری/سوایپ لبه پنل رو بدون تایید
+  // می‌بست، چون یه هندلر جدا توی App.jsx مستقیم `onClose` (بستن واقعی پنل) رو
+  // صدا می‌زد — درحالی‌که دکمه‌ی «خروج» همیشه از `handleExit` (باز کردن پاپ‌آپ
+  // تایید) رد می‌شد. اون هندلر بیرونی حذف شد؛ الان دقیقاً همینجا، داخل خودِ
+  // پنل، دو تا هندلر جداگونه ثبت می‌شه که رفتارشون کاملاً هم‌راستا با بقیه‌ی
+  // پاپ‌آپ‌های تاییدِ اپه (بک = بستن بالاترین چیزِ باز):
+  // ۱) اگه پاپ‌آپ تایید از قبل باز نیست → بک باید همون کاری رو بکنه که خودِ
+  //    دکمه‌ی «خروج» می‌کنه (یعنی اول پاپ‌آپ تایید رو باز کنه، نه بستن مستقیم پنل)
+  // ۲) اگه پاپ‌آپ تایید باز است → بک باید فقط همون پاپ‌آپ رو ببنده (لغو تایید)،
+  //    نه این‌که تاییدش کنه و پنل واقعاً بسته بشه
+  useEffect(() => {
+    if (!isPanelUnlocked || showExitConfirm) return;
+    return pushBackHandler(handleExit);
+  }, [isPanelUnlocked, showExitConfirm]);
+
+  useEffect(() => {
+    if (!showExitConfirm) return;
+    return pushBackHandler(() => setShowExitConfirm(false));
+  }, [showExitConfirm]);
+
   if (!isPanelUnlocked) return <PinScreen onUnlock={handleUnlock} onCancel={onClose} />;
 
   return (
@@ -1602,10 +1622,10 @@ export default function App() {
     return pushBackHandler(() => setShowBasket(false));
   }, [showBasket]);
 
-  useEffect(() => {
-    if (!showManagementPanel) return;
-    return pushBackHandler(() => setShowManagementPanel(false));
-  }, [showManagementPanel]);
+  // آیتم ۹: هندلر بک این پنل از اینجا حذف شد — قبلاً مستقیم `setShowManagementPanel(false)`
+  // می‌کرد و پاپ‌آپ تایید خروج (`showExitConfirm` داخل خودِ ManagementPanelModal) رو
+  // دور می‌زد. الان دقیقاً همون هندلینگ داخل خودِ ManagementPanelModal ثبت می‌شه، جایی
+  // که به state تاییدِ خروج دسترسی داره.
 
   // دکمه‌ی Back سخت‌افزاری اندروید / سوایپ لبه: اول به مودال بازِ ثبت‌شده
   // (استک بالا) فرصت می‌ده خودش رو ببنده؛ اگه چیزی باز نبود و روی تب پیش‌فرض
