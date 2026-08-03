@@ -5,7 +5,7 @@ import React, { useState, useEffect, useLayoutEffect, useMemo, useCallback, useR
 import * as XLSX from "xlsx";
 import { LogOut, Users, RotateCcw, Fingerprint, Lock, Unlock, Undo2 } from "lucide-react";
 
-import { toNum, fmt, fmtCode, fmtDate, todayISO, getProductArea, getProductPerimeter, safeDivide, gregorianToJalali, toPersianDigits, calcPriceFromProfit, resolveProductGroupName } from "./mathCore";
+import { toNum, fmt, fmtCode, fmtDate, todayISO, getProductArea, getProductPerimeter, safeDivide, gregorianToJalali, toPersianDigits, calcPriceFromProfit, resolveProductGroupName, formatFabricGroupLabel } from "./mathCore";
 import { BiometricAuth, BiometryErrorType } from "@aparajita/capacitor-biometric-auth";
 import {
   loadData, saveData, mergeById, refundVanishedDeductions,
@@ -22,6 +22,7 @@ import { useNestedModalCount } from "./utils/modalRegistry";
 import { initKeyboardScroll } from "./utils/keyboardScroll";
 import { useSwipeTabNav, useTabSlideClass } from "./utils/swipeTabs";
 import { compressImageFile } from "./utils/imageCompress";
+import { saveImageToFolder, IMAGE_CATEGORIES } from "./utils/imageStorage";
 import { pushBackHandler, consumeBack } from "./utils/backButton";
 import { useAuth } from "./contexts/AuthContext.jsx";
 import { usePendingChanges } from "./contexts/PendingChangesContext.jsx";
@@ -159,6 +160,21 @@ function RefreshLockButton({ onQuickRefresh, onHoldRefresh, onUndoRefresh, onRes
   const holdTimer = useRef(null);
   const didHold = useRef(false);
   const [showHoldPopup, setShowHoldPopup] = useState(false);
+  // آیتم جدید: با یه ضربه‌ی ساده (نه نگه‌داشتن)، آیکون رفرش ۳ ثانیه دایره‌ای
+  // بچرخه — فقط یه فیدبک بصری که «کاری انجام شد»، مستقل از منطق واقعیِ
+  // quickRefresh (Ash 🟡). دابل‌کلیک (ریست فیلترها) هم مشابه ولی ۴ ثانیه،
+  // سریع‌تر، و با اینرسی (شروع تند، کم‌کم کند و متوقف) — با یه keyframe جدا
+  // که مسافت بیشتر (۵ دور) رو با easing کندشونده (نه linear) طی می‌کنه، پس
+  // خودش به‌طور طبیعی هم سریع‌تر شروع می‌شه هم با اینرسی می‌ایسته، بدون نیاز
+  // به فیزیک واقعی توی JS
+  const [spinMode, setSpinMode] = useState(null); // null | "tap" | "doubleTap"
+  const spinTimeoutRef = useRef(null);
+
+  const triggerSpin = (mode, durationMs) => {
+    clearTimeout(spinTimeoutRef.current);
+    setSpinMode(mode);
+    spinTimeoutRef.current = setTimeout(() => setSpinMode(null), durationMs);
+  };
 
   const onPtrDown = () => {
     didHold.current = false;
@@ -177,12 +193,20 @@ function RefreshLockButton({ onQuickRefresh, onHoldRefresh, onUndoRefresh, onRes
     if (now - RefreshLockButton._lastTap < 350) {
       RefreshLockButton._lastTap = 0;
       onResetFilters?.();
+      triggerSpin("doubleTap", 4000);
     } else {
       RefreshLockButton._lastTap = now;
       onQuickRefresh?.();
+      triggerSpin("tap", 3000);
     }
   };
   const onPtrCancel = () => clearTimeout(holdTimer.current);
+  useEffect(() => () => clearTimeout(spinTimeoutRef.current), []);
+
+  const spinStyle =
+    spinMode === "tap" ? { animation: "ashRefreshSpin 1s linear 3" } :
+    spinMode === "doubleTap" ? { animation: "ashRefreshSpinFast 4s cubic-bezier(0.15,0.65,0.35,1) 1" } :
+    undefined;
 
   // چیدمان ۴ دکمه‌ی مربعی طبق آخرین توضیح دقیق کاربر: ردیف بالا = قفل (راست) و
   // آزاد (چپ)، ردیف پایین = Undo (راست) و رفرش (چپ). چون کل اپ RTL هست، ترتیب
@@ -196,10 +220,11 @@ function RefreshLockButton({ onQuickRefresh, onHoldRefresh, onUndoRefresh, onRes
 
   return (
     <>
+      <style>{`@keyframes ashRefreshSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}@keyframes ashRefreshSpinFast{from{transform:rotate(0deg)}to{transform:rotate(1800deg)}}`}</style>
       <button onPointerDown={onPtrDown} onPointerUp={onPtrUp} onPointerCancel={onPtrCancel}
         style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: "50%", background: hasPending ? "#3a1212" : "#1c1c1c", border: "1px solid " + (hasPending ? "#8B1A1A" : "#2a2a2a"), color: hasPending ? "#e08a8a" : "#888", cursor: "pointer", flexShrink: 0 }}
-        title="ضربه = رفرش نمایش | نگه‌دار = باز شدن منوی قفل/آزادسازی">
-        <RotateCcw size={16} color={hasPending ? "#e08a8a" : "#888"} />
+        title="ضربه = رفرش نمایش | دو ضربه = ریست فیلترها | نگه‌دار = باز شدن منوی قفل/آزادسازی">
+        <RotateCcw size={16} color={hasPending ? "#e08a8a" : "#888"} style={spinStyle} />
         {hasPending && <span style={{ position: "absolute", top: 3, right: 3, width: 6, height: 6, borderRadius: "50%", background: "#e08a8a" }} />}
       </button>
 
@@ -230,9 +255,13 @@ function RefreshLockButton({ onQuickRefresh, onHoldRefresh, onUndoRefresh, onRes
             </button>
             <button
               style={{ ...squareBtnStyle, background: "#1c1c1c", color: "#ccc" }}
-              onClick={() => { setShowHoldPopup(false); onQuickRefresh?.(); }}
+              onClick={() => {
+                setShowHoldPopup(false);
+                onQuickRefresh?.();
+                triggerSpin("tap", 3000);
+              }}
             >
-              <RotateCcw size={16} />
+              <RotateCcw size={16} style={spinStyle} />
               رفرش
             </button>
           </div>
@@ -265,7 +294,32 @@ function ManagementPanelModal({ onClose, children, onQuickRefresh, onHoldRefresh
   }, [isPanelUnlocked]);
 
   const handleUnlock = () => setIsPanelUnlocked(true);
-  const handleExit = () => { setIsPanelUnlocked(false); onClose(); };
+  // آیتم ۶: قبلاً «خروج» بدون هیچ تاییدی مستقیم پنل رو می‌بست — الان اول یه
+  // پاپ‌آپ وسط صفحه تایید می‌گیره (همون الگوی «تأیید خروج» که فرم‌های محصول/
+  // متریال/گالری برای تغییرات ذخیره‌نشده استفاده می‌کنن)
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const handleExit = () => setShowExitConfirm(true);
+  const confirmExit = () => { setShowExitConfirm(false); setIsPanelUnlocked(false); onClose(); };
+
+  // آیتم ۹ (دامپ اخیر کاربر): دکمه‌ی بک سخت‌افزاری/سوایپ لبه پنل رو بدون تایید
+  // می‌بست، چون یه هندلر جدا توی App.jsx مستقیم `onClose` (بستن واقعی پنل) رو
+  // صدا می‌زد — درحالی‌که دکمه‌ی «خروج» همیشه از `handleExit` (باز کردن پاپ‌آپ
+  // تایید) رد می‌شد. اون هندلر بیرونی حذف شد؛ الان دقیقاً همینجا، داخل خودِ
+  // پنل، دو تا هندلر جداگونه ثبت می‌شه که رفتارشون کاملاً هم‌راستا با بقیه‌ی
+  // پاپ‌آپ‌های تاییدِ اپه (بک = بستن بالاترین چیزِ باز):
+  // ۱) اگه پاپ‌آپ تایید از قبل باز نیست → بک باید همون کاری رو بکنه که خودِ
+  //    دکمه‌ی «خروج» می‌کنه (یعنی اول پاپ‌آپ تایید رو باز کنه، نه بستن مستقیم پنل)
+  // ۲) اگه پاپ‌آپ تایید باز است → بک باید فقط همون پاپ‌آپ رو ببنده (لغو تایید)،
+  //    نه این‌که تاییدش کنه و پنل واقعاً بسته بشه
+  useEffect(() => {
+    if (!isPanelUnlocked || showExitConfirm) return;
+    return pushBackHandler(handleExit);
+  }, [isPanelUnlocked, showExitConfirm]);
+
+  useEffect(() => {
+    if (!showExitConfirm) return;
+    return pushBackHandler(() => setShowExitConfirm(false));
+  }, [showExitConfirm]);
 
   if (!isPanelUnlocked) return <PinScreen onUnlock={handleUnlock} onCancel={onClose} />;
 
@@ -361,6 +415,19 @@ function ManagementPanelModal({ onClose, children, onQuickRefresh, onHoldRefresh
       </div>
 
       <ScrollToTopButton activeTab={activeTab} hide={hideScrollButton} />
+
+      {showExitConfirm && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 400, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ width: "88%", maxWidth: 340, background: "#181818", border: "1px solid #2a2a2a", borderRadius: 14, padding: 20 }} dir="rtl">
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#F5F0EB", marginBottom: 8 }}>از پنل مدیریت خارج شوید؟</div>
+            <div style={{ fontSize: 11, color: "#777", lineHeight: 1.65, marginBottom: 18 }}>برای ورود دوباره باید PIN رو وارد کنی.</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button style={{ flex: 1, background: "transparent", border: "1px solid #2a2a2a", color: "#777", borderRadius: 8, padding: "10px 0", fontFamily: "inherit", fontSize: 11, cursor: "pointer" }} onClick={() => setShowExitConfirm(false)}>انصراف</button>
+              <button style={{ flex: 1, background: "#8B1A1A", border: "none", color: "#fff", borderRadius: 8, padding: "10px 0", fontFamily: "inherit", fontSize: 11, cursor: "pointer" }} onClick={confirmExit}>خروج</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -517,7 +584,7 @@ function MgmtTabs({ productTotals, groupedProducts, materialsWithRemaining, cust
       <div style={{ display: mgmtTab === "materials" ? "block" : "none" }}><MaterialTab stickyTop={stickyTop} materials={materialsWithRemaining} products={productTotals} setData={setData} onRequestDelete={onRequestDeleteMaterial} onAddPurchase={addMaterialPurchase} onUpdateProcurement={updateProcurement} onDeleteProcurement={deleteProcurement} onAddBatch={addBatch} onUpdateBatch={updateBatch} onDeleteBatch={deleteBatch} onLockBatch={lockBatch} onUnlockBatch={unlockBatch} onAddStick={addStick} onUpdateStick={updateStick} onDeleteStick={deleteStick} onBulkApply={bulkApplyMaterial} sortOrder={sortOrderMaterials} setSortOrder={setSortOrderMaterials} notify={notify} refreshResetTick={refreshResetTick} /></div>
       <div style={{ display: mgmtTab === "woodCutting" ? "block" : "none" }}><WoodCuttingTab stickyTop={stickyTop} materials={materialsWithRemaining} products={productTotals} woodCuttingSessions={woodCuttingSessions} onSaveSession={onSaveSession} onDeleteSession={onDeleteSession} onExport={onExportWoodCutting} /></div>
       <div style={{ display: mgmtTab === "gallery" ? "block" : "none" }}><GalleryTab businessCard={myBusinessCard} stickyTop={stickyTop} customerStats={customerStats} productTotals={productTotals} setData={setData} onRequestDeleteCustomer={onRequestDeleteCustomer} sortOrder={sortOrderGallery} setSortOrder={setSortOrderGallery} notify={notify} refreshResetTick={refreshResetTick} /></div>
-      <div style={{ display: mgmtTab === "accounting" ? "block" : "none" }}><AccountingTab stickyTop={stickyTop} acc={accounting} customers={data.customers || []} productTotals={productTotals} onExportExcel={handleExportExcel} onExportJson={handleExportJson} onImportExcelClick={() => xlsxImportRef.current?.click()} onImportJsonClick={() => jsonImportRef.current?.click()} setData={setData} notify={notify} businessCard={myBusinessCard} invoiceDrafts={data.invoiceDrafts || []} /></div>
+      <div style={{ display: mgmtTab === "accounting" ? "block" : "none" }}><AccountingTab stickyTop={stickyTop} acc={accounting} customers={data.customers || []} productTotals={productTotals} onExportExcel={handleExportExcel} onExportJson={handleExportJson} onImportExcelClick={() => xlsxImportRef.current?.click()} onImportJsonClick={() => jsonImportRef.current?.click()} setData={setData} notify={notify} businessCard={myBusinessCard} invoiceDrafts={data.invoiceDrafts || []} refreshResetTick={refreshResetTick} /></div>
       <div style={{ display: mgmtTab === "sync" ? "block" : "none" }}><SyncTab stickyTop={stickyTop} data={data} setData={setData} notify={notify} onExportExcel={handleExportExcel} onExportPreviewExcel={handleExportPreviewExcel} onExportJson={handleExportJson} onImportExcelClick={() => xlsxImportRef.current?.click()} onImportJsonClick={() => jsonImportRef.current?.click()} hideFloatingSync={hideFloatingSync} /></div>
       </div>
       </div>
@@ -841,16 +908,52 @@ function runLockUnlockPass(srcMaterials, srcProducts, pendingBulkChangesList, mo
       if (batch.locked) return;
       const batchArea = toNum(batch.width) * toNum(batch.height) * (toNum(batch.qty) || 1);
       const itemOps = [];
+
+      // آیتم‌های قفل‌نشده‌ی همین بچ که قراره همین الان قفل بشن
+      const toLock = [];
       (batch.linkedProductIds || []).forEach((pid) => {
         const pIdx = products.findIndex(p => p.id === pid);
         if (pIdx === -1) return;
         const p = products[pIdx];
         const liIdx = p.lineItems.findIndex(li => li.materialId === change.materialId && li.batchId === change.batchId && !li.deductedAt);
         if (liIdx === -1) return;
+        const li = p.lineItems[liIdx];
+        const area = li.manualArea != null ? toNum(li.manualArea) : getProductArea(p);
+        toLock.push({ pid, pIdx, liIdx, li, area });
+      });
+
+      // مبلغ/مساحتِ از قبل قفل‌شده‌ی همین بچ (اگه بخشی از محصولات این بچ زودتر جدا قفل شده باشن)
+      let alreadyLockedCost = 0, alreadyLockedArea = 0;
+      products.forEach((p) => (p.lineItems || []).forEach((li) => {
+        if (li.materialId === change.materialId && li.batchId === change.batchId && li.deductedAt) {
+          alreadyLockedCost += toNum(li.deductedCost || 0);
+          alreadyLockedArea += li.manualArea != null ? toNum(li.manualArea) : getProductArea(p);
+        }
+      }));
+
+      const remainingCapacityCost = Math.max(0, toNum(batch.totalCost) - alreadyLockedCost);
+      const remainingCapacityArea = Math.max(0, batchArea - alreadyLockedArea);
+      const totalAreaToLock = toLock.reduce((s, x) => s + x.area, 0);
+      // آیتم ۱۳ (روادمپ): همون فرمولِ لحظه‌ی نمایش زنده رو موقع قفل‌کردن هم استفاده می‌کنیم —
+      // اگه سهم فیزیکیِ محصولاتِ درحال‌قفل‌شدن از ظرفیتِ باقیمانده‌ی بچ بیشتر بشه (پرتی خودکار)،
+      // یا اگه صراحتاً حالت «پرتی» روی این آیتم‌ها انتخاب شده، به نسبت مساحت از باقیمانده‌ی
+      // بچ سهم می‌گیرن؛ وگرنه دقیقاً سهم فیزیکی خودشون (لایو/باقی بماند). این مقدار همون لحظه
+      // برای همیشه توی deductedCost فریز می‌شه و دیگه (نه با تغییر بعدی هزینه‌ی متریال، نه با
+      // رفرش) بازمحاسبه نمی‌شه — فقط با Undo دقیقاً به prevLi (مقدار قبل از قفل) برمی‌گرده.
+      const anyWastage = toLock.some((x) => x.li.includeWastage);
+      const overAllocated = totalAreaToLock > remainingCapacityArea + 0.0001;
+      const useWasteFormula = anyWastage || overAllocated;
+      const costPerArea = batchArea > 0 ? toNum(batch.totalCost) / batchArea : 0;
+
+      toLock.forEach(({ pid, pIdx, liIdx, li, area }) => {
         const prevLi = { ...products[pIdx].lineItems[liIdx] };
-        const productArea = getProductArea(p);
-        const share = batchArea > 0 ? productArea / batchArea : 0;
-        const amount = toNum(batch.totalCost) * share;
+        let amount;
+        if (useWasteFormula) {
+          const share = totalAreaToLock > 0 ? area / totalAreaToLock : (1 / Math.max(1, toLock.length));
+          amount = remainingCapacityCost * share;
+        } else {
+          amount = area * costPerArea;
+        }
         products[pIdx].lineItems[liIdx] = {
           ...products[pIdx].lineItems[liIdx],
           deductedAt: todayISO(),
@@ -1204,7 +1307,15 @@ function reverseOperation(srcMaterials, srcProducts, op) {
     const pIdx = products.findIndex(p => p.id === productId);
     if (pIdx === -1) return;
     const liIdx = products[pIdx].lineItems.findIndex(li => li.id === lineItemId);
-    if (liIdx === -1) return;
+    if (liIdx === -1) {
+      // باگ واقعی بود: بعد از یه unlock واقعی، خودِ لاین‌آیتم کاملاً از محصول
+      // حذف می‌شه (نه فقط pendingUnlock می‌شه) — پس اینجا هیچ‌وقت پیدا نمی‌شد و
+      // این تابع بی‌صدا هیچ کاری نمی‌کرد. یعنی موجودی متریال (deductCostQty)
+      // برمی‌گشت ولی خودِ محصول دیگه هیچ ردی از این متریال نداشت — undo از نظر
+      // کاربر «کار نمی‌کرد». الان اگه لاین‌آیتم پیدا نشه، دوباره به محصول اضافه‌ش می‌کنیم.
+      products[pIdx] = { ...products[pIdx], lineItems: [...products[pIdx].lineItems, { ...prevLi }] };
+      return;
+    }
     products[pIdx].lineItems[liIdx] = { ...prevLi };
   };
 
@@ -1349,14 +1460,12 @@ export default function App() {
             if (parsed[0]) p.dimW = parseFloat(parsed[0]) || null;
             if (parsed[1]) p.dimH = parseFloat(parsed[1]) || null;
           }
-          // مهاجرت: تا این نشست، محصولات جدید موقع ذخیره نرمالایز می‌شدن (طول یعنی
-          // dimW همیشه بزرگ‌تر یا مساوی عرض/dimH می‌موند)، ولی طبق تصمیم تازه‌ی
-          // کاربر این برعکس شد: حالا باید کوچیک‌تر اول (dimW) و بزرگ‌تر دوم
-          // (dimH) باشه. این نرمالایز برای همه‌ی محصولات مستطیلی (نه دایره/
-          // نیم‌دایره) روی کل دیتای موجود هم اجرا می‌شه، نه فقط موقع ذخیره‌ی بعدی
+          // مهاجرت: عدد بزرگ‌تر همیشه اول (dimW)، کوچیک‌تر دوم (dimH) — Big×Small.
+          // این نرمالایز برای همه‌ی محصولات مستطیلی (نه دایره/نیم‌دایره) روی کل
+          // دیتای موجود هم اجرا می‌شه، نه فقط موقع ذخیره‌ی بعدی
           if (p.shape !== "circle" && p.shape !== "semi-circle" && p.dimW != null && p.dimH != null) {
             const w = parseFloat(p.dimW), h = parseFloat(p.dimH);
-            if (!isNaN(w) && !isNaN(h) && w > h) {
+            if (!isNaN(w) && !isNaN(h) && w < h) {
               p.dimW = h;
               p.dimH = w;
               p.dims = `${h}×${w}`;
@@ -1564,10 +1673,10 @@ export default function App() {
     return pushBackHandler(() => setShowBasket(false));
   }, [showBasket]);
 
-  useEffect(() => {
-    if (!showManagementPanel) return;
-    return pushBackHandler(() => setShowManagementPanel(false));
-  }, [showManagementPanel]);
+  // آیتم ۹: هندلر بک این پنل از اینجا حذف شد — قبلاً مستقیم `setShowManagementPanel(false)`
+  // می‌کرد و پاپ‌آپ تایید خروج (`showExitConfirm` داخل خودِ ManagementPanelModal) رو
+  // دور می‌زد. الان دقیقاً همون هندلینگ داخل خودِ ManagementPanelModal ثبت می‌شه، جایی
+  // که به state تاییدِ خروج دسترسی داره.
 
   // دکمه‌ی Back سخت‌افزاری اندروید / سوایپ لبه: اول به مودال بازِ ثبت‌شده
   // (استک بالا) فرصت می‌ده خودش رو ببنده؛ اگه چیزی باز نبود و روی تب پیش‌فرض
@@ -1806,26 +1915,49 @@ export default function App() {
         const linkedProds = isVirtual
           ? directLinked
           : (batch.linkedProductIds || []).map((pid) => data.products.find((p) => p.id === pid)).filter(Boolean);
+        const getLi = (p) => (p.lineItems || []).find((l) => isVirtual ? (l.materialId === m.id && !l.batchId) : (l.batchId === batch.id && l.materialId === m.id));
         const getArea = (p) => {
-          const li = (p.lineItems || []).find((l) => isVirtual ? (l.materialId === m.id && !l.batchId) : (l.batchId === batch.id && l.materialId === m.id));
+          const li = getLi(p);
           return li?.manualArea != null ? toNum(li.manualArea) : getProductArea(p);
         };
-        const usedArea = linkedProds.reduce((s, p) => s + getArea(p), 0);
-        const leftoverArea = Math.max(0, batchArea - usedArea);
         const costPerArea = batchCost / batchArea;
-        const wastageProds = linkedProds.filter((p) => {
-          const li = (p.lineItems || []).find((l) => isVirtual ? (l.materialId === m.id && !l.batchId) : (l.batchId === batch.id && l.materialId === m.id));
-          return li?.includeWastage;
-        });
+
+        // آیتم‌های قفل‌شده (deductedAt) هزینه‌شون یک‌بار برای همیشه فریز شده و از resolveLineCost
+        // مستقیم deductedCost خودشون رو می‌گیرن، نه از اینجا — ولی مساحت/هزینه‌شون باید از ظرفیت
+        // باقیمانده‌ی بچ برای بقیه (هنوز قفل‌نشده‌ها) کم بشه
+        const lockedProds = linkedProds.filter((p) => getLi(p)?.deductedAt);
+        const unlockedProds = linkedProds.filter((p) => !getLi(p)?.deductedAt);
+        const lockedArea = lockedProds.reduce((s, p) => s + getArea(p), 0);
+        const lockedCostActual = lockedProds.reduce((s, p) => s + toNum(getLi(p)?.deductedCost || 0), 0);
+        const remainingCapacityArea = Math.max(0, batchArea - lockedArea);
+        const remainingCapacityCost = Math.max(0, batchCost - lockedCostActual);
+        const unlockedUsedArea = unlockedProds.reduce((s, p) => s + getArea(p), 0);
+
+        // آیتم ۵ (روادمپ): اگه سهم فیزیکیِ محصولاتِ هنوز-قفل‌نشده از ظرفیت واقعیِ باقیمانده‌ی
+        // بچ بیشتر بشه (بیش از ۱۰۰٪)، به‌جای محاسبه‌ی مستقیم (که می‌تونه جمعاً از هزینه‌ی
+        // باقیمانده‌ی بچ بیشتر بشه)، خودکار به روش «پرتی» (تقسیم نسبی باقیمانده بین همه بر اساس
+        // مساحت‌شون) سوییچ می‌کنه — همیشه جمع هزینه‌ها دقیقاً برابر باقیمانده‌ی بچه، نه بیشتر.
+        // اگه زیر ۱۰۰٪ بود، دقیقاً همون منطق لایوِ قبلی (سهم فیزیکی + پخش leftover بین آیتم‌های
+        // «پرتی شود») دست‌نخورده باقی می‌مونه.
+        const overAllocated = unlockedUsedArea > remainingCapacityArea + 0.0001;
+
+        const leftoverArea = Math.max(0, batchArea - (lockedArea + unlockedUsedArea));
+        const wastageProds = unlockedProds.filter((p) => getLi(p)?.includeWastage);
         const totalWastageArea = wastageProds.reduce((s, p) => s + getArea(p), 0);
-        linkedProds.forEach((p) => {
-          const li = (p.lineItems || []).find((l) => isVirtual ? (l.materialId === m.id && !l.batchId) : (l.batchId === batch.id && l.materialId === m.id));
+
+        unlockedProds.forEach((p) => {
+          const li = getLi(p);
           const ownArea = getArea(p);
-          const getsWaste = li?.includeWastage;
-          const wasteShare = (getsWaste && totalWastageArea > 0) ? (ownArea / totalWastageArea) * leftoverArea : 0;
-          const totalArea = ownArea + wasteShare;
           if (!result[p.id]) result[p.id] = {};
-          result[p.id][m.id] = totalArea * costPerArea;
+          if (overAllocated) {
+            const share = unlockedUsedArea > 0 ? ownArea / unlockedUsedArea : (1 / Math.max(1, unlockedProds.length));
+            result[p.id][m.id] = remainingCapacityCost * share;
+          } else {
+            const getsWaste = li?.includeWastage;
+            const wasteShare = (getsWaste && totalWastageArea > 0) ? (ownArea / totalWastageArea) * leftoverArea : 0;
+            const totalAreaForP = ownArea + wasteShare;
+            result[p.id][m.id] = totalAreaForP * costPerArea;
+          }
         });
       });
     });
@@ -1996,7 +2128,8 @@ export default function App() {
           const m = data.materials.find((x) => x.id === l.materialId);
           return m?.type === "fabric";
         });
-        const g = li ? (data.materials.find((m) => m.id === li.materialId)?.name || "فرش نامشخص") : "بدون فرش";
+        const mat = li ? data.materials.find((m) => m.id === li.materialId) : null;
+        const g = mat ? formatFabricGroupLabel(mat.name, mat.pattern, mat.ageYears) : "بدون فرش";
         if (!groups[g]) groups[g] = [];
         groups[g].push(p);
       });
@@ -2006,6 +2139,38 @@ export default function App() {
         const bSpecial = gb === "بدون فرش" || gb === "در دست ساخت";
         if (aSpecial !== bSpecial) return aSpecial ? 1 : -1;
         if (aSpecial && bSpecial) return ga === "در دست ساخت" ? 1 : (gb === "در دست ساخت" ? -1 : 0);
+        const minA = Math.min(...groups[ga].map((p) => toNum(p.code)));
+        const minB = Math.min(...groups[gb].map((p) => toNum(p.code)));
+        return minA - minB;
+      });
+      const orderedGroups = {};
+      orderedKeys.forEach((k) => { orderedGroups[k] = groups[k]; });
+      return orderedGroups;
+    }
+    if (sortMode === "type") {
+      // گروه‌بندی بر اساس نوع محصول (productTypeId) — دقیقاً همون الگوی
+      // گروه‌بندی بر اساس فرش (sortMode === "fabric") بالا: هر گروه بر
+      // اساس کمترین کد محصولِ داخلش مرتب می‌شه، «بدون نوع» و «در دست
+      // ساخت» همیشه در انتها می‌مونن (Ash 🟡 — آیتم ۱۲)
+      const groups = {};
+      productTotals.forEach((p) => {
+        if (p.isDraft) {
+          const g = "در دست ساخت";
+          if (!groups[g]) groups[g] = [];
+          groups[g].push(p);
+          return;
+        }
+        const typeName = p.productTypeId ? data.productTypes?.find((t) => t.id === p.productTypeId)?.name : null;
+        const g = typeName || "بدون نوع";
+        if (!groups[g]) groups[g] = [];
+        groups[g].push(p);
+      });
+      Object.keys(groups).forEach((g) => groups[g].sort(orderFn));
+      const rank = (g) => (g === "در دست ساخت" ? 2 : g === "بدون نوع" ? 1 : 0);
+      const orderedKeys = Object.keys(groups).sort((ga, gb) => {
+        const ra = rank(ga), rb = rank(gb);
+        if (ra !== rb) return ra - rb;
+        if (ra !== 0) return 0;
         const minA = Math.min(...groups[ga].map((p) => toNum(p.code)));
         const minB = Math.min(...groups[gb].map((p) => toNum(p.code)));
         return minA - minB;
@@ -2042,8 +2207,21 @@ export default function App() {
       if (!groups[g]) groups[g] = [];
       groups[g].push(p);
     });
-    return groups;
-  }, [productTotals, sortMode, sortOrder, data.customers, data.materials]);
+    // ترتیب دسته‌بندی‌ها: هر دسته بر اساس کمترین کد محصولِ داخلش بالاتر می‌آید
+    // (نه بر اساس نام)؛ «بدون دسته» و بعد از آن «در دست ساخت» همیشه در انتها می‌مانند.
+    const rank = (g) => (g === "در دست ساخت" ? 2 : g === "بدون دسته" ? 1 : 0);
+    const orderedKeys = Object.keys(groups).sort((ga, gb) => {
+      const ra = rank(ga), rb = rank(gb);
+      if (ra !== rb) return ra - rb;
+      if (ra !== 0) return 0;
+      const minA = Math.min(...groups[ga].map((p) => toNum(p.code)));
+      const minB = Math.min(...groups[gb].map((p) => toNum(p.code)));
+      return minA - minB;
+    });
+    const orderedGroups = {};
+    orderedKeys.forEach((k) => { orderedGroups[k] = groups[k]; });
+    return orderedGroups;
+  }, [productTotals, sortMode, sortOrder, data.customers, data.materials, data.productTypes]);
 
   const accounting = useMemo(() => {
     const sold = productTotals.filter((p) => p.status === "sold");
@@ -2140,6 +2318,7 @@ export default function App() {
     pct = 100,
     includeWastage = false,
     batchId = null,
+    batchIds = null,
     label = "",
     perProductPctOverride = null,
     consumeRemaining = true,
@@ -2170,11 +2349,25 @@ export default function App() {
       const materials = d.materials.map(m => ({ ...m }));
       let totalRefund = 0;
 
-      // Calculate total area of all products being assigned to this batch (both new and updated)
-      const isBatchArea = (material.type === "area" || material.type === "fabric") && batchId;
+      // چندبچی: ترتیب انتخاب کاربر = ترتیب پرشدن («اول بچ اول پر بشه، بعد بره
+      // سراغ بعدی» — طبق تصمیم صریح کاربر). batchId تکی (قدیمی) هم پشتیبانی
+      // می‌شه تا هیچ صدازننده‌ی قدیمی‌ای نشکنه.
+      const resolvedBatchIds = (Array.isArray(batchIds) && batchIds.length) ? batchIds : (batchId ? [batchId] : []);
+      const isBatchArea = (material.type === "area" || material.type === "fabric") && resolvedBatchIds.length > 0;
       let totalArea = 0;
       const areas = {};
-      let batchAlreadyDeducted = 0;
+      // برای هر بچِ انتخاب‌شده، باقیمانده‌ی واقعی‌اش (بعد از کسر آنچه قبلاً از
+      // همون بچ برای محصولات دیگر که الان قفل‌اند کسر شده) — به همون ترتیبی که
+      // کاربر بچ‌ها رو انتخاب کرده، تا استخر ترکیبی + منطق پرشدن پشت‌سرهم درست کار کنه
+      let batchFillList = [];
+      let combinedRemainingForPreview = 0;
+      let combinedTotalCost = 0;
+      let combinedPhysArea = 0;
+      // آیتم ۵/۱۳ (روادمپ، فیکس Logy — تعمیم‌داده‌شده به چندبچی): اگه توی حالت
+      // «باقی بماند» جمعِ سهم فیزیکی محصولات از ظرفیت فیزیکیِ واقعیِ باقیمانده‌ی
+      // *همه‌ی* بچ‌های انتخابی (نه کل ظرفیت‌شون) بیشتر بشه، نباید مجموع هزینه از
+      // ۱۰۰٪ باقیمانده بیشتر بشه — خودکار به فرمول «پرتی» سوییچ می‌کنیم
+      let batchOverAllocated = false;
       if (isBatchArea) {
         const allSelectedIds = [...productIds, ...linkedUpdates.map(u => u.productId)];
         allSelectedIds.forEach(pid => {
@@ -2187,14 +2380,51 @@ export default function App() {
           areas[pid] = area;
           totalArea += area;
         });
-        // مبلغی که از قبل از همین بچ برای محصولات دیگر (که الان قفل هستند) کسر شده — تا پیش‌نمایش هزینه
-        // با آنچه واقعاً هنگام قفل کسر می‌شود یکسان باشد و بیشتر از باقیمانده‌ی واقعی بچ نشود
-        d.products.forEach(p => (p.lineItems || []).forEach(li => {
-          if (li.materialId === material.id && li.batchId === batchId && li.deductedAt) {
-            batchAlreadyDeducted += toNum(li.deductedCost || 0);
-          }
-        }));
+        let combinedRemainingPhysArea = 0;
+        batchFillList = resolvedBatchIds.map(bId => {
+          const batch = material.batches?.find(b => b.id === bId);
+          if (!batch) return null;
+          let alreadyDeducted = 0;
+          d.products.forEach(p => (p.lineItems || []).forEach(li => {
+            if (li.materialId === material.id && li.batchId === bId && li.deductedAt) {
+              alreadyDeducted += toNum(li.deductedCost || 0);
+            }
+          }));
+          const remaining = Math.max(0, toNum(batch.totalCost) - alreadyDeducted);
+          const physArea = toNum(batch.width) * toNum(batch.height) * Math.max(1, toNum(batch.qty) || 1);
+          // ظرفیت فیزیکیِ باقیمانده‌ی واقعیِ همین بچ (نه کل ظرفیتش) — چون بخشی از
+          // بچ ممکنه قبلاً قفل و مصرف شده باشه
+          const remainingPhysArea = physArea * (remaining / Math.max(0.0001, toNum(batch.totalCost)));
+          combinedRemainingForPreview += remaining;
+          combinedTotalCost += toNum(batch.totalCost);
+          combinedPhysArea += physArea;
+          combinedRemainingPhysArea += remainingPhysArea;
+          return { batchId: bId, batch, remaining, consumedNow: 0 };
+        }).filter(Boolean);
+        batchOverAllocated = totalArea > combinedRemainingPhysArea + 0.0001;
       }
+      // پرکردن پشت‌سرهم: از باقیمانده‌ی اولین بچ توی لیست کم می‌کنه، وقتی تموم شد
+      // می‌ره سراغ بعدی — یه هزینه‌ی واحد ممکنه بین چند بچ تقسیم و چند لاین‌آیتم بشه
+      const splitCostAcrossBatches = (costNeeded) => {
+        let remainingToAllocate = Math.max(0, toNum(costNeeded));
+        const portions = [];
+        for (const entry of batchFillList) {
+          if (remainingToAllocate <= 0) break;
+          const avail = Math.max(0, entry.remaining - entry.consumedNow);
+          if (avail <= 0) continue;
+          const take = Math.min(avail, remainingToAllocate);
+          entry.consumedNow += take;
+          portions.push({ batchId: entry.batchId, cost: take });
+          remainingToAllocate -= take;
+        }
+        // اگه استخر انتخابی کفاف نداد (نباید پیش بیاد چون سقف‌ها قبلاً چک شدن)، باقیمانده رو
+        // به آخرین بچِ لیست می‌چسبونیم که چیزی گم نشه
+        if (remainingToAllocate > 0.001 && batchFillList.length) {
+          const last = batchFillList[batchFillList.length - 1];
+          portions.push({ batchId: last.batchId, cost: remainingToAllocate });
+        }
+        return portions.length ? portions : [{ batchId: resolvedBatchIds[0] || null, cost: costNeeded }];
+      };
 
       // مبتنی بر طول واقعیِ چوب‌های موجود برای متریال خطی، وقتی «پرتی شود/باقی
       // بماند» انتخاب شده — قبلاً این نوع فقط درصدی از استخر هزینه بود و اصلاً
@@ -2243,6 +2473,7 @@ export default function App() {
         }
 
         // B. Update percentage if listed in linkedUpdates
+        const extraLineItemsForP = [];
         const update = linkedUpdates.find(u => u.productId === p.id);
         if (update) {
           lineItems = lineItems.map((li) => {
@@ -2250,33 +2481,51 @@ export default function App() {
             if (li.deductedAt) return li; // Skip locked items
 
             if (isBatchArea) {
-              const batch = material.batches?.find(b => b.id === batchId);
-              if (batch) {
-                const batchRemainingForPreview = Math.max(0, toNum(batch.totalCost) - batchAlreadyDeducted);
+              if (batchFillList.length) {
                 const prodArea = areas[p.id] || 0;
                 let cost;
-                if (includeWastage) {
-                  // پرتی: کل باقیمانده بچ بین محصولات به نسبت مساحت‌شان
+                if (includeWastage || batchOverAllocated) {
+                  // پرتی (یا باقی بماند ولی مجموع سهم فیزیکی از باقیمانده‌ی واقعی استخر ترکیبی بیشتر شده): کل باقیمانده بین محصولات به نسبت مساحت‌شان
                   const share = totalArea > 0 ? prodArea / totalArea : (1 / Math.max(1, productIds.length + linkedUpdates.length));
-                  cost = batchRemainingForPreview * share;
+                  cost = combinedRemainingForPreview * share;
                 } else {
-                  // باقی بماند: فقط سهم فیزیکی محصول از مساحت بچ
-                  const batchPhysArea = Math.max(0.0001, toNum(batch.width) * toNum(batch.height) * Math.max(1, toNum(batch.qty) || 1));
-                  const unitCost = toNum(batch.totalCost) / batchPhysArea;
+                  // باقی بماند: سهم فیزیکی محصول از مساحتِ کل بچ‌های انتخابی (میانگین وزنی هزینه‌ی هر متر)
+                  const unitCost = combinedPhysArea > 0 ? (combinedTotalCost / combinedPhysArea) : 0;
                   cost = prodArea * unitCost;
-                  // سقف: از باقیمانده بیشتر نشود
-                  cost = Math.min(cost, batchRemainingForPreview);
+                  cost = Math.min(cost, combinedRemainingForPreview);
                 }
-                return {
+                const portions = splitCostAcrossBatches(cost);
+                const [firstPortion, ...restPortions] = portions;
+                const updatedFirst = {
                   ...li,
-                  cost: cost,
-                  batchId: batchId,
+                  cost: firstPortion.cost,
+                  batchId: firstPortion.batchId,
                   includeWastage: !!includeWastage,
                   pct: null,
                   customPct: null,
                   useAreaRatio: false,
                   pendingSessionId: bulkSubmissionId,
                 };
+                if (restPortions.length) {
+                  extraLineItemsForP.push(...restPortions.map(portion => ({
+                    id: uid(),
+                    label: li.label,
+                    cost: portion.cost,
+                    materialId: material.id,
+                    pct: null,
+                    batchId: portion.batchId,
+                    useAreaRatio: false,
+                    includeWastage: !!includeWastage,
+                    manualArea: null,
+                    deductedCost: null,
+                    deductedAt: null,
+                    woodCuts: null,
+                    woodLocked: false,
+                    customPct: null,
+                    pendingSessionId: bulkSubmissionId,
+                  })));
+                }
+                return updatedFirst;
               }
             }
 
@@ -2301,6 +2550,7 @@ export default function App() {
               distributionMode: distributionMode || li.distributionMode || null,
             };
           });
+          if (extraLineItemsForP.length) lineItems = [...lineItems, ...extraLineItemsForP];
         }
 
         // C. Add new line item if listed in productIds
@@ -2309,35 +2559,36 @@ export default function App() {
           if (!exists) {
             const matType = material.type;
             if (isBatchArea) {
-              const batch = material.batches?.find(b => b.id === batchId);
-              if (batch) {
-                const batchRemainingForPreview = Math.max(0, toNum(batch.totalCost) - batchAlreadyDeducted);
+              if (batchFillList.length) {
                 const prodArea = areas[p.id] || 0;
                 let cost;
-                if (includeWastage) {
+                if (includeWastage || batchOverAllocated) {
                   const share = totalArea > 0 ? prodArea / totalArea : (1 / Math.max(1, productIds.length + linkedUpdates.length));
-                  cost = batchRemainingForPreview * share;
+                  cost = combinedRemainingForPreview * share;
                 } else {
-                  const batchPhysArea = Math.max(0.0001, toNum(batch.width) * toNum(batch.height) * Math.max(1, toNum(batch.qty) || 1));
-                  cost = Math.min(prodArea * (toNum(batch.totalCost) / batchPhysArea), batchRemainingForPreview);
+                  const unitCost = combinedPhysArea > 0 ? (combinedTotalCost / combinedPhysArea) : 0;
+                  cost = Math.min(prodArea * unitCost, combinedRemainingForPreview);
                 }
 
-                lineItems.push({
-                  id: uid(),
-                  label: label || material.name,
-                  cost: cost,
-                  materialId: material.id,
-                  pct: null,
-                  batchId: batchId,
-                  useAreaRatio: false,
-                  includeWastage: !!includeWastage,
-                  manualArea: null,
-                  deductedCost: null,
-                  deductedAt: null,
-                  woodCuts: null,
-                  woodLocked: false,
-                  customPct: null,
-                  pendingSessionId: bulkSubmissionId,
+                const portions = splitCostAcrossBatches(cost);
+                portions.forEach(portion => {
+                  lineItems.push({
+                    id: uid(),
+                    label: label || material.name,
+                    cost: portion.cost,
+                    materialId: material.id,
+                    pct: null,
+                    batchId: portion.batchId,
+                    useAreaRatio: false,
+                    includeWastage: !!includeWastage,
+                    manualArea: null,
+                    deductedCost: null,
+                    deductedAt: null,
+                    woodCuts: null,
+                    woodLocked: false,
+                    customPct: null,
+                    pendingSessionId: bulkSubmissionId,
+                  });
                 });
               }
             } else {
@@ -2391,14 +2642,14 @@ export default function App() {
         }
       }
 
-      // 4. Update the batches' linkedProductIds if it's area/fabric and batchId is selected
-      if ((material.type === "area" || material.type === "fabric") && batchId) {
+      // 4. Update the batches' linkedProductIds if it's area/fabric and batch(es) selected
+      if ((material.type === "area" || material.type === "fabric") && resolvedBatchIds.length) {
         const mIdx = materials.findIndex(m => m.id === material.id);
         if (mIdx !== -1) {
           const m = materials[mIdx];
           const finalLinkedIds = [...productIds, ...linkedUpdates.map(u => u.productId)];
           const batches = (m.batches || []).map(b => {
-            if (b.id === batchId) {
+            if (resolvedBatchIds.includes(b.id)) {
               return { ...b, linkedProductIds: finalLinkedIds };
             } else {
               const filtered = (b.linkedProductIds || []).filter(pid => !finalLinkedIds.includes(pid) && !removedIds.includes(pid));
@@ -2642,27 +2893,36 @@ export default function App() {
 
   // ── CRUD ──
   const handleImageUpload = useCallback((e, productId) => {
-    const f = e.target.files[0];
-    if (!f) return;
-    compressImageFile(f)
-      .then((dataUrl) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    const product = data.products.find((p) => p.id === productId);
+    const codeStr = fmtCode(product?.code != null ? product.code : 0);
+    const startIdx = (product?.images || []).length;
+    // آیتم ۸ (روادمپ): این مسیر (افزودن سریع عکس از روی کارت محصول، نه فرم ویرایش)
+    // قبلاً دیتای خام base64 رو مستقیم توی p.image/p.images ذخیره می‌کرد (نه فایل
+    // توی پوشه‌ی محلی)، و فقط تک‌عکسی بود. الان دقیقاً هماهنگ با فرم ویرایش محصول:
+    // چندانتخابی + اسم فایل بر اساس کد محصول (نه اسم فارسی که ممکنه موقع لود فاکتور
+    // مشکل ایجاد کنه) + ذخیره‌ی واقعی توی پوشه‌ی محلی عکس‌ها
+    Promise.all(files.map((f, i) =>
+      compressImageFile(f).then((dataUrl) => {
+        const seq = String(startIdx + i + 1).padStart(2, "0");
+        return saveImageToFolder(dataUrl, IMAGE_CATEGORIES.PRODUCT, `${codeStr}${seq}.jpg`);
+      })
+    ))
+      .then((savedFilenames) => {
         setData((d) => ({
           ...d,
           products: d.products.map((p) => {
             if (p.id !== productId) return p;
-            // قبلاً اینجا فقط p.image ست می‌شد و p.images (آرایه‌ی همه‌ی عکس‌ها که
-            // توی ویرایش محصول نمایش داده می‌شه) دست‌نخورده می‌موند؛ یعنی آیکونی که
-            // از لیست محصولات گذاشته می‌شد نه توی ویرایش محصول دیده می‌شد و نه
-            // قابل حذف بود
             const images = p.images || [];
-            return { ...p, image: dataUrl, images: [dataUrl, ...images.filter((im) => im !== p.image)] };
+            return { ...p, image: p.image || savedFilenames[0], images: [...images, ...savedFilenames] };
           })
         }));
       })
       .catch((err) => {
         console.error("Image compress/upload failed:", err);
       });
-  }, []);
+  }, [data.products]);
 
   const addMaterialPurchase = useCallback((id, amount, date, qty) => {
     const amt = toNum(amount);
@@ -2967,7 +3227,8 @@ export default function App() {
         "قیمت دستی؟",
         "مخفی از کاتالوگ؟",
         "تعداد",
-        "تصویر اصلی"
+        "تصویر اصلی",
+        "کالیگرافی؟"
       ];
 
       const wsProductsRows = [pHeaders];
@@ -3037,7 +3298,11 @@ export default function App() {
           p.salePriceManual ? "بله" : "خیر",
           p.hiddenFromCatalog ? "بله" : "خیر",
           p.qty != null ? toNum(p.qty) : 1,
-          p.image || ""
+          p.image || "",
+          // ستون جدید همیشه در انتها اضافه می‌شه، نه وسط — دقیقاً برای این‌که
+          // باگ حیاتیِ column-shift که قبلاً کل import رو می‌ترکوند (مستند
+          // بالای همین فایل) دوباره تکرار نشه (Ash 🟡، آیتم ۷ - تکمیل export/import)
+          p.isCalligraphy ? "بله" : "خیر"
         ];
         wsProductsRows.push(rowData);
       });
@@ -3768,6 +4033,12 @@ export default function App() {
     reader.onload = (ev) => {
       try {
         const wb = XLSX.read(ev.target.result, { type: "array" });
+        // آیتم ۲: قبلاً یه خطای کوچیک توی هر بخش (مثلاً یه JSON خراب توی یه
+        // سلول) کل ایمپورت رو با یه پیام ثابت و بی‌فایده متوقف می‌کرد. الان هر
+        // بخش (مشتریان/متریال/محصولات/جلسات) جدا try/catch می‌شه؛ اگه یکی
+        // خراب بود، بقیه‌ی بخش‌ها همچنان ایمپورت می‌شن و در پایان دقیقاً گفته
+        // می‌شه کدوم شیت مشکل داشت، به‌جای شکست کامل و کور
+        const sectionErrors = [];
 
         // Find Sheets by Name or fallback to Indices
         let productsSheet = null;
@@ -3801,6 +4072,7 @@ export default function App() {
 
         // ── ۱. پردازش مشتریان و گالری‌ها (Dependency #1) ──
         const importedCustomers = [];
+        try {
         if (customersSheet) {
           const custRows = XLSX.utils.sheet_to_json(customersSheet, { header: 1, defval: "" });
           custRows.forEach((row, idx) => {
@@ -3833,9 +4105,14 @@ export default function App() {
             }
           });
         }
+        } catch (sectionErr) {
+          console.error("import: مشتریان/گالری‌ها", sectionErr);
+          sectionErrors.push(`مشتریان/گالری‌ها: ${sectionErr?.message || sectionErr}`);
+        }
 
         // ── ۲. پردازش متریال‌ها (Dependency #2) ──
         const importedMaterials = [];
+        try {
         if (materialsSheet) {
           const matRows = XLSX.utils.sheet_to_json(materialsSheet, { header: 1, defval: "" });
           matRows.forEach((row, idx) => {
@@ -3849,9 +4126,18 @@ export default function App() {
             let procurements = [];
             let linkedProductIds = [];
 
-            if (row[17]) { 
-              try { 
-                batches = JSON.parse(row[17]); 
+            // 🔴 نکته‌ی مهم (باگ واقعی که import رو کلاً می‌ترکوند، fixed شد):
+            // ستون‌های «قدمت (سال)» و «طرح فرش» بین «تاریخ خرید» و «بچ‌های شارژ شده»
+            // به اکسپورت اضافه شده بودن (index ۱۷ و ۱۸)، ولی اینجا هنوز با اندیس قدیمی
+            // (بدون این ۲ ستون) خونده می‌شد — یعنی row[17] که قبلاً batches بود، الان
+            // «قدمت» (یه عدد، مثلاً 50) بود. JSON.parse(50) بدون خطا عدد ۵۰ برمی‌گردوند
+            // (نه آرایه)، و خط بعدی `(batches || []).map(...)` روی یه عدد صدا زده می‌شد
+            // → TypeError خام که کل import رو (نه فقط همون متریال) می‌ترکوند، چون این
+            // forEach توی try/catch جداگونه نبود. با فایل بک‌آپ واقعی تست شد: دقیقاً
+            // همون ۱۰ متریال فرش‌دار (که «قدمت» پر داشتن) باعث کرش می‌شدن.
+            if (row[19]) {
+              try {
+                batches = JSON.parse(row[19]);
                 if (Array.isArray(batches)) {
                   batches = batches.map(b => {
                     const bQty = Math.max(1, toNum(b.qty) || 1);
@@ -3874,12 +4160,14 @@ export default function App() {
                       linkedProductIds: Array.isArray(b.linkedProductIds) ? b.linkedProductIds : [],
                     };
                   });
+                } else {
+                  batches = [];
                 }
               } catch (_) {} 
             }
-            if (row[18]) {
+            if (row[20]) {
               try {
-                sticks = JSON.parse(row[18]);
+                sticks = JSON.parse(row[20]);
                 if (Array.isArray(sticks)) {
                   sticks = sticks.map((s) => {
                     const sQty = Math.max(1, toNum(s.qty) || 1);
@@ -3897,12 +4185,14 @@ export default function App() {
                       date: s.date || null,
                     };
                   });
+                } else {
+                  sticks = [];
                 }
               } catch (_) {}
             }
-            if (row[19]) {
+            if (row[21]) {
               try {
-                procurements = JSON.parse(row[19]);
+                procurements = JSON.parse(row[21]);
                 if (Array.isArray(procurements)) {
                   procurements = procurements.map((pr) => {
                     const prQty = Math.max(1, toNum(pr.qty) || 1);
@@ -3919,10 +4209,12 @@ export default function App() {
                       date: pr.date || null,
                     };
                   });
+                } else {
+                  procurements = [];
                 }
               } catch (_) {}
             }
-            if (row[20]) { try { linkedProductIds = JSON.parse(row[20]); } catch (_) {} }
+            if (row[22]) { try { const p = JSON.parse(row[22]); linkedProductIds = Array.isArray(p) ? p : []; } catch (_) {} }
 
             const purchaseQty = row[4] !== "" ? toNum(row[4]) : 1;
             const unitCost = row[5] !== "" ? toNum(row[5]) : toNum(row[6]);
@@ -3971,36 +4263,17 @@ export default function App() {
               sticks = (sticks || []).map((s) => ({ ...s, date: s.date || purchaseDate }));
             }
 
-            // ── فرش: قدمت و طرح از ستون اکسل یا استخراج از نام ──
-            // ستون‌های جدید (اکسل fixed): قدمت (سال)=index وابسته، طرح فرش
-            // از نام مثل «طرح شاخه شکسته» و «50ساله» هم استخراج می‌شود
-            let ageYears = null;
-            let pattern = null;
-            // اگر هدرهای جدید بعد از ستون‌های قدیمی آمده باشند (row[22]/قدمت در fixed export جداست)
-            // امن‌ترین راه: پارس نام + هر مقدار عددی در ردیف که با header شناخته نشود
-            const ageMatch = String(name || "").match(/(\d+)\s*ساله/);
-            if (ageMatch) ageYears = toNum(ageMatch[1]);
-            const patMatch = String(name || "").match(/طرح\s*([^)٬،\d]+?)(?:\s*[)٬،\d]|$)/);
-            if (patMatch) pattern = String(patMatch[1]).trim().replace(/\s+/g, " ");
-            // ستون‌های صریح اگر در row باشند (اکسل اصلاح‌شده: بعد از timestamp)
-            // در fixed excel: col 22=قدمت, 23=طرح (0-based index 22,23) — ولی اگر remainingCost هم باشد تداخل دارد
-            // پس فقط اگر matType=fabric و مقدار منطقی است
-            if (matType === "fabric") {
-              // جستجو در کل ردیف برای عدد قدمت اگر خالی بود از نام گرفتیم
-              for (let ci = 22; ci < Math.min(row.length, 30); ci++) {
-                const v = row[ci];
-                if (v === "" || v == null) continue;
-                // اگر عدد بین 1 و 300 است و ageYears خالی → احتمالاً قدمت
-                if (ageYears == null && typeof v === "number" && v >= 1 && v <= 300) {
-                  ageYears = v;
-                }
-                if (!pattern && typeof v === "string" && v.trim() && !String(v).match(/^\d+$/) && String(v).length < 80) {
-                  // ممکن است طرح باشد اگر شبیه تاریخ/json نباشد
-                  if (!String(v).startsWith("[") && !String(v).startsWith("{") && !String(v).includes("/")) {
-                    // فقط اگر هنوز pattern نداریم و این ستون بعد از فیلدهای شناخته‌شده است
-                  }
-                }
-              }
+            // ── فرش: قدمت و طرح — الان ستون اختصاصی دارن (۱۷ و ۱۸)، اولویت با اون‌هاست؛
+            // فقط اگه خالی بودن (بک‌آپ قدیمی‌تر از این فیچر) از روی نام حدس زده می‌شه
+            let ageYears = row[17] !== "" && row[17] != null ? toNum(row[17]) : null;
+            let pattern = row[18] ? String(row[18]).trim() : null;
+            if (ageYears == null) {
+              const ageMatch = String(name || "").match(/(\d+)\s*ساله/);
+              if (ageMatch) ageYears = toNum(ageMatch[1]);
+            }
+            if (!pattern) {
+              const patMatch = String(name || "").match(/طرح\s*([^)٬،\d]+?)(?:\s*[)٬،\d]|$)/);
+              if (patMatch) pattern = String(patMatch[1]).trim().replace(/\s+/g, " ");
             }
 
             // تکمیل unitPrice و pattern روی بچ‌ها
@@ -4045,18 +4318,23 @@ export default function App() {
               sticks,
               procurements,
               linkedProductIds,
-              updatedAt: row[21] !== "" ? toNum(row[21]) : null,
-              remainingCost: row[22] !== "" && row[22] != null && typeof row[22] === "number" && row[22] > 300 ? toNum(row[22]) : calculatedRemainingCost,
-              totalQty: row[23] !== "" && row[23] != null && typeof row[23] === "number" ? toNum(row[23]) : purchaseQty,
-              remainingQty: row[24] !== "" && row[24] != null && typeof row[24] === "number" ? toNum(row[24]) : Math.max(0, purchaseQty - consumedQty),
-              creditAllowed: row[25] !== "خیر" && row[25] !== false,
-              isUsableRemaining: row[26] !== "خیر" && row[26] !== false
+              updatedAt: row[23] !== "" ? toNum(row[23]) : null,
+              remainingCost: row[24] !== "" && row[24] != null && typeof row[24] === "number" ? toNum(row[24]) : calculatedRemainingCost,
+              totalQty: row[25] !== "" && row[25] != null && typeof row[25] === "number" ? toNum(row[25]) : purchaseQty,
+              remainingQty: row[26] !== "" && row[26] != null && typeof row[26] === "number" ? toNum(row[26]) : Math.max(0, purchaseQty - consumedQty),
+              creditAllowed: row[27] !== "خیر" && row[27] !== false,
+              isUsableRemaining: row[28] !== "خیر" && row[28] !== false
             });
           });
+        }
+        } catch (sectionErr) {
+          console.error("import: متریال‌ها", sectionErr);
+          sectionErrors.push(`متریال‌ها: ${sectionErr?.message || sectionErr}`);
         }
 
         // ── ۳. پردازش محصولات (Dependency #3) ──
         const importedProducts = [];
+        try {
         if (productsSheet) {
           const prodRows = XLSX.utils.sheet_to_json(productsSheet, { header: 1, defval: "" });
           prodRows.forEach((row, idx) => {
@@ -4180,13 +4458,21 @@ export default function App() {
                 if (m) return Math.max(1, parseInt(m[1], 10) || 1);
                 return 1;
               })(),
-              image: String(row[34] || "").trim() || null
+              image: String(row[34] || "").trim() || null,
+              // ستون ۳۵ (انتهایی، امن) — فایل‌های قدیمی‌تر که این ستون رو
+              // ندارن، خودکار false می‌گیرن (Ash 🟡)
+              isCalligraphy: row[35] === "بله" || row[35] === true
             });
           });
+        }
+        } catch (sectionErr) {
+          console.error("import: محصولات", sectionErr);
+          sectionErrors.push(`محصولات: ${sectionErr?.message || sectionErr}`);
         }
 
         // ── ۴. پردازش جلسات برش (Dependency #4) ──
         const importedSessions = [];
+        try {
         if (sessionsSheet) {
           const sessRows = XLSX.utils.sheet_to_json(sessionsSheet, { header: 1, defval: "" });
           sessRows.forEach((row, idx) => {
@@ -4226,10 +4512,25 @@ export default function App() {
             }
           });
         }
+        } catch (sectionErr) {
+          console.error("import: جلسات برش", sectionErr);
+          sectionErrors.push(`جلسات برش: ${sectionErr?.message || sectionErr}`);
+        }
 
         // کارت‌ویزیت‌ها (+ کارت خودم)
         const importedBusinessCards = [];
         let importedMyBusinessCard = null;
+        // تجهیزات
+        const importedEquipment = [];
+        // لینک‌های کارگاه
+        const importedWorkshopLinks = [];
+        // ردپای تغییرات
+        const importedAuditLog = [];
+        // انواع محصول
+        const importedProductTypes = [];
+        // پیش‌نویس فاکتور
+        const importedInvoiceDrafts = [];
+        try {
         if (businessCardsSheet) {
           const bcRows = XLSX.utils.sheet_to_json(businessCardsSheet, { header: 1, defval: "" });
           bcRows.forEach((row, idx) => {
@@ -4267,8 +4568,6 @@ export default function App() {
           });
         }
 
-        // تجهیزات
-        const importedEquipment = [];
         if (equipmentSheet) {
           const eqRows = XLSX.utils.sheet_to_json(equipmentSheet, { header: 1, defval: "" });
           eqRows.forEach((row, idx) => {
@@ -4284,8 +4583,6 @@ export default function App() {
           });
         }
 
-        // لینک‌های کارگاه
-        const importedWorkshopLinks = [];
         if (workshopLinksSheet) {
           const wlRows = XLSX.utils.sheet_to_json(workshopLinksSheet, { header: 1, defval: "" });
           wlRows.forEach((row, idx) => {
@@ -4312,8 +4609,6 @@ export default function App() {
           });
         }
 
-        // ردپای تغییرات
-        const importedAuditLog = [];
         if (auditLogSheet) {
           const aRows = XLSX.utils.sheet_to_json(auditLogSheet, { header: 1, defval: "" });
           aRows.forEach((row, idx) => {
@@ -4331,8 +4626,6 @@ export default function App() {
           });
         }
 
-        // انواع محصول
-        const importedProductTypes = [];
         if (productTypesSheet) {
           const ptRows = XLSX.utils.sheet_to_json(productTypesSheet, { header: 1, defval: "" });
           ptRows.forEach((row, idx) => {
@@ -4348,8 +4641,6 @@ export default function App() {
           });
         }
 
-        // پیش‌نویس فاکتور
-        const importedInvoiceDrafts = [];
         if (invoiceDraftsSheet) {
           const invRows = XLSX.utils.sheet_to_json(invoiceDraftsSheet, { header: 1, defval: "" });
           invRows.forEach((row, idx) => {
@@ -4363,6 +4654,10 @@ export default function App() {
               importedInvoiceDrafts.push({ id, updatedAt: row[2] || null });
             }
           });
+        }
+        } catch (sectionErr) {
+          console.error("import: کارت‌ویزیت/تجهیزات/لینک‌کارگاه/ردپا/انواع‌محصول/پیش‌نویس‌فاکتور", sectionErr);
+          sectionErrors.push(`بخش‌های تکمیلی (کارت‌ویزیت/تجهیزات/...): ${sectionErr?.message || sectionErr}`);
         }
 
         // Set pending state to trigger confirmation dialog rather than wiping database automatically
@@ -4380,9 +4675,19 @@ export default function App() {
           auditLog: importedAuditLog,
         });
 
+        if (sectionErrors.length > 0) {
+          // بخش‌هایی که خراب بودن رد شدن ولی بقیه‌ی فایل با موفقیت ایمپورت شد —
+          // به‌جای شکست کامل، دقیقاً می‌گیم کدوم بخش(ها) مشکل داشتن
+          notify(`ایمپورت با هشدار انجام شد — این بخش(ها) مشکل داشتن و رد شدن: ${sectionErrors.join(" | ")}`);
+        }
+
       } catch (err) {
         console.error(err);
-        notify("خطا در بازخوانی فایل اکسل پشتیبان");
+        // آیتم ۲: قبلاً پیام همیشه ثابت و بی‌فایده بود («خطا در بازخوانی فایل
+        // اکسل پشتیبان») و متن واقعی خطا فقط توی console.error می‌رفت که روی
+        // گوشی/APK اصلاً دیده نمی‌شه — الان خودِ پیام خطا هم توی toast میاد تا
+        // بشه فهمید مشکل واقعاً چیه (شیت گم‌شده، فرمت غلط، JSON خراب، ...)
+        notify(`خطا در بازخوانی فایل اکسل پشتیبان: ${err?.message || err}`);
       }
     };
     reader.readAsArrayBuffer(file);

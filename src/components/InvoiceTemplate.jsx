@@ -12,6 +12,35 @@ function stripGenderPrefix(name) {
   return n.trim();
 }
 
+// ── تصویر آیتم فاکتور ──
+// باگ: item.image توی سیستم جدید ذخیره‌سازی عکس (imageStorage.js) فقط اسم فایله
+// نه یه src مستقیم‌قابل‌استفاده — قبلاً مستقیم توی <img src={item.image}/> ست می‌شد
+// که همیشه شکسته بود (به‌جز عکس‌های خیلی قدیمی base64/URL). این کامپوننت دقیقاً
+// مثل ProductImage (ProductTab.jsx) resolve واقعی (فایل محلی/IndexedDB) رو انجام می‌ده.
+function InvoiceItemImage({ filename }) {
+  const isLegacyInline = !!filename && (filename.startsWith("data:") || filename.startsWith("http") || filename.startsWith("/"));
+  const resolvedSrc = useResolvedImageSrc(isLegacyInline ? null : filename, IMAGE_CATEGORIES.PRODUCT);
+  const src = isLegacyInline ? filename : resolvedSrc;
+  if (!filename || !src) {
+    // نکته‌ی مهم برای Save/Share/Print (InvoicePrint.jsx): وقتی filename هست ولی src
+    // هنوز resolve نشده (useResolvedImageSrc در حال lookup از IndexedDB/فایل‌سیستمه)،
+    // این یه پلاسهولدر موقته نه «واقعاً بدون عکس». قبلاً این دو حالت از نظر DOM
+    // غیرقابل‌تشخیص بودن، پس اگه کاربر سریع دکمه‌ی ذخیره/اشتراک/چاپ رو می‌زد، اسنپ‌شاتی
+    // که گرفته می‌شد همین پلاسهولدر رو برای همیشه توی عکس/PDF نهایی ثبت می‌کرد، حتی اگه
+    // یه لحظه بعد عکس واقعی لود می‌شد. الان با data-resolving مشخصش می‌کنیم تا
+    // InvoicePrint.jsx قبل از گرفتن اسنپ‌شات صبر کنه تا همه‌شون تموم بشن.
+    const stillResolving = !!filename && resolvedSrc === undefined && !isLegacyInline;
+    return (
+      <div data-resolving={stillResolving ? "true" : undefined} style={{ width: "42px", height: "42px", margin: "0 auto", borderRadius: "6px", background: "#f0f0f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "9px", color: "#888", border: "1px dashed #ccc" }}>{stillResolving ? "" : "بدون عکس"}</div>
+    );
+  }
+  return (
+    <div style={{ width: "42px", height: "42px", margin: "0 auto", borderRadius: "6px", overflow: "hidden", border: "1px solid #ddd", background: "#f0f0f0" }}>
+      <img src={src} style={{ width: "100%", height: "100%", objectFit: "cover" }} referrerPolicy="no-referrer" alt="" />
+    </div>
+  );
+}
+
 export default function InvoiceTemplate({ invoiceData, businessCard }) {
   // بخش «بازطراحی ذخیره‌سازی عکس‌ها» (Wall 🟣): قبل از هر return زودهنگام باید
   // صدا زده بشه (قانون Hooks). qrCode جدید فقط اسم فایله؛ برای داده‌ی قدیمی
@@ -30,6 +59,7 @@ export default function InvoiceTemplate({ invoiceData, businessCard }) {
     customer, // { name, phone, address, gender, kind, galleryOwnerName }
     items = [], // array of products
     totals, // { total, discount, final }
+    depositAmount: rawDepositAmount = 0, // آیتم ۲ (نمای پیشرفته‌ی فاکتور): مبلغ ودیعه/پیش‌پرداخت که از مبلغ قابل‌پرداخت کم می‌شه
   } = invoiceData;
 
   const title = type === "sales" ? "فاکتور فروش کالا" : "حساب فاکتور";
@@ -93,7 +123,8 @@ else {
   // تخفیف واقعی فقط روی آیتم‌های غیرِ هدیه حساب می‌شه؛ هدیه‌ها جدا (به‌عنوان «هدیه»، نه تخفیف) گزارش می‌شن
   const totalDiscount = sumOriginal(nonGiftSoldItems) - sumFinal(nonGiftSoldItems);
   const totalGiftValue = sumOriginal(giftSoldItems);
-  const finalPayable = sumFinal(soldUnsettledItems);
+  const finalPayable = Math.max(0, sumFinal(soldUnsettledItems) - toNum(rawDepositAmount));
+  const depositAmount = toNum(rawDepositAmount);
 
   const hasSettledItems = soldSettledItems.length > 0;
   const hasAvailableItems = availableItems.length > 0;
@@ -182,7 +213,8 @@ else {
           font-size: 11px;
           vertical-align: middle;
           color: #2c2c2c;
-          word-break: break-word;
+          word-break: normal;
+          overflow-wrap: break-word;
         }
 
         .invoice-summary-box {
@@ -328,27 +360,22 @@ else {
             <tr key={index}>
               <td style={{ textAlign: "center", fontWeight: "bold" }}>{index + 1}</td>
               <td style={{ textAlign: "center" }}>
-                {item.image ? (
-                  <div style={{ width: "42px", height: "42px", margin: "0 auto", borderRadius: "6px", overflow: "hidden", border: "1px solid #ddd", background: "#f0f0f0" }}>
-                    <img src={item.image} style={{ width: "100%", height: "100%", objectFit: "cover" }} referrerPolicy="no-referrer" alt="" />
-                  </div>
-                ) : (
-                  <div style={{ width: "42px", height: "42px", margin: "0 auto", borderRadius: "6px", background: "#f0f0f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "9px", color: "#888", border: "1px dashed #ccc" }}>بدون عکس</div>
-                )}
+                <InvoiceItemImage filename={item.image} />
               </td>
               <td style={{ textAlign: "right" }}>
                 <div style={{ fontWeight: "700", color: "#111", fontSize: "12px" }}>{item.name}</div>
                 <div style={{ fontSize: "10px", color: "#666", marginTop: "3px" }}>شناسه کد کالا: {item.code || "—"}</div>
               </td>
-              <td style={{ textAlign: "center", fontWeight: "500" }}>{item.dims || "—"}</td>
+              <td style={{ textAlign: "center", fontWeight: "500", whiteSpace: "nowrap" }}>{item.dims || "—"}</td>
               <td style={{ textAlign: "left", fontWeight: "700", color: "#111" }}>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", justifyContent: "center", width: "100%", height: "100%", minHeight: "28px", boxSizing: "border-box" }}>
                 {item.discountPct >= 100 ? (
                   <span style={{ textDecoration: "line-through", color: "#999", fontSize: "11px" }}>{fmt(item.originalPrice)} ت</span>
                 ) : item.discountPct > 0 ? (
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "3px" }}>
-                    <span style={{ textDecoration: "line-through", color: "#999", fontSize: "10px", fontWeight: "normal" }}>{fmt(item.originalPrice)}</span>
-                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                      <div style={{ background: "#e3f2fd", border: "1px solid #64b5f6", borderRadius: "4px", padding: "1px 7px", display: "flex", flexDirection: "column", alignItems: "center", lineHeight: 1.35 }}>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+                    <span style={{ textDecoration: "line-through", color: "#999", fontSize: "10px", fontWeight: "normal", marginBottom: "3px" }}>{fmt(item.originalPrice)}</span>
+                    <div style={{ display: "flex", alignItems: "center" }}>
+                      <div style={{ background: "#e3f2fd", border: "1px solid #64b5f6", borderRadius: "4px", padding: "1px 7px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", lineHeight: 1.35, marginLeft: "6px" }}>
                         <span style={{ color: "#1565c0", fontSize: "8.5px", fontWeight: "700" }}>٪{toPersianDigits(item.discountPct)}</span>
                       </div>
                       <span>{fmt(item.finalPrice)} ت</span>
@@ -357,19 +384,22 @@ else {
                 ) : (
                   <span>{fmt(item.finalPrice)} ت</span>
                 )}
+                </div>
               </td>
               <td style={{ textAlign: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "100%", minHeight: "28px", boxSizing: "border-box" }}>
                 {item.discountPct >= 100 ? (
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "#fce4ec", color: "#c2185b", border: "1px solid #c2185b", borderRadius: "4px", padding: "2px 7px", fontSize: "10px", fontWeight: "700" }}>
-                    {"\u{1F381}\uFE0E"} هدیه
+                  <span style={{ display: "inline-flex", alignItems: "center", background: "#fce4ec", color: "#c2185b", border: "1px solid #c2185b", borderRadius: "4px", padding: "2px 7px", fontSize: "10px", fontWeight: "700", direction: "rtl", unicodeBidi: "plaintext" }}>
+                    <span>هدیه</span><span style={{ marginRight: "4px" }}>{"\u{1F381}\uFE0E"}</span>
                   </span>
                 ) : item.isAvailableInGallery ? (
                   <span style={{ color: "#666", fontSize: "10px", fontWeight: "bold" }}>موجود در گالری</span>
                 ) : item.isSettled ? (
-                  <span className="badge-settled">تسویه شده</span>
+                  <span className="badge-settled" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", direction: "rtl", unicodeBidi: "plaintext" }}>تسویه شده</span>
                 ) : (
-                  <span className="badge-pending">بدهکار</span>
+                  <span className="badge-pending" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", direction: "rtl", unicodeBidi: "plaintext" }}>بدهکار</span>
                 )}
+                </div>
               </td>
             </tr>
           ))}
@@ -439,6 +469,12 @@ else {
                   <strong style={{ color: "#555" }}>{fmt(galleryStockValue)} تومان</strong>
                 </div>
               )}
+              {depositAmount > 0 && (
+                <div className="invoice-summary-row" style={{ color: "#1565c0" }}>
+                  <span>مبلغ ودیعه (پیش‌پرداخت):</span>
+                  <strong>{fmt(depositAmount)} تومان</strong>
+                </div>
+              )}
               <div className="invoice-summary-row invoice-summary-final">
                 <span>مبلغ نهایی قابل پرداخت:</span>
                 <span style={{ fontSize: "14px", fontWeight: "bold", color: "#8B1A1A" }}>{fmt(finalPayable)} تومان</span>
@@ -466,6 +502,12 @@ else {
                 <div className="invoice-summary-row" style={{ color: "#9c27b0" }}>
                   <span>مجموع هدیه‌ها ({giftSoldItems.length} قلم):</span>
                   <strong>{fmt(totalGiftValue)} تومان</strong>
+                </div>
+              )}
+              {depositAmount > 0 && (
+                <div className="invoice-summary-row" style={{ color: "#1565c0" }}>
+                  <span>مبلغ ودیعه (پیش‌پرداخت):</span>
+                  <strong>{fmt(depositAmount)} تومان</strong>
                 </div>
               )}
               <div className="invoice-summary-row invoice-summary-final">

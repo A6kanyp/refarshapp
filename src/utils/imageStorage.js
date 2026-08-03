@@ -194,7 +194,59 @@ export async function getImageSrc(filename, category) {
   return src;
 }
 
-/** برای علامت (!) زرد: آیا فایل واقعاً توی پوشه/IndexedDB هست یا نه */
+/** لیست تمام فایل‌های موجود توی یه دسته (category) — روی هر دو پلتفرم (اندروید/وب).
+ * قبلاً هر خطای native (پوشه وجود نداره، دسترسی رد شده، ...) بی‌صدا catch می‌شد
+ * و [] برمی‌گشت — یعنی از دید کاربر «هیچ عکسی پیدا نشد» با «خطای واقعی دسترسی
+ * به پوشه» قابل‌تشخیص نبودن. الان خطای native رو با پیام اصلی‌ش دوباره throw
+ * می‌کنیم تا صدازننده (autoDetectImagesForCode) بتونه واقعاً نشونش بده. */
+async function listFilesInCategory(category) {
+  if (isNativePlatform()) {
+    const { Filesystem, Directory } = await import("@capacitor/filesystem");
+    const folder = getImageFolderName();
+    const res = await Filesystem.readdir({ path: `${folder}/${category}`, directory: Directory.Documents });
+    return (res.files || []).map((f) => (typeof f === "string" ? f : f.name)).filter(Boolean);
+  }
+  const keys = await idbListKeys();
+  const prefix = `${category}/`;
+  return keys.filter((k) => k.startsWith(prefix)).map((k) => k.slice(prefix.length));
+}
+
+/**
+ * تشخیص خودکار عکس‌های یه کد محصول توی پوشه، طبق قرارداد نام‌گذاری «کد + شماره
+ * دورقمی» — مثلاً کد ۰۰۰۴ → 000401.jpg, 000402.jpg, ... تا حداکثر ۹۹ عکس.
+ * اگه پوشه/IndexedDB این فایل‌ها رو داشته باشه، بدون نیاز به آپلود دستی خودکار
+ * پیدا و به لیست عکس‌های محصول اضافه می‌شن.
+ * @param {string} code - کد محصول (مثلاً "0004"، از قبل ۴رقمی/padded)
+ * @returns {Promise<string[]>} اسم فایل‌های پیدا‌شده، به ترتیب شماره
+ */
+export async function autoDetectImagesForCode(code) {
+  const codeStr = String(code || "").trim();
+  if (!codeStr) return [];
+  let files;
+  try {
+    files = await listFilesInCategory(IMAGE_CATEGORIES.PRODUCT);
+  } catch (err) {
+    // اگه پوشه هنوز اصلاً وجود نداره (اولین‌باره، هیچ عکسی هنوز ذخیره نشده)،
+    // این یه خطای واقعی نیست — فقط یعنی چیزی برای پیدا کردن نیست.
+    const msg = String(err?.message || err || "").toLowerCase();
+    if (msg.includes("not exist") || msg.includes("not found") || msg.includes("enoent")) {
+      return [];
+    }
+    // هر خطای دیگه (دسترسی رد شده، مسیر نامعتبر، ...) واقعیه — به صدازننده پاس
+    // داده می‌شه تا کاربر واقعاً پیام خطا رو ببینه، نه این‌که بی‌صدا قورت داده بشه
+    throw err;
+  }
+  const re = new RegExp(`^${codeStr}(\\d{2})\\.[a-zA-Z0-9]+$`);
+  const matches = [];
+  for (const f of files) {
+    const m = f.match(re);
+    if (m) matches.push({ file: f, idx: parseInt(m[1], 10) });
+  }
+  matches.sort((a, b) => a.idx - b.idx);
+  return matches.map((m) => m.file);
+}
+
+
 export async function imageFileExists(filename, category) {
   if (!filename) return false;
   if (isNativePlatform()) {

@@ -122,6 +122,19 @@ export function formatProductDims(product) {
   return toNum(h) > toNum(w) ? `${h}×${w}` : `${w}×${h}`;
 }
 
+// نمایش خوانا/انسانی ابعاد برای بزرگ‌نمایی محصول: «64D» → «نیم‌دایره به قطر 64»، «55O» → «دایره به قطر 55».
+// برای ابعاد مستطیلی معمولی (طول×عرض) دست‌نخورده برمی‌گرده.
+export function formatDimsHuman(dimsText) {
+  if (!dimsText) return "";
+  const s = String(dimsText).trim();
+  const upper = s.toUpperCase();
+  const dMatch = upper.match(/^(\d+(?:\.\d+)?)\s*D$/);
+  if (dMatch) return `نیم‌دایره به قطر ${dMatch[1]}`;
+  const oMatch = upper.match(/^(\d+(?:\.\d+)?)\s*O$/);
+  if (oMatch) return `دایره به قطر ${oMatch[1]}`;
+  return s;
+}
+
 // «(۴عدد)» کنار ابعاد برای محصولات ستی (qty > 1)؛ برای qty=1 چیزی برنمی‌گردونه
 export function qtySuffix(product) {
   const q = toNum(product?.qty);
@@ -249,6 +262,31 @@ export function serviceROI(profit, finalPrice) {
   const fp = toNum(finalPrice);
   return fp <= 0 ? 0 : Math.round((toNum(profit) / fp) * 100 * 10) / 10;
 }
+// فرمت دسته‌بندی فرش: «فرش (نام)، (طرح (طرح)) (قدمت) ساله» — مثال: «فرش یزد، (طرح کاشان) 50 ساله»
+// طرح و قدمت فیلدهای جدا (mat.pattern / mat.ageYears)ن، نه بخشی از اسم — قبلاً این تابع فقط
+// اسم رو می‌گرفت و سعی می‌کرد الگوی «(طرح ...)» و «...ساله» رو از توی خودِ متن اسم پیدا کنه که
+// عملاً هیچ‌وقت جواب نمی‌داد چون این دوتا از اول جدا از اسم ذخیره می‌شن.
+export function formatFabricGroupLabel(rawName, pattern, ageYears) {
+  const trimmed = (rawName || "").trim();
+  if (!trimmed) return trimmed;
+  const name = trimmed.startsWith("فرش") ? trimmed.slice(3).trim().replace(/^[،,]\s*/, "") : trimmed;
+  const patternTrimmed = (pattern || "").trim();
+  const ageNum = ageYears != null ? Number(ageYears) : null;
+  const hasAge = ageNum != null && !isNaN(ageNum) && ageNum > 0;
+  if (name && patternTrimmed && hasAge) {
+    return `فرش ${name}، (طرح ${patternTrimmed}) ${ageNum} ساله`;
+  }
+  if (name && patternTrimmed) {
+    return `فرش ${name}، (طرح ${patternTrimmed})`;
+  }
+  if (name && hasAge) {
+    return `فرش ${name}، ${ageNum} ساله`;
+  }
+  // کاربر دیگه خودش کلمه‌ی «فرش» رو اول اسم متریال تایپ نمی‌کنه، پس اگه از قبل
+  // نداشت خودکار اضافه می‌شه (فقط برای دسته‌بندی محصولات، اسم خودِ متریال دست‌نخورده می‌مونه)
+  return trimmed.startsWith("فرش") ? trimmed : `فرش ${trimmed}`;
+}
+
 /** نام دسته محصول از روی id فرش زنده (نه نام قدیمی ذخیره‌شده) */
 export function resolveProductGroupName(product, materials = []) {
   if (!product) return "";
@@ -260,12 +298,7 @@ export function resolveProductGroupName(product, materials = []) {
     })?.materialId;
   if (fabricId) {
     const m = (materials || []).find((x) => x.id === fabricId);
-    if (m?.name) {
-      const trimmed = m.name.trim();
-      // کاربر دیگه خودش کلمه‌ی «فرش» رو اول اسم متریال تایپ نمی‌کنه، پس اگه از قبل
-      // نداشت خودکار اضافه می‌شه (فقط برای دسته‌بندی محصولات، اسم خودِ متریال دست‌نخورده می‌مونه)
-      return trimmed.startsWith("فرش") ? trimmed : `فرش ${trimmed}`;
-    }
+    if (m?.name) return formatFabricGroupLabel(m.name, m.pattern, m.ageYears);
   }
   return product.group || "";
 }

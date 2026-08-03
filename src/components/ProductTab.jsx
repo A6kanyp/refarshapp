@@ -10,12 +10,12 @@ import {
   Copy, Camera, Printer, Gift, Eye, EyeOff, Tag, Clock
 } from "lucide-react";
 import html2canvas from "html2canvas";
-import { toNum, fmt, fmtCode, fmtDate, todayISO, parseDims, dimsArea, getProductArea, normalizeNumericInput, calcProfitFromPrice, calcPriceFromProfit, formatProductDims, qtySuffix } from "../mathCore";
+import { toNum, fmt, fmtCode, fmtDate, todayISO, parseDims, dimsArea, getProductArea, normalizeNumericInput, calcProfitFromPrice, calcPriceFromProfit, formatProductDims, formatDimsHuman, qtySuffix } from "../mathCore";
 
 import { SCRATCH_KEYS, saveScratch, loadScratch, clearScratch } from "../scratchpad";
 import { saveFile, shareText } from "../utils/nativeSave";
 import { compressImageFile } from "../utils/imageCompress";
-import { saveImageToFolder, IMAGE_CATEGORIES, useResolvedImageSrc } from "../utils/imageStorage";
+import { saveImageToFolder, IMAGE_CATEGORIES, useResolvedImageSrc, autoDetectImagesForCode, deleteImageFile } from "../utils/imageStorage";
 import { handleEnterNavigate } from "../utils/formNav";
 import { pushBackHandler } from "../utils/backButton";
 import {
@@ -26,7 +26,7 @@ import { useToast } from "../contexts/ToastContext.jsx";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import { formatPriceInput, parsePriceInput, formatPhoneInput, parsePhoneInput, getJalaliTimestamp } from "../utils/formatters";
 import { JalaliDatePicker } from "./JalaliDatePicker";
-import { FilterPopup } from "./FilterPopup";
+import { FilterPopup, AnchoredFloatingPopup } from "./FilterPopup";
 import InvoicePrint from "./InvoicePrint";
 import { useRegisterOpenModal } from "../utils/modalRegistry";
 
@@ -60,7 +60,7 @@ function ProductImage({ filename, alt = "", style, loading, className, ...rest }
 const S = {
   input: { width:"100%", background:"#1c1c1c", border:"1px solid #2a2a2a", borderRadius:6, padding:"7px 10px", color:"#ddd", fontFamily:"inherit", fontSize:11, outline:"none", boxSizing:"border-box" },
   iconBtn: { background:"transparent", border:"none", cursor:"pointer", padding:"4px 6px", display:"flex", alignItems:"center" },
-  chip: { background:"#1c1c1c", border:"1px solid #2a2a2a", color:"#888", fontSize:10, padding:"6px 9px", borderRadius:12, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap", display:"inline-flex", alignItems:"center", justifyContent:"center", minHeight:32, height:32, boxSizing:"border-box" },
+  chip: { background:"#1c1c1c", border:"1px solid #2a2a2a", color:"#888", fontSize:10, padding:"2px 9px", borderRadius:11, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap", display:"inline-flex", alignItems:"center", justifyContent:"center", minHeight:22, height:22, boxSizing:"border-box" },
   chipActive: { background:"#2a1414", border:"1px solid #8B1A1A", color:"#d88888" },
   chipYellow: { background:"#3a2a10", border:"1px solid #d4b400", color:"#f2c94c" },
   sectionLabel: { fontSize:10, color:"#666", fontWeight:600, letterSpacing:1, textTransform:"uppercase", margin:"14px 0 7px" },
@@ -71,10 +71,10 @@ const S = {
 
 // ── ثابت‌های مرتب‌سازی ──
 const SORT_MODES = [
-  { key: "az", kind: "text", ascText: "Az", descText: "Za" },
-  { key: "code", kind: "text", ascText: "123", descText: "321" },
-  { key: "stock", kind: "icon", Icon: ShoppingBag },
-  { key: "date", kind: "icon", Icon: Clock },
+  { key: "az", kind: "text", ascText: "Az", descText: "Za", label: "الفبا" },
+  { key: "code", kind: "text", ascText: "123", descText: "321", label: "کد محصول" },
+  { key: "stock", kind: "icon", Icon: ShoppingBag, label: "وضعیت موجودی" },
+  { key: "date", kind: "icon", Icon: Clock, label: "تاریخ" },
 ];
 
 function cycleSort(current) {
@@ -85,7 +85,7 @@ function cycleSort(current) {
 }
 
 // ── دکمه سورت ──
-function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onToggleGrouped }) {
+function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onToggleGrouped, groupByTypeActive, onGroupByType, onGroupByFabric }) {
   const [showPopup, setShowPopup] = useState(false);
   const wrapRef = useRef(null);
   const baseOrder = String(sortOrder || "").replace(/_desc$/, "");
@@ -123,7 +123,7 @@ function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onTogg
       <button
         style={{
           ...S.chip,
-          padding: "6px 10px",
+          padding: "2px 10px",
           fontSize: 10,
           position: "relative",
           ...style,
@@ -141,18 +141,24 @@ function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onTogg
                 display: "block",
                 width: "100%",
                 padding: "8px 10px",
-                background: groupedView ? "#2a1414" : "transparent",
+                background: !groupByTypeActive && groupedView ? "#2a1414" : "transparent",
                 border: "none",
                 borderRadius: 4,
-                color: groupedView ? "#d88888" : "#ddd",
+                color: !groupByTypeActive && groupedView ? "#d88888" : "#ddd",
                 fontSize: 11,
                 fontFamily: "inherit",
                 cursor: "pointer",
                 textAlign: "right",
               }}
-              onClick={() => { if (!groupedView) onToggleGrouped(); }}
+              onClick={() => {
+                // قبلاً وقتی groupedView از قبل true بود (مثلاً چون الان روی «بر اساس نوع»
+                // بودیم) این کلیک هیچ کاری نمی‌کرد، چون فقط groupedView رو روشن می‌کرد نه
+                // sortMode رو برمی‌گردوند به fabric — پس گیر می‌کرد رو نوع. الان صریح برمی‌گرده.
+                if (onGroupByFabric) onGroupByFabric();
+                else if (!groupedView) onToggleGrouped?.();
+              }}
             >
-              دسته‌بندی
+              بر اساس فرش
             </button>
             <button
               style={{
@@ -172,6 +178,27 @@ function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onTogg
             >
               یکجا
             </button>
+            {onGroupByType && (
+              // گزینه‌ی جدید: گروه‌بندی بر اساس نوع محصول (نه دسته‌بندی/فرش) — آیتم ۱۲ (Ash 🟡)
+              <button
+                style={{
+                  display: "block",
+                  width: "100%",
+                  padding: "8px 10px",
+                  background: groupByTypeActive ? "#2a1414" : "transparent",
+                  border: "none",
+                  borderRadius: 4,
+                  color: groupByTypeActive ? "#d88888" : "#ddd",
+                  fontSize: 11,
+                  fontFamily: "inherit",
+                  cursor: "pointer",
+                  textAlign: "right",
+                }}
+                onClick={onGroupByType}
+              >
+                بر اساس نوع
+              </button>
+            )}
             <div style={{ borderTop: "1px solid #2a2a2a", margin: "4px 0" }} />
           </>
         )}
@@ -179,7 +206,10 @@ function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onTogg
           <button
             key={mode.key}
             style={{
-              display: "block",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 8,
               width: "100%",
               padding: "8px 10px",
               background: baseOrder === mode.key ? "#2a1414" : "transparent",
@@ -200,6 +230,7 @@ function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onTogg
             }}
           >
             {renderMode(mode, baseOrder === mode.key)}
+            {mode.label && <span>{mode.label}</span>}
           </button>
         ))}
       </FilterPopup>
@@ -364,14 +395,14 @@ function ProductCard({ p, customers, materials, onEdit, onDelete, onImageUpload,
     <div style={{ background:"#161616", border:"1px solid #232323", borderRadius:10, marginBottom:7, overflow:"hidden", opacity: p.hiddenFromCatalog ? 0.55 : 1 }}>
       <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", cursor:"pointer" }} onClick={() => onToggleExpand(p.id)}>
         <div style={{ width:40, height:40, borderRadius:6, background:"#111", overflow:"hidden", flexShrink:0, cursor:"pointer", position:"relative" }}
-          onClick={(e) => { e.stopPropagation(); if (p.image) onOpenLightbox(p.id); }}>
+          onClick={(e) => { e.stopPropagation(); onOpenLightbox(p.id); }}>
           {p.image ? (
             <ProductImage filename={p.image} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
           ) : (
             <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center" }}>
               <label style={{ cursor:"pointer" }} onClick={(e) => e.stopPropagation()}>
                 <ImagePlus size={16} color="#444" />
-                <input type="file" accept="image/*" style={{ display:"none" }} onChange={(e) => onImageUpload(e, p.id)} />
+                <input type="file" accept="image/*" multiple style={{ display:"none" }} onChange={(e) => onImageUpload(e, p.id)} />
               </label>
             </div>
           )}
@@ -710,6 +741,18 @@ export function ImageLightbox({ products, currentId, onNavigate, onClose, onAddT
     const remaining = Object.keys(ptrsRef.current).length;
 
     if (remaining < 2) lastDistRef.current = null;
+    // باگ pinch-zoom: وقتی با دو انگشت زوم می‌کردیم، `lastPanRef` هیچ‌وقت
+    // آپدیت نمی‌شد (فقط توی حالت تک‌انگشتی آپدیت می‌شه) — پس مقدارش از قبل از
+    // شروع pinch (یا حتی قدیمی‌تر) باقی می‌موند. با ول‌کردن یکی از دو انگشت،
+    // یه پوینتر تنها می‌مونه؛ حرکت بعدیش `dx/dy` رو نسبت به همون موقعیت خیلی
+    // قدیمی حساب می‌کرد → یه جهش ناگهانی چندسانتی توی تصویر. فیکس: وقتی از ۲
+    // انگشت به ۱ انگشت می‌رسیم، `lastPanRef` رو به موقعیت *فعلی* همون انگشتِ
+    // باقی‌مونده sync می‌کنیم، نه این‌که دست‌نخورده از قبل بمونه.
+    if (remaining === 1) {
+      const remainingId = Object.keys(ptrsRef.current)[0];
+      const pt = ptrsRef.current[remainingId];
+      if (pt) lastPanRef.current = { x: pt.x, y: pt.y };
+    }
     if (remaining === 0) {
       lastPanRef.current = null;
       if (swipeStartRef.current && scaleRef.current <= 1) {
@@ -761,7 +804,7 @@ export function ImageLightbox({ products, currentId, onNavigate, onClose, onAddT
         <button style={S.iconBtn} onClick={onClose} onPointerDown={(e) => e.stopPropagation()}>
           <X size={18} color="#fff" />
         </button>
-        <span style={{ flex: 1, fontSize: 12, color: "#ccc" }}>#{fmtCode(product.code)} · {product.name}</span>
+        <span style={{ flex: 1, fontSize: 16, color: "#F5F0EB", fontWeight: 800 }}>#{fmtCode(product.code)} · {product.name}</span>
         {onAddToBasket && product.status !== "sold" && (
           <button
             style={{ ...S.iconBtn, width: 44, height: 44, borderRadius: "50%", background: "rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center" }}
@@ -893,14 +936,19 @@ export function ImageLightbox({ products, currentId, onNavigate, onClose, onAddT
               </div>
               {dimsText && (
                 <div style={{ fontSize: 12, color: "#ddd", fontWeight: 600, marginBottom: 4 }}>
-                  {dimsLabel}: {dimsText}
+                  {dimsLabel}: {formatDimsHuman(dimsText)}
                 </div>
               )}
               {product.description && (
-                <div style={{ fontSize: 11.5, color: "#ccc", marginBottom: 8, whiteSpace: "pre-wrap", lineHeight: 1.65, fontWeight: 500 }}>
-                  {product.description}
-                </div>
+                <>
+                  <div style={{ height: 10 }} />
+                  <div style={{ fontSize: 11.5, color: "#ccc", marginBottom: 8, whiteSpace: "pre-wrap", lineHeight: 1.65, fontWeight: 500 }}>
+                    {product.description}
+                  </div>
+                </>
               )}
+              {/* یک ردیف خط خالی بین آخرین مشخصات محصول و ردیف بها (خواسته‌ی کاربر) */}
+              <div style={{ height: 10 }} />
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontWeight: 700 }}>
                 <span style={{ fontSize: 12, color: "#aaa", fontWeight: 600 }}>بها:</span>
                 {hasDisc ? (
@@ -1649,9 +1697,9 @@ export function ProductEditor({
     let finalDimW = local.dimW, finalDimH = local.dimH, finalDims = local.dims;
     if (local.shape !== "circle" && local.shape !== "semi-circle" && local.dimW && local.dimH) {
       const a = toNum(local.dimW), b = toNum(local.dimH);
-      // طبق تصمیم تازه‌ی کاربر (برعکسِ تصمیم قبلی همین نشست): حالا باید عدد
-      // کوچیک‌تر اول باشه، بزرگ‌تر دوم — نه برعکس
-      if (a > b) {
+      // طبق تأیید صریح کاربر: عدد بزرگ‌تر اول، کوچیک‌تر دوم (Big×Small) — یه نشست قبلی
+      // این رو اشتباه برعکس کرده بود (Small×Big)، الان دوباره به حالت درست برگشت
+      if (a < b) {
         finalDimW = local.dimH;
         finalDimH = local.dimW;
       }
@@ -1661,8 +1709,8 @@ export function ProductEditor({
   };
 
   const handleImageUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
 
     try {
       // بخش «بازطراحی ذخیره‌سازی عکس‌ها» (Wall 🟣): قبلاً اینجا عکس به یه
@@ -1671,29 +1719,91 @@ export function ProductEditor({
       // امنیتی واقعی داشت (destPath بدون اعتبارسنجی از کلاینت) — حذف شد.
       // الان عکس فشرده می‌شه (مثل قبل) و مستقیم توی پوشه‌ی محلی ذخیره می‌شه؛
       // فقط اسم فایل (نه خودِ عکس) توی رکورد محصول می‌مونه.
-      const compressedDataUrl = await compressImageFile(file);
-      const safeName = (local.name || "Product").replace(/[^a-zA-Z0-9\u0600-\u06FF\s-]/g, '').trim().replace(/\s+/g, '_');
-      const desiredFilename = `${safeName}_${getJalaliTimestamp()}.jpg`;
-      const savedFilename = await saveImageToFolder(compressedDataUrl, IMAGE_CATEGORIES.PRODUCT, desiredFilename);
+      //
+      // آیتم ۸ (روادمپ): قبلاً اسم فایل از روی نام محصول ساخته می‌شد که اگه
+      // فارسی بود، موقع لود فاکتور ذخیره نمی‌شد. الان اسم فایل همیشه بر اساس
+      // کد محصول + شماره‌ی ترتیبی می‌سازه (مثلاً کد ۴ → 000401.jpg, 000402.jpg)،
+      // که هم همیشه لاتین/عددیه، هم چون کد یکتاست تضمین می‌کنه اسم فایل با
+      // هیچ محصول دیگه‌ای تداخل نداره. همچنین حالا چندانتخابی هم پشتیبانی می‌شه.
+      const codeStr = fmtCode(local.code != null ? local.code : nextCode);
+      const startIdx = (local.images || []).length;
+      const savedFilenames = [];
+      for (let i = 0; i < files.length; i++) {
+        const compressedDataUrl = await compressImageFile(files[i]);
+        const seq = String(startIdx + i + 1).padStart(2, "0");
+        const desiredFilename = `${codeStr}${seq}.jpg`;
+        const savedFilename = await saveImageToFolder(compressedDataUrl, IMAGE_CATEGORIES.PRODUCT, desiredFilename);
+        savedFilenames.push(savedFilename);
+      }
 
       setLocalWithScratch((l) => {
         const images = l.images || [];
-        if (!l.image) {
-          return { ...l, image: savedFilename, images: [savedFilename, ...images] };
-        }
-        return { ...l, images: [...images, savedFilename] };
+        const nextImages = [...images, ...savedFilenames];
+        return { ...l, image: l.image || savedFilenames[0], images: nextImages };
       });
-      showToast("تصویر در پوشه‌ی محلی ذخیره شد");
+      showToast(savedFilenames.length > 1 ? `${savedFilenames.length} تصویر در پوشه‌ی محلی ذخیره شد` : "تصویر در پوشه‌ی محلی ذخیره شد");
     } catch (err) {
       console.error("Image upload failed:", err);
       showToast("خطا در ذخیره‌ی عکس", "error");
     }
   };
 
+  // تشخیص خودکار عکس‌های از قبل موجود توی پوشه بر اساس کد محصول — طبق قرارداد
+  // نام‌گذاری «کد+شماره دورقمی» (000401، 000402، ...، تا حداکثر ۹۹ عکس به‌ازای هر
+  // کد). برای عکس‌هایی که کاربر مستقیم با فایل‌منیجر توی پوشه گذاشته (نه از طریق
+  // همین دکمه‌ی «افزودن»)، تا وقتی خودش پیدا نمی‌شد توی محصول نمایش داده نمی‌شدن.
+  const [autoScanning, setAutoScanning] = useState(false);
+  const autoScanForImages = async (opts = {}) => {
+    const codeStr = fmtCode(local.code != null ? local.code : nextCode);
+    setAutoScanning(true);
+    try {
+      let found;
+      try {
+        found = await autoDetectImagesForCode(codeStr);
+      } catch (err) {
+        if (opts.manual) showToast(`خطا در خواندن پوشه‌ی عکس: ${err.message || err}`, "error");
+        return;
+      }
+      if (found.length === 0) {
+        if (opts.manual) showToast("عکسی با این کد در پوشه پیدا نشد", "error");
+        return;
+      }
+      let addedCount = 0;
+      setLocalWithScratch((l) => {
+        const current = l.images || (l.image ? [l.image] : []);
+        const currentSet = new Set(current);
+        const newOnes = found.filter((f) => !currentSet.has(f));
+        addedCount = newOnes.length;
+        if (newOnes.length === 0) return l;
+        const merged = [...current, ...newOnes];
+        return { ...l, image: l.image || merged[0] || null, images: merged };
+      });
+      if (opts.manual) showToast(addedCount > 0 ? `${addedCount} تصویر جدید از پوشه پیدا شد` : "همه‌ی عکس‌های این کد از قبل توی محصول هستن");
+    } finally {
+      setAutoScanning(false);
+    }
+  };
+  // فقط یه‌بار موقع باز شدن فرم (نه با هر تایپ کد) — فقط وقتی محصول کد مشخص داره؛
+  // چیزی رو از لیست عکس‌های موجود حذف نمی‌کنه، فقط جدیدهایی که پیدا می‌شه اضافه می‌کنه
+  useEffect(() => {
+    if (local.code == null && nextCode == null) return;
+    autoScanForImages({ manual: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleRemoveImage = (idx) => {
     setLocalWithScratch((l) => {
+      const removed = (l.images || [])[idx];
       const all = (l.images || []).filter((_, i) => i !== idx);
       const newImage = all.length > 0 ? all[0] : null;
+      // آیتم ۵ (دامپ اخیر): حذف عکس از محصول قبلاً فقط اسم فایل رو از رکورد
+      // برمی‌داشت، فایل فیزیکی توی پوشه دست‌نخورده می‌موند (برخلاف الگوی از قبل
+      // موجود توی BusinessCardModal که همین‌جا هم پیروی شد). عکس‌های محصول
+      // یکتا هستن (اسم‌شون شامل کد محصوله)، پس بین محصولات مختلف مشترک نیستن —
+      // حذف فیزیکی امن است.
+      if (removed) {
+        deleteImageFile(removed, IMAGE_CATEGORIES.PRODUCT).catch(() => {});
+      }
       return { ...l, image: newImage, images: all };
     });
   };
@@ -1971,7 +2081,7 @@ export function ProductEditor({
         <div style={{ padding: "12px 14px" }}>
           <div style={S.sectionLabel}>تصاویر محصول (اول = آیکون)</div>
           <div style={{ display: "flex", gap: 8, marginBottom: 12, overflowX: "auto", paddingBottom: 4, WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
-            {(local.images || (local.image ? [local.image] : [])).map((img, i) => (
+            {(local.images || (local.image ? [local.image] : [])).map((img, i, arr) => (
               <div key={i} style={{ width: 60, height: 60, background: "#111", borderRadius: 8, overflow: "hidden", flexShrink: 0, position: "relative", border: i === 0 ? "2px solid #8B1A1A" : "1px solid #2a2a2a" }}>
                 <ProductImage filename={img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} loading="lazy" />
                 {i === 0 && (
@@ -1979,13 +2089,54 @@ export function ProductEditor({
                 )}
                 <button style={{ position: "absolute", top: 2, right: 2, background: "rgba(0,0,0,0.7)", border: "none", borderRadius: "50%", color: "#fff", width: 16, height: 16, fontSize: 9, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
                   onClick={() => handleRemoveImage(i)}>✕</button>
+                {/* جابجایی ترتیب عکس‌ها — drag-and-drop واقعیِ HTML5 روی صفحه‌لمسی موبایل
+                    (وب‌ویوی اندروید) قابل‌اعتماد نیست، پس به‌جاش دو دکمه‌ی کوچیک
+                    جابجایی چپ/راست اضافه شد؛ عکسِ اول همیشه آیکون/جلد محصوله */}
+                {arr.length > 1 && (
+                  <div style={{ position: "absolute", top: 2, left: 2, display: "flex", gap: 2 }}>
+                    {i > 0 && (
+                      <button
+                        type="button"
+                        title="جابجایی به جلو"
+                        onClick={() => setLocalWithScratch((l) => {
+                          const all = [...(l.images || [])];
+                          [all[i - 1], all[i]] = [all[i], all[i - 1]];
+                          return { ...l, image: all[0] || null, images: all };
+                        })}
+                        style={{ background: "rgba(0,0,0,0.7)", border: "none", borderRadius: "50%", color: "#fff", width: 16, height: 16, fontSize: 9, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                      >‹</button>
+                    )}
+                    {i < arr.length - 1 && (
+                      <button
+                        type="button"
+                        title="جابجایی به عقب"
+                        onClick={() => setLocalWithScratch((l) => {
+                          const all = [...(l.images || [])];
+                          [all[i], all[i + 1]] = [all[i + 1], all[i]];
+                          return { ...l, image: all[0] || null, images: all };
+                        })}
+                        style={{ background: "rgba(0,0,0,0.7)", border: "none", borderRadius: "50%", color: "#fff", width: 16, height: 16, fontSize: 9, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                      >›</button>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
             <label style={{ width: 60, height: 60, background: "#1c1c1c", border: "1px dashed #333", borderRadius: 8, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, gap: 3 }}>
               <ImagePlus size={16} color="#444" />
               <span style={{ fontSize: 8, color: "#444" }}>افزودن</span>
-              <input type="file" accept="image/*" style={{ display: "none" }} onChange={handleImageUpload} />
+              <input type="file" accept="image/*" multiple style={{ display: "none" }} onChange={handleImageUpload} />
             </label>
+            <button
+              type="button"
+              title="بررسی خودکار پوشه برای عکس‌های این کد"
+              onClick={() => autoScanForImages({ manual: true })}
+              disabled={autoScanning}
+              style={{ width: 60, height: 60, background: "#1c1c1c", border: "1px dashed #333", borderRadius: 8, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: autoScanning ? "default" : "pointer", flexShrink: 0, gap: 3, fontFamily: "inherit" }}
+            >
+              <RotateCcw size={16} color="#444" style={autoScanning ? { animation: "spin 1s linear infinite" } : undefined} />
+              <span style={{ fontSize: 8, color: "#444" }}>{autoScanning ? "..." : "بررسی پوشه"}</span>
+            </button>
           </div>
 
           <div style={{ display: "flex", gap: 6, marginBottom: 8, alignItems: "flex-end" }}>
@@ -2099,6 +2250,39 @@ export function ProductEditor({
               <div style={{ fontSize: 9.5, color: "#666", marginBottom: 4 }}>نام محصول</div>
               <input onFocus={(e) => e.target.select()} style={{ ...S.input, borderColor: errors.name ? "#ef4444" : "#232323", background: errors.name ? "#2a1414" : "#1c1c1c" }} value={local.name} onChange={(e) => { setErrors(e => ({...e, name: false})); setLocalWithScratch({ ...local, name: e.target.value }); }} />
             </div>
+            {(() => {
+              // آیتم ۷ (روادمپ) — فیکس: قبلاً این دکمه با فعال‌شدن، productTypeId محصول رو
+              // مستقیم روی نوع «کالیگرافی» می‌ذاشت — یعنی *جایگزین* نوع اصلی محصول می‌شد
+              // (مثلاً تابلوفرش پاک می‌شد). طبق تصمیم درست: کالیگرافی صرفاً یه تگ اضافه‌ست؛
+              // محصول می‌تونه هم‌زمان توی نوع اصلی‌ش (productTypeId دست‌نخورده) و هم زیر
+              // «کالیگرافی» دیده بشه. این الان یه فیلد مستقل (`isCalligraphy`) رو toggle می‌کنه.
+              const isCalligraphy = !!local.isCalligraphy;
+              return (
+                <div style={{ flexShrink: 0, alignSelf: "flex-end" }}>
+                  <button
+                    type="button"
+                    title="کالیگرافی (تگ اضافه — نوع اصلی محصول رو عوض نمی‌کنه)"
+                    onClick={() => {
+                      setLocalWithScratch((l) => ({ ...l, isCalligraphy: !l.isCalligraphy }));
+                    }}
+                    style={{
+                      height: 31,
+                      padding: "0 8px",
+                      borderRadius: 6,
+                      fontSize: 9.5,
+                      fontFamily: "inherit",
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                      background: isCalligraphy ? "#2a1414" : "#1c1c1c",
+                      border: isCalligraphy ? "1px solid #8B1A1A" : "1px solid #2a2a2a",
+                      color: isCalligraphy ? "#d88888" : "#888",
+                    }}
+                  >
+                    کالیگرافی
+                  </button>
+                </div>
+              );
+            })()}
             <div style={{ width: 64 }}>
               <div style={{ fontSize: 9.5, color: "#666", marginBottom: 4 }}>کد</div>
               <input style={{ ...S.input, textAlign: "center", color: errors.code ? "#ef4444" : "#8B1A1A", borderColor: errors.code ? "#ef4444" : "#232323", background: errors.code ? "#2a1414" : "#1c1c1c" }} value={local.code != null ? fmtCode(local.code) : fmtCode(nextCode)} onChange={(e) => { const d = e.target.value.replace(/\D/g, "");
@@ -2810,6 +2994,7 @@ export function CatalogTab({
   const [showCatalogStatusMenu, setShowCatalogStatusMenu] = useState(false);
   const [typeFilter, setTypeFilter] = useState([]); // چند-انتخابی: آرایه‌ی شناسه‌ی انواع؛ خالی = همه
   const [showTypeFilterMenu, setShowTypeFilterMenu] = useState(false);
+  const typeFilterBtnRef = useRef(null);
   const [lightboxId, setLightboxId] = useState(null);
   const [search, setSearch] = useState("");
 
@@ -2847,7 +3032,7 @@ export function CatalogTab({
       .filter((p) => {
         if (p.isDraft) return false;
         if (p.hiddenFromCatalog) return false;
-        if ((typeFilter || []).length > 0 && !(typeFilter || []).includes(p.productTypeId)) return false;
+        if ((typeFilter || []).length > 0 && !(typeFilter || []).includes(p.productTypeId) && !((typeFilter || []).includes("__calligraphy__") && p.isCalligraphy)) return false;
         if (search.trim() && !p.name?.includes(search) && !String(p.code).includes(search) && !(p.dims && p.dims.includes(search))) return false;
         if (statusFilter.length > 0 && !statusFilter.includes(p.status)) return false;
         let locMatch = false;
@@ -2904,7 +3089,7 @@ export function CatalogTab({
             <button
               style={{
                 ...S.chip,
-                padding: "6px 8px",
+                padding: "2px 8px",
                 fontSize: 10,
                 position: "relative",
                 background: statusFilter.length > 0 ? "#2a1414" : "#1c1c1c",
@@ -2954,7 +3139,7 @@ export function CatalogTab({
             <button
               style={{
                 ...S.chip,
-                padding: "6px 10px",
+                padding: "2px 10px",
                 fontSize: 10,
                 position: "relative",
                 background: isLocationSelected() ? "#2a1414" : "#1c1c1c",
@@ -3055,10 +3240,11 @@ export function CatalogTab({
           {(productTypes || []).length > 0 && (
             <div style={{ position: "relative" }}>
               <button
+                ref={typeFilterBtnRef}
                 title={(typeFilter || []).length > 0 ? (typeFilter || []).map((id) => productTypes.find((t) => t.id === id)?.name).filter(Boolean).join("، ") : "همه"}
                 style={{
                   ...S.chip,
-                  padding: "6px 10px",
+                  padding: "2px 10px",
                   fontSize: 10,
                   background: (typeFilter || []).length > 0 ? "#2a1414" : "#1c1c1c",
                   border: (typeFilter || []).length > 0 ? "1px solid #8B1A1A" : "1px solid #2a2a2a",
@@ -3068,7 +3254,7 @@ export function CatalogTab({
               >
                 <Tag size={13} />
               </button>
-              <FilterPopup open={showTypeFilterMenu} onClose={() => setShowTypeFilterMenu(false)} width={160}>
+              <FilterPopup open={showTypeFilterMenu} onClose={() => setShowTypeFilterMenu(false)} width={220} maxHeight={320}>
                   <button
                     style={{ display: "block", width: "100%", textAlign: "right", padding: "8px 8px", background: (typeFilter || []).length === 0 ? "#2a1414" : "transparent", border: "none", color: (typeFilter || []).length === 0 ? "#d88888" : "#ddd", fontSize: 11, fontFamily: "inherit", cursor: "pointer", borderRadius: 4 }}
                     onClick={() => setTypeFilter([])}
@@ -3090,6 +3276,15 @@ export function CatalogTab({
                       </button>
                     );
                   })}
+                  {/* کالیگرافی یه تگ اضافه‌ست، نه یه نوع اصلی — به‌همین‌خاطر جدا از productTypes با شناسه‌ی مصنوعی نمایش داده می‌شه، تا با انتخابش محصولات هم‌زمان زیر نوع اصلی‌شون هم قابل‌فیلتر بمونن */}
+                  <button
+                    style={{ display: "block", width: "100%", textAlign: "right", padding: "8px 8px", background: (typeFilter || []).includes("__calligraphy__") ? "#2a1414" : "transparent", border: "none", borderTop: "1px solid #232323", color: (typeFilter || []).includes("__calligraphy__") ? "#d88888" : "#ddd", fontSize: 11, fontFamily: "inherit", cursor: "pointer", borderRadius: 4 }}
+                    onClick={() => {
+                      setTypeFilter((prev) => prev.includes("__calligraphy__") ? prev.filter((id) => id !== "__calligraphy__") : [...prev, "__calligraphy__"]);
+                    }}
+                  >
+                    کالیگرافی
+                  </button>
               </FilterPopup>
             </div>
           )}
@@ -3264,9 +3459,10 @@ export default function ProductTab({
   };
   const [typeFilter, setTypeFilter] = useState([]); // چند-انتخابی: آرایه‌ی شناسه‌ی انواع؛ خالی = همه
   const [showTypeFilterMenu, setShowTypeFilterMenu] = useState(false);
+  const typeFilterBtnRef = useRef(null);
   const [expandedProductId, setExpandedProductId] = useState(null);
 
-  // دابل‌کلیک روی Refresh → ریست فیلترها (نه با کلیک ساده)
+  // Refresh (تک‌ضربه) → ریست کامل فیلترها/چیدمان تب محصولات به پیش‌فرض
   useEffect(() => {
     if (!refreshResetTick) return;
     setSearch("");
@@ -3274,6 +3470,7 @@ export default function ProductTab({
     setTypeFilter([]);
     setShowTypeFilterMenu(false);
     setShowStatusMenu(false);
+    setCollapsedGroups({});
   }, [refreshResetTick]);
 
   useEffect(() => {
@@ -3468,7 +3665,7 @@ export default function ProductTab({
       });
       if (!matchesAny) return false;
     }
-    if ((typeFilter || []).length > 0 && !(typeFilter || []).includes(p.productTypeId)) return false;
+    if ((typeFilter || []).length > 0 && !(typeFilter || []).includes(p.productTypeId) && !((typeFilter || []).includes("__calligraphy__") && p.isCalligraphy)) return false;
     let locMatch = false;
     if (!isLocationSelected()) {
       locMatch = true;
@@ -3481,6 +3678,9 @@ export default function ProductTab({
 
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const toggleGroup = (name) => setCollapsedGroups(prev => ({ ...prev, [name]: !prev[name] }));
+  const [floatingCatLabel, setFloatingCatLabel] = useState("");
+  const groupSectionRefs = useRef({});
+  const stickyHeaderRef = useRef(null);
   const [groupedView, setGroupedView] = useState(() => {
     try {
       return localStorage.getItem("product_grouped_view") !== "false"; // پیش‌فرض روشن
@@ -3496,10 +3696,52 @@ export default function ProductTab({
     } catch (_) {}
   };
 
-  // ریست کامل‌تر روی دابل‌کلیک Refresh (مرتب‌سازی + نمای گروهی)
+  // لیبل شناور دسته (فرش) هنگام اسکرول — همون منطق تب متریال
+  useEffect(() => {
+    if (!groupedView) { setFloatingCatLabel(""); return; }
+    const onScroll = () => {
+      const panelEl = document.querySelector('div[style*="position: fixed"]');
+      const scrollY = panelEl ? panelEl.scrollTop : (window.scrollY || document.documentElement.scrollTop || 0);
+      if (scrollY <= 0) { setFloatingCatLabel(""); return; }
+
+      const entries = Object.entries(groupSectionRefs.current || {});
+      // همون باگ تب متریال: stickyTop رشته‌ی calc()ه نه عدد، +96 بهش رشته می‌سازه و
+      // مقایسه‌ها همیشه false می‌شن (NaN) — لیبل هیچ‌وقت نشون داده نمی‌شد. الان مستقیم
+      // از خودِ بلوک sticky هدر لبه‌ی پایینش اندازه گرفته می‌شه.
+      const headerBottom = stickyHeaderRef.current ? stickyHeaderRef.current.getBoundingClientRect().bottom : 184;
+      let current = "";
+      let best = -Infinity;
+      for (const [name, el] of entries) {
+        if (!el) continue;
+        const top = el.getBoundingClientRect().top;
+        if (top < headerBottom && top > best) { best = top; current = name; }
+      }
+      if (current) {
+        const el = groupSectionRefs.current[current];
+        const top = el ? el.getBoundingClientRect().top : -Infinity;
+        if (top >= headerBottom) current = "";
+      }
+      setFloatingCatLabel(current);
+    };
+    window.addEventListener("scroll", onScroll, true);
+    document.addEventListener("scroll", onScroll, true);
+    const panel = document.querySelector('div[style*="position: fixed"]');
+    if (panel) panel.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    const t = setInterval(onScroll, 400);
+    return () => {
+      window.removeEventListener("scroll", onScroll, true);
+      document.removeEventListener("scroll", onScroll, true);
+      if (panel) panel.removeEventListener("scroll", onScroll);
+      clearInterval(t);
+    };
+  }, [groupedView, stickyTop]);
+
+  // Refresh (تک‌ضربه) → ریست کامل‌تر مرتب‌سازی + حالت گروه‌بندی + نمای گروهی
   useEffect(() => {
     if (!refreshResetTick) return;
     if (setSortOrder) setSortOrder("code");
+    if (setSortMode) setSortMode("code");
     setGroupedView(true);
     try { localStorage.setItem("product_grouped_view", "true"); } catch (_) {}
   }, [refreshResetTick]);
@@ -3507,6 +3749,7 @@ export default function ProductTab({
   return (
     <div style={{ padding: "0 0 100px 0" }} dir="rtl">
       <div
+        ref={stickyHeaderRef}
         style={{
           position: "sticky",
           top: stickyTop,
@@ -3542,7 +3785,7 @@ export default function ProductTab({
             <button
               style={{
                 ...S.chip,
-                padding: "6px 8px",
+                padding: "2px 8px",
                 fontSize: 10,
                 position: "relative",
                 background: ((filterStatus || []).length > 0 && (filterStatus || []).length < 3) ? "#2a1414" : "#1c1c1c",
@@ -3596,7 +3839,7 @@ export default function ProductTab({
             <button
               style={{
                 ...S.chip,
-                padding: "6px 10px",
+                padding: "2px 10px",
                 fontSize: 10,
                 position: "relative",
                 background: isLocationSelected() ? "#2a1414" : "#1c1c1c",
@@ -3697,10 +3940,11 @@ export default function ProductTab({
           {(productTypes || []).length > 0 && (
             <div style={{ position: "relative" }}>
               <button
+                ref={typeFilterBtnRef}
                 title={(typeFilter || []).length > 0 ? (typeFilter || []).map((id) => productTypes.find((t) => t.id === id)?.name).filter(Boolean).join("، ") : "همه"}
                 style={{
                   ...S.chip,
-                  padding: "6px 10px",
+                  padding: "2px 10px",
                   fontSize: 10,
                   background: (typeFilter || []).length > 0 ? "#2a1414" : "#1c1c1c",
                   border: (typeFilter || []).length > 0 ? "1px solid #8B1A1A" : "1px solid #2a2a2a",
@@ -3710,7 +3954,7 @@ export default function ProductTab({
               >
                 <Tag size={13} />
               </button>
-              <FilterPopup open={showTypeFilterMenu} onClose={() => setShowTypeFilterMenu(false)} width={160}>
+              <FilterPopup open={showTypeFilterMenu} onClose={() => setShowTypeFilterMenu(false)} width={220} maxHeight={320}>
                   <button
                     style={{ display: "block", width: "100%", textAlign: "right", padding: "8px 8px", background: (typeFilter || []).length === 0 ? "#2a1414" : "transparent", border: "none", color: (typeFilter || []).length === 0 ? "#d88888" : "#ddd", fontSize: 11, fontFamily: "inherit", cursor: "pointer", borderRadius: 4 }}
                     onClick={() => setTypeFilter([])}
@@ -3732,15 +3976,42 @@ export default function ProductTab({
                       </button>
                     );
                   })}
+                  {/* کالیگرافی یه تگ اضافه‌ست، نه یه نوع اصلی — به‌همین‌خاطر جدا از productTypes با شناسه‌ی مصنوعی نمایش داده می‌شه، تا با انتخابش محصولات هم‌زمان زیر نوع اصلی‌شون هم قابل‌فیلتر بمونن */}
+                  <button
+                    style={{ display: "block", width: "100%", textAlign: "right", padding: "8px 8px", background: (typeFilter || []).includes("__calligraphy__") ? "#2a1414" : "transparent", border: "none", borderTop: "1px solid #232323", color: (typeFilter || []).includes("__calligraphy__") ? "#d88888" : "#ddd", fontSize: 11, fontFamily: "inherit", cursor: "pointer", borderRadius: 4 }}
+                    onClick={() => {
+                      setTypeFilter((prev) => prev.includes("__calligraphy__") ? prev.filter((id) => id !== "__calligraphy__") : [...prev, "__calligraphy__"]);
+                    }}
+                  >
+                    کالیگرافی
+                  </button>
               </FilterPopup>
             </div>
           )}
 
-          <SortButton sortOrder={sortOrder} setSortOrder={setSortOrder} modes={SORT_MODES} style={{}} groupedView={groupedView} onToggleGrouped={toggleGroupedView} />
+          <SortButton
+            sortOrder={sortOrder}
+            setSortOrder={setSortOrder}
+            modes={SORT_MODES}
+            style={{}}
+            groupedView={groupedView}
+            onToggleGrouped={toggleGroupedView}
+            groupByTypeActive={groupedView && sortMode === "type"}
+            onGroupByFabric={() => {
+              if (setSortMode) setSortMode("fabric");
+              if (!groupedView) toggleGroupedView();
+            }}
+            onGroupByType={() => {
+              if (setSortMode) setSortMode("type");
+              if (!groupedView) toggleGroupedView();
+            }}
+          />
           <button
             style={{
               ...S.chip,
               padding: "7px 10px",
+              height: 32,
+              minHeight: 32,
               position: "relative",
               background: basket.length > 0 ? "#2a1414" : "#1c1c1c",
               border: basket.length > 0 ? "1px solid #8B1A1A" : "1px solid #2a2a2a",
@@ -3770,6 +4041,54 @@ export default function ProductTab({
             )}
           </button>
         </div>
+
+        {groupedView && floatingCatLabel ? (
+          <div
+            onClick={() => {
+              const el = groupSectionRefs.current[floatingCatLabel];
+              if (!el || !stickyHeaderRef.current) return;
+              const headerBottom = stickyHeaderRef.current.getBoundingClientRect().bottom;
+              const delta = el.getBoundingClientRect().top - headerBottom - 4;
+              const panelEl = document.querySelector('div[style*="position: fixed"]');
+              if (panelEl && typeof panelEl.scrollBy === "function") {
+                panelEl.scrollBy({ top: delta, behavior: "smooth" });
+              } else {
+                window.scrollBy({ top: delta, behavior: "smooth" });
+              }
+            }}
+            style={{
+              // قبلاً توی flow خودِ بلوک sticky هدر بود، یعنی پس‌زمینه‌ی تیره‌ی همون بلوک
+              // (تمام عرض صفحه) کش می‌اومد پایین‌تر تا این لیبل رو هم بگیره — یه نوار
+              // مشکی عریض به‌جای یه حباب کوچیک شناور. الان با position:absolute کاملاً
+              // مستقل شناوره (مثل دکمه‌ی اسکرول‌به‌بالا یا FAB قرمز +).
+              position: "absolute",
+              top: "100%",
+              left: 14,
+              marginTop: 6,
+              zIndex: 14,
+              width: "fit-content",
+              maxWidth: "70%",
+              minHeight: 28,
+              height: 28,
+              background: "rgba(40,40,40,0.92)",
+              color: "#bbb",
+              fontSize: 10,
+              padding: "0 14px",
+              borderRadius: 12,
+              pointerEvents: "auto",
+              textAlign: "center",
+              backdropFilter: "blur(4px)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              border: "1px solid #2a2a2a",
+              boxSizing: "border-box",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+            }}
+          >
+            {floatingCatLabel}
+          </div>
+        ) : null}
       </div>
 
       {groupedView ? (
@@ -3780,7 +4099,11 @@ export default function ProductTab({
               if (b === "در دست ساخت") return -1;
               if (a === "بدون فرش") return 1;
               if (b === "بدون فرش") return -1;
-              if (sortMode === "fabric") return 0; // ترتیب از قبل بر اساس کمترین کد محصول در groupedProducts محاسبه شده
+              if (a === "بدون دسته") return 1;
+              if (b === "بدون دسته") return -1;
+              if (a === "بدون نوع") return 1;
+              if (b === "بدون نوع") return -1;
+              if (sortMode === "fabric" || sortMode === "code" || sortMode === "type") return 0; // ترتیب از قبل بر اساس کمترین کد محصول در groupedProducts محاسبه شده
               return a.localeCompare(b, "fa");
             })
             .map(([groupName, prods]) => {
@@ -3789,7 +4112,16 @@ export default function ProductTab({
             const isCollapsed = collapsedGroups[groupName];
             return (
               <div key={groupName} style={{ marginBottom: 4 }}>
-                <GroupHeader title={groupName} count={filteredProds.length} isOpen={!isCollapsed} onToggle={() => toggleGroup(groupName)} />
+                <GroupHeader
+                  title={groupName}
+                  count={filteredProds.length}
+                  isOpen={!isCollapsed}
+                  onToggle={() => toggleGroup(groupName)}
+                  sectionRef={(el) => {
+                    if (el) groupSectionRefs.current[groupName] = el;
+                    else delete groupSectionRefs.current[groupName];
+                  }}
+                />
                 {!isCollapsed && filteredProds.map((p) => (
                   <ProductCard
                     key={p.id}
@@ -3991,9 +4323,10 @@ export default function ProductTab({
   );
 }
 
-function GroupHeader({ title, count, isOpen, onToggle }) {
+function GroupHeader({ title, count, isOpen, onToggle, sectionRef }) {
   return (
     <button
+      ref={sectionRef}
       style={{
         width: "100%",
         background: "transparent",

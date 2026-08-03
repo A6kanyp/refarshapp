@@ -20,7 +20,18 @@ function CardImage({ filename, category, alt = "", style, onClick, referrerPolic
   const resolvedSrc = useResolvedImageSrc(isLegacyInline ? null : filename, category);
   if (!filename) return null;
   const src = isLegacyInline ? filename : resolvedSrc;
-  if (!src) return <div style={{ ...style, background: "#161616" }} onClick={onClick} />;
+  // resolvedSrc===null یعنی هنوز در حال resolve؛ undefined بعد از resolve = فایل نیست
+  if (!isLegacyInline && resolvedSrc === undefined) {
+    return <div style={{ ...style, background: "#161616" }} onClick={onClick} />;
+  }
+  if (!src) {
+    // فایل در پوشه/IndexedDB پیدا نشد — همون علامت زرد ProductImage
+    return (
+      <div style={{ ...style, background: "#161616", position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={onClick}>
+        <span title="فایل عکس در پوشه پیدا نشد" style={{ position: "absolute", top: 4, left: 4, width: 16, height: 16, borderRadius: "50%", background: "#e0b93c", color: "#1a1a1a", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>!</span>
+      </div>
+    );
+  }
   return <img src={src} alt={alt} style={style} onClick={onClick} referrerPolicy={referrerPolicy} />;
 }
 

@@ -3,8 +3,9 @@ import {
   Receipt, Eye, Printer, Search, ArrowUpDown, ChevronDown, ChevronUp, FileText, 
   Calendar, CheckCircle2, AlertCircle, ShoppingBag, Landmark, User, DollarSign,
   Palette, Edit3, Save, RefreshCw, Filter, X
-, Trash2, Edit2 } from "lucide-react";
+, Trash2, Edit2, Plus } from "lucide-react";
 import { fmt, fmtCode, fmtDate, toNum, formatProductDims, qtySuffix } from "../mathCore";
+import { uid } from "../dataModels";
 import { JalaliDatePicker } from "./JalaliDatePicker";
 import InvoicePrint from "./InvoicePrint";
 
@@ -45,6 +46,8 @@ export default function InvoicesTab({
   const [editSettled, setEditSettled] = useState(true);
   const [autoPrint, setAutoPrint] = useState(false);
   const [expandedInvoiceId, setExpandedInvoiceId] = useState(null);
+  const [showAddItemPicker, setShowAddItemPicker] = useState(false);
+  const [addItemQuery, setAddItemQuery] = useState("");
 
   // States for پیش‌فاکتور (Draft) Creator — قبلاً «Sandbox» بود؛ الان به‌جای
   // دیتای تستی/دستی، از محصولات واقعی انتخاب می‌شه
@@ -72,6 +75,15 @@ export default function InvoicesTab({
       : availableProductsForDraft;
     return pool.slice(0, 40);
   }, [productPickerQuery, availableProductsForDraft]);
+
+  // پیدا کردن محصولات موجود برای افزودن به یک فاکتور ثبت‌شده در حال ویرایش
+  const addItemResults = useMemo(() => {
+    const q = addItemQuery.trim().toLowerCase();
+    const pool = q
+      ? availableProductsForDraft.filter((p) => p.name?.toLowerCase().includes(q) || String(p.code).includes(q))
+      : availableProductsForDraft;
+    return pool.slice(0, 30);
+  }, [addItemQuery, availableProductsForDraft]);
 
   const addProductToDraft = (p) => {
     setCustomItems((items) => [...items, {
@@ -144,6 +156,63 @@ export default function InvoicesTab({
     setData((d) => ({ ...d, invoiceDrafts: (d.invoiceDrafts || []).filter((x) => x.id !== id) }));
     if (currentDraftId === id) resetDraftForm();
     notify && notify("پیش‌فاکتور حذف شد");
+  };
+
+  // یه پیش‌فاکتور ذخیره‌شده رو «نهایی» می‌کنه: محصولات واقعیِ توش (که productId دارن) رو
+  // sold می‌کنه (دقیقاً همون قراردادی که سبد خرید تب محصولات برای فروش استفاده می‌کنه)
+  // و خودِ پیش‌فاکتور از لیست پیش‌نویس‌ها حذف می‌شه — از اون به بعد جزو فاکتورهای رسمی‌ست
+  const handleFinalizeDraft = (draft) => {
+    if (!setData) return;
+    const itemsWithProduct = (draft.items || []).filter((it) => it.productId);
+    if (itemsWithProduct.length === 0) {
+      notify && notify("این پیش‌فاکتور هیچ محصول واقعی‌ای نداره که بشه نهایی‌ش کرد");
+      return;
+    }
+    const name = (draft.buyerName || "").trim();
+    const saleDate = draft.date || new Date().toISOString().substring(0, 10);
+    const priceById = {};
+    itemsWithProduct.forEach((it) => { priceById[it.productId] = toNum(it.finalPrice); });
+    const ids = new Set(itemsWithProduct.map((it) => it.productId));
+
+    setData((d) => {
+      let customersList = [...(d.customers || [])];
+      let custId = null;
+      if (name) {
+        const existing = customersList.find((c) => c.kind === "customer" && c.name.toLowerCase() === name.toLowerCase());
+        if (existing) {
+          custId = existing.id;
+        } else {
+          const nc = { id: uid(), name, phone: draft.buyerPhone || "", note: draft.buyerAddress || "", color: "#8B1A1A", kind: "customer" };
+          customersList = [...customersList, nc];
+          custId = nc.id;
+        }
+      }
+      const updatedProducts = d.products.map((p) => {
+        if (!ids.has(p.id)) return p;
+        const orig = toNum(p.salePrice);
+        const fp = priceById[p.id];
+        const discPct = orig > 0 && fp < orig ? Math.round((1 - fp / orig) * 100) : 0;
+        return {
+          ...p,
+          status: "sold",
+          location: custId || p.location,
+          buyerCustomerId: custId,
+          buyerName: name,
+          buyerPhone: draft.buyerPhone || "",
+          buyerAddress: draft.buyerAddress || "",
+          buyerGender: draft.buyerGender || "",
+          saleDate,
+          settled: !!draft.isSettled,
+          settleDate: draft.isSettled ? saleDate : null,
+          discountPercent: discPct,
+          discountedPrice: fp,
+        };
+      });
+      const nextDrafts = (d.invoiceDrafts || []).filter((x) => x.id !== draft.id);
+      return { ...d, products: updatedProducts, customers: customersList, invoiceDrafts: nextDrafts };
+    });
+    if (currentDraftId === draft.id) resetDraftForm();
+    notify && notify("پیش‌فاکتور نهایی و به فاکتور رسمی تبدیل شد");
   };
 
   // Compute Invoices Grouped from Product Totals
@@ -248,6 +317,8 @@ export default function InvoicesTab({
     setEditDate(inv.date);
     setEditSettled(inv.allSettled);
     setExpandedInvoiceId(inv.id);
+    setShowAddItemPicker(false);
+    setAddItemQuery("");
   };
 
   const handleSaveInvoiceEdit = (invId) => {
@@ -309,6 +380,69 @@ export default function InvoicesTab({
       if (notify) notify("فاکتور با موفقیت ویرایش شد");
     }
     setEditingId(null);
+  };
+
+  // یک قلم رو از فاکتور جدا می‌کنه (برخلاف حذف کل فاکتور) — محصول به انبار برمی‌گرده
+  const handleRemoveItemFromInvoice = (productId) => {
+    if (!setData) return;
+    setData((d) => ({
+      ...d,
+      products: d.products.map((p) =>
+        p.id === productId
+          ? {
+              ...p,
+              status: "available",
+              location: "warehouse",
+              buyerCustomerId: null,
+              buyerName: "",
+              buyerPhone: "",
+              saleDate: null,
+              settled: false,
+              settleDate: null,
+            }
+          : p
+      ),
+    }));
+    if (notify) notify("کالا از فاکتور جدا و به انبار برگشت");
+  };
+
+  // یک محصول موجود رو به فاکتور در حال ویرایش اضافه می‌کنه
+  const handleAddItemToInvoice = (inv, product) => {
+    if (!setData) return;
+    setData((d) => ({
+      ...d,
+      products: d.products.map((p) =>
+        p.id === product.id
+          ? {
+              ...p,
+              status: "sold",
+              location: inv.buyerId,
+              buyerCustomerId: inv.buyerId === "warehouse" ? null : inv.buyerId,
+              buyerName: editBuyerName || inv.buyerName,
+              buyerPhone: editBuyerPhone || inv.buyerPhone,
+              saleDate: editDate || inv.date,
+              settled: editSettled,
+              settleDate: editSettled ? (editDate || inv.date) : null,
+            }
+          : p
+      ),
+    }));
+    if (notify) notify("محصول به فاکتور اضافه شد");
+  };
+
+  // تخفیف تک‌تک اقلام — مستقیم روی خودِ رکورد محصول می‌نویسه (discountPercent/discountedPrice)
+  // پس این تغییر همه‌جای دیگه (تب محصولات، حسابداری و...) هم که همین فیلدها رو می‌خونن دیده می‌شه
+  const handleItemDiscountChange = (product, rawValue) => {
+    if (!setData) return;
+    const disc = rawValue === "" ? 0 : Math.min(100, Math.max(0, parseFloat(rawValue) || 0));
+    const sp = toNum(product.salePrice);
+    const dp = disc > 0 ? Math.round(sp * (1 - disc / 100)) : sp;
+    setData((d) => ({
+      ...d,
+      products: d.products.map((p) =>
+        p.id === product.id ? { ...p, discountPercent: disc, discountedPrice: dp } : p
+      ),
+    }));
   };
 
   const handleDeleteInvoice = (invId, e) => {
@@ -423,13 +557,18 @@ export default function InvoicesTab({
       items: customItems.map((item) => ({
         ...item,
         originalPrice: item.finalPrice,
-        discountPct: 0
+        discountPct: 0,
+        // آیتم ۲ (نمای پیشرفته): وضعیت تسویه‌ی کل پیش‌فاکتور به هر قلم اعمال می‌شه
+        // (قبلاً هر قلم همیشه isSettled پیش‌فرض/undefined بود، مستقل از تاگل بالای فرم)
+        isSettled: customIsSettled,
       })),
       totals: {
         total: customItems.reduce((s, x) => s + toNum(x.finalPrice), 0),
         discount: 0,
         final: customItems.reduce((s, x) => s + toNum(x.finalPrice), 0)
-      }
+      },
+      // مبلغ ودیعه هم توی چاپ/پیش‌نمایش A4 از مبلغ نهایی کم بشه (InvoiceTemplate.jsx)
+      depositAmount: customIsSettled ? 0 : toNum(customDeposit),
     };
     setAutoPrint(false);
     setActivePrintInvoice(invoiceData);
@@ -646,7 +785,98 @@ export default function InvoicesTab({
                       </div>
                     </div>
 
-                    {isExpanded && (
+                    {isExpanded && editingId === inv.id && (
+                      <div style={{ padding: "10px 12px", background: "#0a0a0a", borderTop: "1px solid #1e1e1e" }} onClick={(e) => e.stopPropagation()}>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+                          <div>
+                            <label style={{ fontSize: 9, color: "#888" }}>نام خریدار</label>
+                            <input onFocus={(e) => e.target.select()} style={{ ...S.input, width: "100%", height: 30, marginTop: 3 }} value={editBuyerName} onChange={(e) => setEditBuyerName(e.target.value)} />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: 9, color: "#888" }}>شماره تماس</label>
+                            <input onFocus={(e) => e.target.select()} style={{ ...S.input, width: "100%", height: 30, marginTop: 3 }} value={editBuyerPhone} onChange={(e) => setEditBuyerPhone(e.target.value)} />
+                          </div>
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10, alignItems: "end" }}>
+                          <div>
+                            <label style={{ fontSize: 9, color: "#888" }}>تاریخ فروش</label>
+                            <JalaliDatePicker value={editDate} onChange={(val) => setEditDate(val)} />
+                          </div>
+                          <button
+                            onClick={() => setEditSettled((s) => !s)}
+                            style={{ height: 32, borderRadius: 6, border: "none", cursor: "pointer", fontSize: 10.5, fontWeight: 600, background: editSettled ? "#1d3a24" : "#3a1d1d", color: editSettled ? "#5fd180" : "#e08a8a" }}
+                          >
+                            {editSettled ? "✓ تسویه‌شده" : "⚠ بدهکار"}
+                          </button>
+                        </div>
+
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 }}>
+                          {inv.items.map(p => (
+                            <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 6, paddingBottom: 5, borderBottom: "1px dashed #151515" }}>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 10, color: "#ccc", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>#{fmtCode(p.code)} {p.name}</div>
+                                <div style={{ fontSize: 9, color: "#666" }}>{fmt(toNum(p.salePrice))} ت</div>
+                              </div>
+                              <input
+                                type="number" min={0} max={100} onFocus={(e) => e.target.select()}
+                                value={toNum(p.discountPercent) || ""}
+                                placeholder="0٪"
+                                onChange={(e) => handleItemDiscountChange(p, e.target.value)}
+                                style={{ ...S.input, width: 46, height: 26, padding: "2px 4px", textAlign: "center", fontSize: 10 }}
+                                title="درصد تخفیف این کالا"
+                              />
+                              <button
+                                onClick={() => handleRemoveItemFromInvoice(p.id)}
+                                title="حذف این کالا از فاکتور"
+                                style={{ padding: "5px 7px", background: "#2a1414", border: "none", borderRadius: 4, cursor: "pointer", color: "#e08a8a" }}
+                              >
+                                <Trash2 size={10} />
+                              </button>
+                            </div>
+                          ))}
+                          {inv.items.length === 0 && (
+                            <div style={{ fontSize: 9.5, color: "#555", textAlign: "center", padding: "8px 0" }}>همه‌ی اقلام از این فاکتور جدا شدن</div>
+                          )}
+                        </div>
+
+                        {!showAddItemPicker ? (
+                          <button onClick={() => setShowAddItemPicker(true)} style={{ ...S.btnOutline, width: "100%", justifyContent: "center", fontSize: 10, marginBottom: 10 }}>
+                            <Plus size={11} /> افزودن محصول به این فاکتور
+                          </button>
+                        ) : (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
+                            <input
+                              autoFocus placeholder="جستجوی محصول موجود..."
+                              value={addItemQuery} onChange={(e) => setAddItemQuery(e.target.value)}
+                              style={{ ...S.input, width: "100%", height: 30 }}
+                            />
+                            <div style={{ maxHeight: 140, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
+                              {addItemResults.length === 0 ? (
+                                <div style={{ fontSize: 9.5, color: "#555", padding: "6px 0" }}>محصول موجودی پیدا نشد</div>
+                              ) : addItemResults.map((p) => (
+                                <div key={p.id}
+                                  onClick={() => { handleAddItemToInvoice(inv, p); setShowAddItemPicker(false); setAddItemQuery(""); }}
+                                  style={{ fontSize: 10, color: "#ccc", padding: "6px 8px", background: "#161616", borderRadius: 5, cursor: "pointer", display: "flex", justifyContent: "space-between" }}
+                                >
+                                  <span>#{fmtCode(p.code)} {p.name}</span>
+                                  <span style={{ color: "#5fd180" }}>{fmt(toNum(p.discountedPrice ?? p.salePrice))} ت</span>
+                                </div>
+                              ))}
+                            </div>
+                            <button onClick={() => { setShowAddItemPicker(false); setAddItemQuery(""); }} style={{ ...S.btnOutline, fontSize: 9.5, alignSelf: "flex-end", padding: "4px 10px" }}>بستن</button>
+                          </div>
+                        )}
+
+                        <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                          <button onClick={() => { setEditingId(null); setShowAddItemPicker(false); }} style={{ ...S.btnOutline, fontSize: 10, padding: "6px 12px" }}>انصراف</button>
+                          <button onClick={() => handleSaveInvoiceEdit(inv.id)} style={{ ...S.btn, fontSize: 10, padding: "6px 12px", background: "#1d3a24", color: "#5fd180" }}>
+                            <Save size={11} style={{ marginLeft: 3 }} /> ذخیره تغییرات
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {isExpanded && editingId !== inv.id && (
                       <div style={{ padding: "10px 12px", background: "#0a0a0a", borderTop: "1px solid #1e1e1e" }}>
                         <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 10 }}>
                           {inv.items.map(p => (
@@ -837,6 +1067,34 @@ export default function InvoicesTab({
               </div>
             </div>
 
+            {/* وضعیت تسویه + ودیعه + مبلغ قابل پرداخت */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, alignItems: "end" }}>
+              <button
+                onClick={() => setCustomIsSettled((s) => !s)}
+                style={{ height: 32, marginTop: 3, borderRadius: 6, border: "none", cursor: "pointer", fontSize: 10.5, fontWeight: 600, background: customIsSettled ? "#1d3a24" : "#3a1d1d", color: customIsSettled ? "#5fd180" : "#e08a8a" }}
+              >
+                {customIsSettled ? "✓ تسویه‌شده" : "⚠ بدهکار / پیش‌پرداخت"}
+              </button>
+              {!customIsSettled && (
+                <div>
+                  <label style={{ fontSize: 9, color: "#888" }}>مبلغ ودیعه (پیش‌پرداخت)</label>
+                  <input onFocus={(e) => e.target.select()}
+                    type="number"
+                    style={{ ...S.input, width: "100%", height: 32, marginTop: 3 }}
+                    value={customDeposit || ""}
+                    placeholder="0"
+                    onChange={(e) => setCustomDeposit(parseInt(e.target.value) || 0)}
+                  />
+                </div>
+              )}
+            </div>
+            {!customIsSettled && (
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, color: "#F5F0EB", background: "#161616", borderRadius: 8, padding: "8px 12px" }}>
+                <span style={{ color: "#888" }}>مبلغ قابل پرداخت (بعد از ودیعه)</span>
+                <span style={{ fontWeight: 700 }}>{fmt(Math.max(0, customItems.reduce((s, x) => s + toNum(x.finalPrice), 0) - toNum(customDeposit)))} ت</span>
+              </div>
+            )}
+
             <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
               <button style={{ ...S.btnOutline, flex: 1, justifyContent: "center" }} onClick={handleSaveDraft}>
                 <Save size={13} />
@@ -874,6 +1132,13 @@ export default function InvoicesTab({
                       <div style={{ fontSize: 9.5, color: "#666", marginTop: 2 }}>{(draft.items || []).length} قلم — {fmt(total)} ت</div>
                     </div>
                     <button style={{ ...S.chip }} onClick={() => handleLoadDraft(draft)}>باز کردن</button>
+                    <button
+                      style={{ ...S.chip, background: "#1d3a24", color: "#5fd180", border: "none" }}
+                      onClick={() => handleFinalizeDraft(draft)}
+                      title="تبدیل به فاکتور رسمی (محصولاتش sold می‌شن و از پیش‌نویس‌ها حذف می‌شه)"
+                    >
+                      <CheckCircle2 size={12} /> نهایی‌کردن
+                    </button>
                     <button style={{ background: "transparent", border: "none", color: "#8B1A1A", cursor: "pointer", padding: 4 }} onClick={() => handleDeleteDraft(draft.id)}>
                       <Trash2 size={14} />
                     </button>

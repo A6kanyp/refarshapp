@@ -14,6 +14,19 @@ import { FilterPopup } from "./FilterPopup";
 import { useToast } from "../contexts/ToastContext.jsx";
 import InvoicePrint from "./InvoicePrint";
 import { useRegisterOpenModal } from "../utils/modalRegistry";
+import { useResolvedImageSrc, IMAGE_CATEGORIES } from "../utils/imageStorage";
+
+// عکس کوچیک محصول توی خط گالری/اکسپورت — قبلاً از یه getImageUrl قدیمی و
+// import‌نشده استفاده می‌شد («getImageUrl is not defined»، همیشه کرش می‌کرد چون
+// عکس‌ها دیگه data URL/مسیر مستقیم نیستن، فقط اسم فایل‌ان). الان از همون سیستم
+// resolve واقعی (فایل محلی/IndexedDB) که ProductTab/InvoiceTemplate استفاده می‌کنن.
+function GalleryProductThumb({ filename, size = 30 }) {
+  const isLegacyInline = !!filename && (filename.startsWith("data:") || filename.startsWith("http") || filename.startsWith("/"));
+  const resolvedSrc = useResolvedImageSrc(isLegacyInline ? null : filename, IMAGE_CATEGORIES.PRODUCT);
+  const src = isLegacyInline ? filename : resolvedSrc;
+  if (!filename || !src) return null;
+  return <img src={src} alt="" style={{ width: size, height: size, borderRadius: 5, objectFit: "cover", flexShrink: 0 }} loading="lazy" />;
+}
 
 // raw window.confirm()/confirm() is unreliable inside the mobile app webview,
 // so invoice-related confirmations use this in-app dialog instead.
@@ -45,7 +58,7 @@ const T = {
     outline: "none",
     boxSizing: "border-box",
   },
-  chip: { background:"#1c1c1c", border:"1px solid #2a2a2a", color:"#888", fontSize:10, padding:"6px 9px", borderRadius:12, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap", display:"inline-flex", alignItems:"center", justifyContent:"center", minHeight:32, height:32, boxSizing:"border-box" },
+  chip: { background:"#1c1c1c", border:"1px solid #2a2a2a", color:"#888", fontSize:10, padding:"2px 9px", borderRadius:11, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap", display:"inline-flex", alignItems:"center", justifyContent:"center", minHeight:22, height:22, boxSizing:"border-box" },
   chipActive: {
     background: "#2a1414",
     border: "1px solid #8B1A1A",
@@ -98,10 +111,10 @@ const T = {
 };
 
 const SORT_MODES = [
-  { key: "az", kind: "text", ascText: "Az", descText: "Za" },
-  { key: "date", kind: "icon", Icon: Clock },
-  { key: "count", kind: "text", ascText: "123", descText: "321" },
-  { key: "balance", kind: "icon", Icon: ShoppingBag },
+  { key: "az", kind: "text", ascText: "Az", descText: "Za", label: "الفبا" },
+  { key: "date", kind: "icon", Icon: Clock, label: "تاریخ" },
+  { key: "count", kind: "text", ascText: "123", descText: "321", label: "تعداد" },
+  { key: "balance", kind: "icon", Icon: ShoppingBag, label: "موجودی" },
 ];
 
 function cycleSort(current) {
@@ -142,7 +155,7 @@ function SortButton({ sortOrder, setSortOrder, modes }) {
       <button
         style={{
           ...T.chip,
-          padding: "6px 10px",
+          padding: "2px 10px",
           fontSize: 10,
           position: "relative",
         }}
@@ -156,7 +169,10 @@ function SortButton({ sortOrder, setSortOrder, modes }) {
           <button
             key={mode.key}
             style={{
-              display: "block",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 8,
               width: "100%",
               padding: "8px 10px",
               background: baseOrder === mode.key ? "#2a1414" : "transparent",
@@ -178,6 +194,7 @@ function SortButton({ sortOrder, setSortOrder, modes }) {
             }}
           >
             {renderMode(mode, baseOrder === mode.key)}
+            {mode.label && <span>{mode.label}</span>}
           </button>
         ))}
       </FilterPopup>
@@ -908,13 +925,13 @@ function CustomerCard({
             </div>
           </div>
           <button
-            style={T.iconBtn}
+            style={{ ...T.iconBtn, width: 22, height: 22, justifyContent: "center" }}
             onClick={(e) => { e.stopPropagation(); onEdit(stat); }}
           >
             <Edit3 size={12} color="#555" />
           </button>
           <button
-            style={T.iconBtn}
+            style={{ ...T.iconBtn, width: 22, height: 22, justifyContent: "center" }}
             onClick={(e) => { e.stopPropagation(); onRequestDelete(stat.id); }}
           >
             <Trash2 size={12} color="#e08a8a" />
@@ -972,7 +989,7 @@ function CustomerCard({
                 <div style={{ fontSize: 9.5, color: "#f2c94c", margin: "10px 0 6px", fontWeight: 600 }}>موجود ({held.length})</div>
                 {held.map((p) => (
                   <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderBottom: "1px solid #1a1a1a" }}>
-                    {p.image && <img src={getImageUrl(p.image)} alt="" style={{ width: 30, height: 30, borderRadius: 5, objectFit: "cover", flexShrink: 0 }} loading="lazy" />}
+                    <GalleryProductThumb filename={p.image} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 11, color: "#ddd" }}>#{fmtCode(p.code)} {p.name}</div>
                     </div>
@@ -1238,6 +1255,8 @@ function InvoiceListModal({ stat, products, onClose, onSetProductSold, onSetProd
   const [selectedInvoices, setSelectedInvoices] = useState({});
   const [confirmDeleteInv, setConfirmDeleteInv] = useState(null);
   const [confirmReturnProduct, setConfirmReturnProduct] = useState(null);
+  const [addItemQuery, setAddItemQuery] = useState("");
+  const [editingId2, setEditingId2] = useState(null); // برای toggle پیکر افزودن محصول، مستقل از editingId (که برای ویرایش تاریخ/تسویه‌ست)
 
   // Get both sold and available products for this gallery
   const galleryProducts = products.filter(p => p.location === stat.id && (p.status === "sold" || p.status === "available"));
@@ -1406,6 +1425,46 @@ function InvoiceListModal({ stat, products, onClose, onSetProductSold, onSetProd
     }));
   };
 
+  // محصولات موجودِ قابل‌افزودن به یه فاکتور ثبت‌شده‌ی این گالری (از انبار/هرجای دیگه)
+  const addItemResults = useMemo(() => {
+    const q = addItemQuery.trim().toLowerCase();
+    const pool = products.filter((p) => p.status === "available");
+    const filtered = q ? pool.filter((p) => p.name?.toLowerCase().includes(q) || String(p.code).includes(q)) : pool;
+    return filtered.slice(0, 30);
+  }, [products, addItemQuery]);
+
+  // یه محصول موجود رو مستقیم به یه فاکتور ثبت‌شده‌ی این گالری اضافه می‌کنه
+  const handleAddItemToInvoice = (inv, product) => {
+    if (!setData) return;
+    const saleDate = (() => {
+      const d = new Date(inv.date);
+      return isNaN(d.getTime()) ? todayISO() : d.toISOString();
+    })();
+    setData((d) => ({
+      ...d,
+      products: d.products.map((p) =>
+        p.id === product.id
+          ? { ...p, status: "sold", location: stat.id, saleDate, settled: inv.allSettled, settleDate: inv.allSettled ? saleDate : null }
+          : p
+      ),
+    }));
+    if (notify) notify("محصول به فاکتور اضافه شد");
+  };
+
+  // تخفیف تک‌تک اقلام — مستقیم روی رکورد محصول می‌نویسه (discountPercent/discountedPrice)
+  // پس تب محصولات و بقیه‌ی جاهایی که همین فاکتور رو نشون می‌دن هم آپدیت‌شده می‌بینن
+  const handleItemDiscountChange = (product, rawValue) => {
+    if (!setData) return;
+    const disc = rawValue === "" ? 0 : Math.min(100, Math.max(0, parseFloat(rawValue) || 0));
+    const sp = toNum(product.salePrice);
+    const dp = disc > 0 ? Math.round(sp * (1 - disc / 100)) : sp;
+    setData((d) => ({
+      ...d,
+      products: d.products.map((p) => (p.id === product.id ? { ...p, discountPercent: disc, discountedPrice: dp } : p)),
+    }));
+  };
+
+
   const handleEditClick = (inv) => {
     setEditingId(inv.id);
     setEditDate(inv.date === "موجود در گالری" ? "" : inv.date);
@@ -1562,26 +1621,68 @@ function InvoiceListModal({ stat, products, onClose, onSetProductSold, onSetProd
                   ) : (
                     <div style={{ margin: "10px 0", padding: "10px", background: "#141414", borderRadius: 8 }}>
                       {inv.items.map(p => (
-                         <div key={p.id} style={{ display: "grid", gridTemplateColumns: "1fr 60px 60px 30px", alignItems: "center", fontSize: 11, color: "#ccc", marginBottom: 6, borderBottom: "1px solid #1e1e1e", paddingBottom: 6 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <button style={{ background: "transparent", border: "none", color: "#8B1A1A", cursor: "pointer", padding: 2 }} onClick={() => setConfirmReturnProduct(p)} title="بازگشت به انبار"><X size={10}/></button>
-                            <span>#{fmtCode(p.code)} {p.name}</span>
+                         <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#ccc", marginBottom: 6, borderBottom: "1px solid #1e1e1e", paddingBottom: 6 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
+                            <button style={{ background: "transparent", border: "none", color: "#8B1A1A", cursor: "pointer", padding: 2, flexShrink: 0 }} onClick={() => setConfirmReturnProduct(p)} title="بازگشت به انبار"><X size={10}/></button>
+                            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>#{fmtCode(p.code)} {p.name}</span>
                             {!p.isAvailableInGallery && (
                                <button 
-                                 style={{ background: p.settled ? "#21965320" : "#d87c1d20", color: p.settled ? "#219653" : "#d87c1d", border: "none", padding: "2px 6px", borderRadius: 4, fontSize: 9, cursor: "pointer", marginRight: 8 }}
+                                 style={{ background: p.settled ? "#21965320" : "#d87c1d20", color: p.settled ? "#219653" : "#d87c1d", border: "none", padding: "2px 6px", borderRadius: 4, fontSize: 9, cursor: "pointer", marginRight: 8, flexShrink: 0 }}
                                  onClick={() => handleToggleItemStatus(p)}
                                >
                                  {p.settled ? "تسویه" : "بدهکار"}
                                </button>
                             )}
                           </div>
-                          <span>{fmt(toNum(p.salePrice) || toNum(p.price))} ت</span>
+                          {!p.isAvailableInGallery && (
+                            <input
+                              type="number" min={0} max={100} onFocus={(e) => e.target.select()}
+                              value={toNum(p.discountPercent) || ""}
+                              placeholder="0٪"
+                              onChange={(e) => handleItemDiscountChange(p, e.target.value)}
+                              title="درصد تخفیف این کالا"
+                              style={{ width: 42, height: 24, padding: "2px 4px", textAlign: "center", fontSize: 10, background: "#1c1c1c", border: "1px solid #2a2a2a", borderRadius: 5, color: "#ddd", flexShrink: 0 }}
+                            />
+                          )}
+                          <span style={{ flexShrink: 0, minWidth: 60, textAlign: "left" }}>{fmt(toNum(p.salePrice) || toNum(p.price))} ت</span>
                         </div>
                       ))}
                       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#fff", fontWeight: 600, marginTop: 10 }}>
                         <span>جمع کل:</span>
                         <span>{fmt(inv.total)} ت</span>
                       </div>
+
+                      {!inv.isAvailableGroup && (
+                        <div style={{ marginTop: 10 }}>
+                          {editingId2 !== inv.id ? (
+                            <button onClick={() => setEditingId2(inv.id)} style={{ width: "100%", justifyContent: "center", display: "flex", alignItems: "center", gap: 6, background: "transparent", border: "1px solid #2a2a2a", color: "#888", borderRadius: 6, padding: "6px 0", fontSize: 10, cursor: "pointer" }}>
+                              <Plus size={12} /> افزودن محصول به این فاکتور
+                            </button>
+                          ) : (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                              <input
+                                autoFocus placeholder="جستجوی محصول موجود..."
+                                value={addItemQuery} onChange={(e) => setAddItemQuery(e.target.value)}
+                                style={{ width: "100%", height: 30, background: "#1c1c1c", border: "1px solid #2a2a2a", borderRadius: 6, color: "#ddd", fontSize: 11, padding: "0 10px", boxSizing: "border-box" }}
+                              />
+                              <div style={{ maxHeight: 140, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
+                                {addItemResults.length === 0 ? (
+                                  <div style={{ fontSize: 9.5, color: "#555", padding: "6px 0" }}>محصول موجودی پیدا نشد</div>
+                                ) : addItemResults.map((p) => (
+                                  <div key={p.id}
+                                    onClick={() => { handleAddItemToInvoice(inv, p); setEditingId2(null); setAddItemQuery(""); }}
+                                    style={{ fontSize: 10, color: "#ccc", padding: "6px 8px", background: "#1c1c1c", borderRadius: 5, cursor: "pointer", display: "flex", justifyContent: "space-between" }}
+                                  >
+                                    <span>#{fmtCode(p.code)} {p.name}</span>
+                                    <span style={{ color: "#5fd180" }}>{fmt(toNum(p.discountedPrice ?? p.salePrice))} ت</span>
+                                  </div>
+                                ))}
+                              </div>
+                              <button onClick={() => { setEditingId2(null); setAddItemQuery(""); }} style={{ alignSelf: "flex-end", background: "transparent", border: "1px solid #2a2a2a", color: "#888", borderRadius: 6, padding: "4px 10px", fontSize: 9.5, cursor: "pointer" }}>بستن</button>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                   
@@ -1647,12 +1748,13 @@ export default function GalleryTab({
   const [gallerySearch, setGallerySearch] = useState("");
   const [statusFilter, setStatusFilter] = useState([]); // چند-انتخابی: "debt" | "hasStock"
 
-  // دابل‌کلیک Refresh → ریست فیلترهای گالری
+  // Refresh (تک‌ضربه) → ریست فیلترهای گالری + بستن ردیف‌های بازشده
   useEffect(() => {
     if (!refreshResetTick) return;
     setGallerySearch("");
     setStatusFilter([]);
     if (setSortOrder) setSortOrder("name");
+    setExpandedCardId(null);
   }, [refreshResetTick]);
   useEffect(() => {
     if (!editingCustomer) return;

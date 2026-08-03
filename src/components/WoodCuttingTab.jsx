@@ -5,7 +5,7 @@ import React, { useState, useMemo, memo, useRef, useEffect } from "react";
 import { Trash2, ChevronDown, ChevronUp, RotateCcw, Plus, Eye, EyeOff, Download, X, Package, Save, Upload, Image as ImageIcon, FileText, Clock } from "lucide-react";
 import html2canvas from "html2canvas";
 import { saveFile, REFARSH_SAVE_DIRS } from "../utils/nativeSave";
-import { toNum, normalizeNumericInput, fmtCode } from "../mathCore";
+import { toNum, normalizeNumericInput, fmtCode, formatProductDims } from "../mathCore";
 import { getJalaliTimestamp } from "../utils/formatters";
 import { NestingVisualizer } from "./NestingVisualizer";
 import {
@@ -163,10 +163,17 @@ function computePlankRowLayout(cuts, wasteLength, kerfVal, stockLength, targetWi
   const K = r2(kerfVal || 0);
   const totalLen = toNum(stockLength) || (cuts.reduce((s, c) => s + toNum(c.length), 0) + wasteLength);
   const n = cuts.length;
-  // گپ یکسان برای همه اتصال‌ها (سبز/آبی/قرمز) — بدون صفرِ چسبیده
+  // گپ پایه، متناسب با کرف (حداقل ۳پیکسل، حداکثر ۶پیکسل) — طبق درخواست کاربر
+  // (آیتم ۱۵ دامپ رودمپ): برش‌های کج/مایتردار باید نصف این گپ رو بگیرن، برش‌های
+  // صاف (بدون مایتر) گپ کامل رو نگه می‌دارن
   const visibleGap = Math.max(3, Math.min(6, K <= PLANK_KERF_GAP_THRESHOLD_CM ? PLANK_DEFAULT_GAP_PX : (totalLen > 0 ? K * (targetWidthPx / totalLen) : PLANK_DEFAULT_GAP_PX)));
+  const miterGap = visibleGap / 2;
 
-  const jointGapPx = cuts.map((_, i) => (i === 0 ? 0 : visibleGap));
+  const jointGapPx = cuts.map((c, i) => {
+    if (i === 0) return 0;
+    const isMiterJoint = c.miterLeft === true;
+    return isMiterJoint ? miterGap : visibleGap;
+  });
   const wasteGapPx = wasteLength > 0 && n > 0 ? visibleGap : 0;
   const totalGapPx = jointGapPx.reduce((s, g) => s + g, 0) + (wasteLength > 0 ? wasteGapPx : 0);
 
@@ -572,6 +579,13 @@ export default function WoodCuttingTab({ stickyTop, materials, products, persist
       const baseName = fileName.replace(/_1d|_2d/, match => match.toUpperCase());
       const subdir = baseName.includes("2d") || baseName.includes("2D") ? REFARSH_SAVE_DIRS.NEST_2D : REFARSH_SAVE_DIRS.NEST_1D;
       await saveFile(canvas.toDataURL("image/jpeg", 0.9), `${baseName}${getJalaliTimestamp()}.jpg`, { subdir });
+      showToast(`عکس ${baseName.includes("2D") ? "۲D" : "۱D"} ذخیره شد`, "success");
+    }).catch((e) => {
+      if (parent) parent.style.overflowX = prevParentOverflow;
+      el.style.width = prevElWidth;
+      console.error("handleSaveAsJpg failed", e);
+      showToast(`خطا در ذخیره عکس: ${e?.message || e}`, "error");
+      throw e;
     });
   };
 
@@ -588,8 +602,8 @@ export default function WoodCuttingTab({ stickyTop, materials, products, persist
       showToast("خطا: چیزی برای ذخیره به‌صورت تصویر نیست", "error");
       return;
     }
-    if (has1D) await handleSaveAsJpg(results1DRef, "nesting_1d");
-    if (has2D) await handleSaveAsJpg(results2DRef, "nesting_2d");
+    if (has1D) { try { await handleSaveAsJpg(results1DRef, "nesting_1d"); } catch (_) {} }
+    if (has2D) { try { await handleSaveAsJpg(results2DRef, "nesting_2d"); } catch (_) {} }
   };
 
   const handleSaveLocalSession = () => {
@@ -1100,7 +1114,7 @@ export default function WoodCuttingTab({ stickyTop, materials, products, persist
                       }}>
                     <span style={{ fontSize: 9, color: "#8B1A1A", flexShrink: 0 }}>#{fmtCode(p.code)}</span>
                     <span style={{ fontSize: 11, color: "#ddd", flex: 1 }}>{p.name}</span>
-                    <span style={{ fontSize: 10, color: "#7ec7e8", flexShrink: 0 }}>{p.dims} سانت</span>
+                    <span style={{ fontSize: 10, color: "#7ec7e8", flexShrink: 0 }}>{formatProductDims(p)} سانت</span>
                   </div>
                 ))}
                 {!(products || []).filter((p) => p.dims).length && (
@@ -1203,18 +1217,25 @@ export default function WoodCuttingTab({ stickyTop, materials, products, persist
                   ضخامت {thicknessKey} — {result.usedSticks} چوب
                 </div>
                 {result.unfulfilledCount > 0 && (
-                  <div style={{ marginBottom: 10, padding: "8px 12px", background: "#3a1d1d", border: "1px solid #8B1A1A", borderRadius: 8 }}>
-                    <span style={{ fontSize: 10, color: "#e08a8a", fontWeight: 500, display: "flex", alignItems: "center", gap: 4 }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
-                      خطای کمبود متریال (بدون چوب مناسب) — {
-                        Array.from(
-                          result.bins.filter((b) => b.unfulfilled).reduce((acc, b) => {
-                            const len = b.cuts[0]?.length;
-                            acc.set(len, (acc.get(len) || 0) + 1);
-                            return acc;
-                          }, new Map())
-                        ).map(([len, qty]) => `${len} سانت (${qty} عدد)`).join(" ، ")
-                      }
+                  // فونت/آیکون هم‌اندازه‌ی خطای کمبود ۲D شد (قبلاً 10px/۱۴px بود،
+                  // بزرگ‌تر از ۲D بود و چون متن روی یک خط بود، عرض کادر ۱D رو با
+                  // خودش می‌کشید بزرگ‌تر — الان maxWidth = عرض واقعی کادر (همون
+                  // plankContainerWidth) گرفته و متن wrap می‌شه، پس دیگه چیزی رو
+                  // کش نمیاد (Ash 🟡)
+                  <div style={{ marginBottom: 10, padding: "6px 10px", background: "#3a1d1d", border: "1px solid #8B1A1A", borderRadius: 6, maxWidth: plankContainerWidth || "100%", boxSizing: "border-box" }}>
+                    <span style={{ fontSize: 9.5, color: "#e08a8a", fontWeight: 500, display: "flex", alignItems: "flex-start", gap: 6 }}>
+                      <svg width="12" height="12" style={{ flexShrink: 0, marginTop: 1 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                      <span style={{ flex: 1, minWidth: 0, whiteSpace: "normal", wordBreak: "break-word" }}>
+                        خطای کمبود متریال (بدون چوب مناسب) — {
+                          Array.from(
+                            result.bins.filter((b) => b.unfulfilled).reduce((acc, b) => {
+                              const len = b.cuts[0]?.length;
+                              acc.set(len, (acc.get(len) || 0) + 1);
+                              return acc;
+                            }, new Map())
+                          ).map(([len, qty]) => `${len} سانت (${qty} عدد)`).join(" ، ")
+                        }
+                      </span>
                     </span>
                   </div>
                 )}

@@ -6,7 +6,7 @@ import {
   Plus, Search, Edit3, Trash2, ChevronDown, ChevronUp,
   Eye, EyeOff, Lock, Unlock, X, RotateCcw, Package, CheckCircle2, Clock, ShoppingBag, Tag
 } from "lucide-react";
-import { toNum, fmt, fmtDate, todayISO, getProductArea } from "../mathCore";
+import { toNum, fmt, fmtDate, todayISO, getProductArea, formatProductDims } from "../mathCore";
 import { emptyMaterial, emptyBatch, emptyStick, uid } from "../dataModels";
 import { formatPriceInput, parsePriceInput } from "../utils/formatters";
 import { pushBackHandler } from "../utils/backButton";
@@ -15,7 +15,7 @@ import { useToast } from "../contexts/ToastContext.jsx";
 import { useRegisterOpenModal } from "../utils/modalRegistry";
 
 import { JalaliDatePicker } from "./JalaliDatePicker";
-import { FilterPopup } from "./FilterPopup";
+import { FilterPopup, AnchoredFloatingPopup } from "./FilterPopup";
 
 const S = {
   input: {
@@ -35,13 +35,13 @@ const S = {
     border: "1px solid #2a2a2a",
     color: "#888",
     fontSize: 10,
-    padding: "6px 9px",
-    borderRadius: 12,
+    padding: "2px 9px",
+    borderRadius: 11,
     cursor: "pointer",
     fontFamily: "inherit",
     whiteSpace: "nowrap",
-    minHeight: 32,
-    height: 32,
+    minHeight: 22,
+    height: 22,
     boxSizing: "border-box",
     display: "inline-flex",
     alignItems: "center",
@@ -110,10 +110,10 @@ const S = {
 
 // ── ثابت‌های مرتب‌سازی ──
 const SORT_MODES = [
-  { key: "az", kind: "text", ascText: "Az", descText: "Za" },
-  { key: "date", kind: "icon", Icon: Clock },
-  { key: "stock", kind: "icon", Icon: ShoppingBag },
-  { key: "code", kind: "text", ascText: "123", descText: "321" },
+  { key: "az", kind: "text", ascText: "Az", descText: "Za", label: "الفبا" },
+  { key: "date", kind: "icon", Icon: Clock, label: "تاریخ" },
+  { key: "stock", kind: "icon", Icon: ShoppingBag, label: "موجودی" },
+  { key: "code", kind: "text", ascText: "123", descText: "321", label: "کد" },
 ];
 
 function cycleSort(current) {
@@ -162,7 +162,7 @@ function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onTogg
       <button
         style={{
           ...S.chip,
-          padding: "6px 10px",
+          padding: "2px 10px",
           fontSize: 10,
           position: "relative",
           ...style,
@@ -218,7 +218,10 @@ function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onTogg
           <button
             key={mode.key}
             style={{
-              display: "block",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 8,
               width: "100%",
               padding: "8px 10px",
               background: baseOrder === mode.key ? "#2a1414" : "transparent",
@@ -240,6 +243,7 @@ function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onTogg
             }}
           >
             {renderMode(mode, baseOrder === mode.key)}
+            {mode.label && <span>{mode.label}</span>}
           </button>
         ))}
       </FilterPopup>
@@ -374,6 +378,33 @@ export function BulkApplyMaterialPage({ material, products = [], allMaterials = 
     return initialLinked.map((p) => p.id);
   });
 
+  // صف آزادسازی محصولات قفل‌شده — فقط لوکاله، تا «ذخیره» زده نشه هیچی روی
+  // دیتای واقعی commit نمی‌شه (برخلاف قبل که خودِ کلیک X مستقیم setData می‌زد).
+  // کلید: `${sessionId}:${productId}`
+  const [queuedReleaseIds, setQueuedReleaseIds] = useState(() => new Set());
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const hasUnsavedChanges = () => {
+    if (queuedReleaseIds.size > 0) return true;
+    const initialIdsSet = new Set(initialLinked.map(p => p.id));
+    const finalSelectedSet = new Set(selectedIds);
+    if (initialIdsSet.size !== finalSelectedSet.size) return true;
+    for (const id of initialIdsSet) if (!finalSelectedSet.has(id)) return true;
+    return false;
+  };
+  const requestClose = () => {
+    if (hasUnsavedChanges()) setShowExitConfirm(true);
+    else onClose();
+  };
+  const toggleQueuedRelease = (sessionId, productId) => {
+    const key = `${sessionId}:${productId}`;
+    setQueuedReleaseIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
   const [distributionMode, setDistributionMode] = useState(() => {
     if (initialLinked.length > 0) {
       // اگه همه‌ی لینک‌های قبلی با یه حالت توزیع مشخص (مساوی/نسبت‌مساحت) ذخیره شده بودن، همونو یادآوری کن
@@ -439,7 +470,10 @@ export function BulkApplyMaterialPage({ material, products = [], allMaterials = 
   // چندانتخابی بچ — «بدون بچ» نداریم (ensureInitialStock همیشه بچ اولیه می‌سازد)
   const initialBatchIds = () => {
     const bs = material.batches || [];
-    if (bs.length) return [bs[0].id];
+    if (bs.length) {
+      const usable = bs.filter(b => !b.locked);
+      return [(usable[0] || bs[0]).id];
+    }
     const sticks = material.sticks || [];
     if (sticks.length) return [sticks[0].id];
     return [];
@@ -657,8 +691,36 @@ export function BulkApplyMaterialPage({ material, products = [], allMaterials = 
       }
     });
 
-    if (productIds.length === 0 && linkedUpdates.length === 0 && removedIds.length === 0) {
+    if (productIds.length === 0 && linkedUpdates.length === 0 && removedIds.length === 0 && queuedReleaseIds.size === 0) {
       setApplyMessage("هیچ تغییری برای اعمال وجود ندارد");
+      return;
+    }
+
+    // صف آزادسازیِ محصولات قفل‌شده رو همین‌جا commit می‌کنیم — مستقیم روی همون
+    // لاین‌آیتم‌های صف‌شده pendingUnlock می‌ذاریم (بعداً با نگه‌داشتن دکمه رفرش
+    // واقعاً آزاد می‌شن)، بدون این‌که سهم/درصدِ بقیه‌ی اعضای همون سشن قفل رو دست
+    // بزنیم — چون قفل‌شدن یعنی درصدها قبلاً حساب و فیکس شدن، حذف یکی نباید
+    // خودکار بین بقیه بازتقسیم بشه
+    if (queuedReleaseIds.size > 0 && setData) {
+      setData((d) => {
+        const products2 = d.products.map((p) => ({ ...p, lineItems: (p.lineItems || []).map((li) => ({ ...li })) }));
+        queuedReleaseIds.forEach((key) => {
+          const [sessionId, productId] = key.split(":");
+          const pIdx = products2.findIndex((x) => x.id === productId);
+          if (pIdx === -1) return;
+          const liIdx = products2[pIdx].lineItems.findIndex(
+            (li) => li.materialId === material.id && getSessionKey(li) === sessionId && li.deductedAt && !li.pendingUnlock
+          );
+          if (liIdx === -1) return;
+          products2[pIdx].lineItems[liIdx] = { ...products2[pIdx].lineItems[liIdx], pendingUnlock: true, deductedAt: null };
+        });
+        return { ...d, products: products2 };
+      });
+    }
+
+    if (productIds.length === 0 && linkedUpdates.length === 0 && removedIds.length === 0) {
+      // فقط آزادسازی صف‌شده تغییر کرده بود، چیز دیگه‌ای برای onApply نیست
+      onClose();
       return;
     }
 
@@ -674,6 +736,7 @@ export function BulkApplyMaterialPage({ material, products = [], allMaterials = 
       includeWastage: isWaste,
       isUsableRemaining,
       batchId,
+      batchIds: selectedBatchIds,
       perProductPctOverride,
       linkedUpdates,
       removedIds,
@@ -683,6 +746,7 @@ export function BulkApplyMaterialPage({ material, products = [], allMaterials = 
 
     onClose();
   };
+
 
   // ── تنظیم زنده‌ی درصد بین اعضای یک سشن قفل‌شده — فقط بین خودشان جابه‌جا می‌شود، نیازی به رفرش ندارد ──
   const adjustSessionShare = (sessionId, changedProductId, newPct) => {
@@ -715,45 +779,8 @@ export function BulkApplyMaterialPage({ material, products = [], allMaterials = 
     });
   };
 
-  // ── حذف یک محصول از سشن قفل‌شده — سهمش در صف آزادسازی قرار می‌گیرد (با نگه‌داشتن دکمه رفرش واقعاً آزاد می‌شود)
-  // و باقیمانده‌ی سشن (نه کل استخر متریال) بین اعضای دیگر همان سشن بازتقسیم می‌شود ──
-  const queueSessionRelease = (sessionId, productId) => {
-    if (!setData) return;
-    setData(d => {
-      const products2 = d.products.map(p => ({ ...p, lineItems: (p.lineItems || []).map(li => ({ ...li })) }));
-      const siblings = [];
-      products2.forEach(p => {
-        p.lineItems.forEach(li => {
-          if (li.materialId === material.id && getSessionKey(li) === sessionId && li.deductedAt && !li.pendingUnlock) {
-            siblings.push({ p, li });
-          }
-        });
-      });
-      const target = siblings.find(x => x.p.id === productId);
-      if (!target) return d;
-      const remaining = siblings.filter(x => x.p.id !== productId);
-      const prevTotal = siblings.reduce((s, x) => s + toNum(x.li.deductedCost), 0);
-      const newSessionTotal = prevTotal - toNum(target.li.deductedCost);
-
-      const tPIdx = products2.findIndex(x => x.id === target.p.id);
-      const tLiIdx = products2[tPIdx].lineItems.findIndex(x => x.id === target.li.id);
-      products2[tPIdx].lineItems[tLiIdx] = { ...products2[tPIdx].lineItems[tLiIdx], pendingUnlock: true, deductedAt: null };
-
-      const prevRemainingSum = remaining.reduce((s, x) => s + toNum(x.li.deductedCost), 0);
-      remaining.forEach(({ p, li }) => {
-        const ratio = prevRemainingSum > 0 ? toNum(li.deductedCost) / prevRemainingSum : (1 / remaining.length);
-        const newCost = newSessionTotal * ratio;
-        const pIdx2 = products2.findIndex(x => x.id === p.id);
-        const liIdx2 = products2[pIdx2].lineItems.findIndex(x => x.id === li.id);
-        products2[pIdx2].lineItems[liIdx2] = {
-          ...products2[pIdx2].lineItems[liIdx2],
-          deductedCost: newCost,
-          customPct: newSessionTotal > 0 ? Math.round((newCost / newSessionTotal) * 100) : 0,
-        };
-      });
-      return { ...d, products: products2 };
-    });
-  };
+  // نکته: منطق آزادسازی محصولات قفل‌شده الان توی toggleQueuedRelease (لوکال) +
+  // commitQueuedReleases (که موقع «ذخیره» صدا زده می‌شه) هست — پایین‌تر از handleApply.
 
   const selectedProductsList = products.filter(p => selectedIds.includes(p.id));
   const availableProductsList = products.filter(p => !selectedIds.includes(p.id) &&
@@ -767,7 +794,7 @@ export function BulkApplyMaterialPage({ material, products = [], allMaterials = 
     <div style={S.overlay}>
       <div style={{ ...S.sheet, maxWidth: 540 }} dir="rtl">
         <div style={S.sheetHeader}>
-          <button style={S.iconBtn} onClick={onClose}>
+          <button style={S.iconBtn} onClick={requestClose}>
             <X size={15} color="#aaa" />
           </button>
           <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#F5F0EB" }}>
@@ -789,8 +816,24 @@ export function BulkApplyMaterialPage({ material, products = [], allMaterials = 
           </div>
         </div>
 
+        {showExitConfirm && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 400, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={() => setShowExitConfirm(false)}>
+            <div style={{ background: "#181818", border: "1px solid #2a2a2a", borderRadius: 12, padding: 18, maxWidth: 320, width: "100%" }} onClick={(e) => e.stopPropagation()}>
+              <div style={{ fontSize: 12.5, color: "#F5F0EB", fontWeight: 600, marginBottom: 6 }}>خروج بدون ذخیره؟</div>
+              <div style={{ fontSize: 11, color: "#999", marginBottom: 16, lineHeight: 1.6 }}>
+                تغییراتی که دادی (از جمله صف آزادسازی) ذخیره نشدن. اگه خارج بشی، همه‌شون بی‌خیال می‌شن و چیزی روی متریال اعمال نمی‌شه.
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => setShowExitConfirm(false)} style={{ flex: 1, background: "transparent", border: "1px solid #2a2a2a", color: "#888", borderRadius: 8, padding: "9px 0", fontFamily: "inherit", fontSize: 11, cursor: "pointer" }}>ادامه‌ی ویرایش</button>
+                <button onClick={() => { setShowExitConfirm(false); onClose(); }} style={{ flex: 1, background: "#8B1A1A", border: "none", color: "#fff", borderRadius: 8, padding: "9px 0", fontFamily: "inherit", fontSize: 11, cursor: "pointer" }}>خروج بی‌خیال تغییرات</button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div style={{ padding: "14px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: 12 }}>
           {/* اطلاعات متریال */}
+
           <div style={{ background: "#1a1a1a", border: "1px solid #252525", borderRadius: 8, padding: "10px 12px" }}>
             <div style={{ fontSize: 10, color: "#666", marginBottom: 4 }}>اطلاعات متریال</div>
             <div style={{ fontSize: 11, color: "#ddd", display: "flex", flexWrap: "wrap", gap: "8px 12px" }}>
@@ -824,25 +867,33 @@ export function BulkApplyMaterialPage({ material, products = [], allMaterials = 
                     </div>
                     {isSessionOpen && session.items.map(({ product, li }) => {
                       const pct = sessionTotal > 0 ? Math.round((toNum(li.deductedCost) / sessionTotal) * 100) : 0;
+                      const releaseKey = `${session.sessionId}:${product.id}`;
+                      const isQueued = queuedReleaseIds.has(releaseKey);
                       return (
-                        <div key={product.id} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                          <span style={{ flex: 1, fontSize: 10.5, color: "#ddd", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{product.name}</span>
-                          <span style={{ fontSize: 9.5, color: "#888", minWidth: 62, textAlign: "left" }}>{fmt(toNum(li.deductedCost))} ت</span>
-                          <input
-                            style={{ ...S.input, width: 44, padding: "3px 4px", fontSize: 10, textAlign: "center" }}
-                            type="text"
-                            value={pct}
-                            onFocus={(e) => e.target.select()}
-                            onChange={(e) => adjustSessionShare(session.sessionId, product.id, toNum(e.target.value))}
-                            disabled={session.items.length <= 1}
-                          />
-                          <span style={{ fontSize: 9, color: "#666" }}>%</span>
+                        <div key={product.id} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, opacity: isQueued ? 0.6 : 1 }}>
+                          <span style={{ flex: 1, fontSize: 10.5, color: isQueued ? "#5b9bd5" : "#ddd", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: isQueued ? "line-through" : "none" }}>{product.name}</span>
+                          {isQueued ? (
+                            <span style={{ fontSize: 9, color: "#5b9bd5" }}>در صف آزادسازی</span>
+                          ) : (
+                            <>
+                              <span style={{ fontSize: 9.5, color: "#888", minWidth: 62, textAlign: "left" }}>{fmt(toNum(li.deductedCost))} ت</span>
+                              <input
+                                style={{ ...S.input, width: 44, padding: "3px 4px", fontSize: 10, textAlign: "center" }}
+                                type="text"
+                                value={pct}
+                                onFocus={(e) => e.target.select()}
+                                onChange={(e) => adjustSessionShare(session.sessionId, product.id, toNum(e.target.value))}
+                                disabled={session.items.length <= 1}
+                              />
+                              <span style={{ fontSize: 9, color: "#666" }}>%</span>
+                            </>
+                          )}
                           <button
                             style={{ ...S.iconBtn, padding: 3 }}
-                            title="حذف از این تخصیص (با نگه‌داشتن دکمه رفرش آزاد می‌شود)"
-                            onClick={() => queueSessionRelease(session.sessionId, product.id)}
+                            title={isQueued ? "بی‌خیال آزادسازی (تا وقتی ذخیره نزنی چیزی عوض نمی‌شه)" : "صف آزادسازی — تا «ذخیره» نزنی چیزی روی متریال اعمال نمی‌شه"}
+                            onClick={() => toggleQueuedRelease(session.sessionId, product.id)}
                           >
-                            <X size={11} color="#8B1A1A" />
+                            <X size={11} color={isQueued ? "#5b9bd5" : "#8B1A1A"} />
                           </button>
                         </div>
                       );
@@ -963,10 +1014,10 @@ export function BulkApplyMaterialPage({ material, products = [], allMaterials = 
 
             {/* جستجوگر کوچک + فیلتر دسته‌بندی فرش */}
             <div style={{ display: "flex", gap: 6, marginBottom: showFabricFilter ? 4 : 8 }}>
-              <div style={{ display: "flex", alignItems: "center", background: "#161616", border: "1px solid #232323", borderRadius: 6, padding: "4px 8px", gap: 6, flex: 1 }}>
+              <div style={{ display: "flex", alignItems: "center", background: "#161616", border: "1px solid #232323", borderRadius: 6, padding: "4px 8px", gap: 6, flex: 1, minWidth: 0 }}>
                 <Search size={12} color="#444" />
                 <input onFocus={(e) => e.target.select()}
-                  style={{ background: "transparent", border: "none", outline: "none", color: "#ddd", fontSize: 10.5, flex: 1, fontFamily: "inherit" }}
+                  style={{ background: "transparent", border: "none", outline: "none", color: "#ddd", fontSize: 10.5, flex: 1, minWidth: 0, fontFamily: "inherit" }}
                   placeholder="جستجوی سریع محصول..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -1047,7 +1098,7 @@ export function BulkApplyMaterialPage({ material, products = [], allMaterials = 
                     <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
                       <span style={{ fontSize: 9, color: "#666", width: 24, flexShrink: 0 }}>#{product.code}</span>
                       <span style={{ fontSize: 11, color: "#ccc", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{product.name}</span>
-                      {product.dims && <span style={{ fontSize: 9.5, color: "#555", flexShrink: 0 }}>({product.dims})</span>}
+                      {product.dims && <span style={{ fontSize: 9.5, color: "#555", flexShrink: 0 }}>({formatProductDims(product)})</span>}
                     </div>
                     <button
                       type="button"
@@ -1105,8 +1156,9 @@ export function BulkApplyMaterialPage({ material, products = [], allMaterials = 
             <div style={{ background: "#111", border: "1px solid #222", borderRadius: 8, padding: "10px" }}>
               <div style={{ fontSize: 10, color: "#aaa", marginBottom: 6 }}>انتخاب بچ محصول</div>
               <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                {/* بدون گزینه «بدون بچ» — چندانتخابی بچ‌ها */}
-                {(material.batches || []).map((b, bi) => {
+                {/* بدون گزینه «بدون بچ» — چندانتخابی بچ‌ها؛ بچ‌های کاملاً مصرف‌شده
+                    (قفل) دیگه به‌عنوان قابل‌استفاده نشون داده نمی‌شن */}
+                {(material.batches || []).filter(b => !b.locked).map((b, bi) => {
                   const active = selectedBatchIds.includes(b.id);
                   const qty = b.qty != null ? b.qty : 1;
                   const cost = b.totalCost != null ? b.totalCost : 0;
@@ -1236,7 +1288,7 @@ export function BulkApplyMaterialPage({ material, products = [], allMaterials = 
                         <span style={{ fontSize: 10.5, fontWeight: 500, color: "#eee", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: `${nameColCh}ch`, flexShrink: 0 }} title={product.name}>
                           {product.name}
                         </span>
-                        {product.dims && <span style={{ fontSize: 9, color: "#666", flexShrink: 0 }}>({product.dims})</span>}
+                        {product.dims && <span style={{ fontSize: 9, color: "#666", flexShrink: 0 }}>({formatProductDims(product)})</span>}
                       </div>
 
                       {/* سمت چپ (روبرو، در امتداد همون خط): نوار درصد + عدد درصد + × حذف — چون
@@ -1553,7 +1605,7 @@ function MaterialCard({
           </div>
         </div>
         <button
-          style={S.iconBtn}
+          style={{ ...S.iconBtn, width: 22, height: 22, justifyContent: "center" }}
           onClick={(e) => {
             e.stopPropagation();
             onToggleHidden(mat.id);
@@ -2302,9 +2354,13 @@ function MaterialCard({
           )}
 
           {/* دکمه‌های بولک/ویرایش/حذف — بالای لیست محصولات لینک‌شده */}
+          {/* «افزودن به محصولات» باید عریض بمونه (flex:1) و بقیه‌ی فضای خالی ردیف رو پر کنه؛
+              فقط دکمه‌های ویرایش/حذف کناریش باید باریک (اندازه‌ی آیکون) بمونن. نسخه‌ی قبلی
+              اشتباهاً flex:1 رو از این دکمه برداشته بود و به‌جاش فکر کرده بود مشکل جای دیگه‌ایه —
+              الان برگشت */}
           <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
             <button
-              style={{ ...S.chip, flex: 1, color: "#7aa8d8" }}
+              style={{ ...S.chip, color: "#7aa8d8", flex: 1, justifyContent: "center" }}
               onClick={() => onBulkApply(mat)}
             >
               افزودن به محصولات
@@ -2869,7 +2925,9 @@ export default function MaterialTab({
   const [matGroupFilter, setMatGroupFilter] = useState([]); // آرایه‌ی چند-انتخابی؛ خالی = همه
   const [floatingCatLabel, setFloatingCatLabel] = useState("");
   const groupSectionRefs = useRef({});
+  const stickyHeaderRef = useRef(null);
   const [showTypeMenu, setShowTypeMenu] = useState(false);
+  const typeFilterBtnRef = useRef(null);
   const [groupedView, setGroupedView] = useState(() => {
     try {
       return localStorage.getItem("material_grouped_view") !== "false"; // پیش‌فرض روشن
@@ -2895,13 +2953,20 @@ export default function MaterialTab({
   const { stockFilter, setStockFilter, showStockMenu, setShowStockMenu, menuRef, getStockLabel } =
     useStockFilter();
 
-  // دابل‌کلیک Refresh → ریست فیلتر جستجو و موجودی
+  // Refresh (تک‌ضربه) → ریست کامل فیلتر جستجو/موجودی/گروه‌بندی/هاید به پیش‌فرض
   useEffect(() => {
     if (!refreshResetTick) return;
     setSearch("");
     setStockFilter("all");
     setShowStockMenu(false);
     if (setSortOrder) setSortOrder("name");
+    setMatGroupFilter([]);
+    setShowTypeMenu(false);
+    setCollapsedGroups({});
+    setGroupedView(true);
+    try { localStorage.setItem("material_grouped_view", "true"); } catch (_) {}
+    setShowZeroBalance(false);
+    try { localStorage.setItem("material_show_zero_balance", "false"); } catch (_) {}
   }, [refreshResetTick]);
 
   const toggleZeroBalance = () => {
@@ -2972,24 +3037,31 @@ export default function MaterialTab({
   useEffect(() => {
     if (!groupedView) { setFloatingCatLabel(""); return; }
     const onScroll = () => {
+      const panelEl = document.querySelector('div[style*="position: fixed"]');
+      const scrollY = panelEl ? panelEl.scrollTop : (window.scrollY || document.documentElement.scrollTop || 0);
+      // بالای بالا: هیچ گروهی هنوز پشتِ هدر نرفته، لیبل شناور لازم نیست
+      if (scrollY <= 0) { setFloatingCatLabel(""); return; }
+
       const entries = Object.entries(groupSectionRefs.current || {});
+      // نکته‌ی مهم: stickyTop یه رشته‌ی CSS calc()ه (نه عدد)، پس نمی‌شه بهش +96 کرد
+      // (قبلاً همین‌جا باگ بود: "calc(...)" + 96 => رشته => مقایسه‌ی top < headerBottom
+      // همیشه false می‌شد چون NaN بود، پس لیبل شناور اصلاً هیچ‌وقت نشون داده نمی‌شد).
+      // الان مستقیم از روی خودِ بلوک sticky هدر (که lableهم توشه) لبه‌ی پایینش رو
+      // اندازه می‌گیریم — همیشه درسته، به هیچ عدد/رشته‌ی جداگونه‌ای وابسته نیست.
+      const headerBottom = stickyHeaderRef.current ? stickyHeaderRef.current.getBoundingClientRect().bottom : 184;
       let current = "";
       let best = -Infinity;
-      // آستانه: زیر هدر پنل + نوار تب‌ها + نوار فیلتر (~ stickyTop)
-      const threshold = 160;
       for (const [name, el] of entries) {
         if (!el) continue;
         const top = el.getBoundingClientRect().top;
-        if (top <= threshold && top > best) { best = top; current = name; }
+        // فقط گروهی که هدر واقعیش زیر هدر sticky رفته (دیگه دیده نمی‌شه) کاندید می‌شه
+        if (top < headerBottom && top > best) { best = top; current = name; }
       }
-      // اگر هیچ گروهی زیر آستانه نبود، اولین گروه دیده شده
-      if (!current && entries.length) {
-        let minTop = Infinity;
-        for (const [name, el] of entries) {
-          if (!el) continue;
-          const top = el.getBoundingClientRect().top;
-          if (top < minTop) { minTop = top; current = name; }
-        }
+      // اگر گروهِ کاندید هنوز واقعاً روی صفحه دیده می‌شه (هدر خودش زیر sticky نرفته)، لیبل رو نشون نده
+      if (current) {
+        const el = groupSectionRefs.current[current];
+        const top = el ? el.getBoundingClientRect().top : -Infinity;
+        if (top >= headerBottom) current = "";
       }
       setFloatingCatLabel(current);
     };
@@ -3348,6 +3420,7 @@ export default function MaterialTab({
   return (
     <div style={{ padding: "0 0 100px 0" }} dir="rtl">
       <div
+        ref={stickyHeaderRef}
         style={{
           position: "sticky",
           top: stickyTop,
@@ -3378,9 +3451,10 @@ export default function MaterialTab({
 
           <div style={{ position: "relative", flexShrink: 0 }}>
             <button
+              ref={typeFilterBtnRef}
               style={{
                 ...S.chip,
-                padding: "6px 8px",
+                padding: "2px 8px",
                 fontSize: 10,
                 position: "relative",
                 display: "flex",
@@ -3400,7 +3474,7 @@ export default function MaterialTab({
                   : filterOptions.filter((o) => matGroupFilter.includes(o.key)).map((o) => o.label).join("،")}
               </span>
             </button>
-            <FilterPopup open={showTypeMenu} onClose={() => setShowTypeMenu(false)} width={170}>
+            <FilterPopup open={showTypeMenu} onClose={() => setShowTypeMenu(false)} width={220} maxHeight={320}>
               {filterOptions.map((opt) => {
                 const isAllOpt = opt.key === "all";
                 const isSelected = isAllOpt ? matGroupFilter.length === 0 : matGroupFilter.includes(opt.key);
@@ -3467,7 +3541,7 @@ export default function MaterialTab({
             <button
               style={{
                 ...S.chip,
-                padding: "6px 10px",
+                padding: "2px 10px",
                 fontSize: 10,
                 position: "relative",
                 background: stockFilter !== "all" ? "#2a1414" : "#1c1c1c",
@@ -3510,43 +3584,62 @@ export default function MaterialTab({
 
           <SortButton sortOrder={sortOrder} setSortOrder={setSortOrder} modes={SORT_MODES} style={{}} groupedView={groupedView} onToggleGrouped={toggleGroupedView} />
         </div>
-      </div>
 
-      
-      {groupedView && floatingCatLabel ? (
-        <div
-          onClick={() => {
-            const el = groupSectionRefs.current[floatingCatLabel];
-            if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-          }}
-          style={{
-            position: "sticky",
-            // دقیقاً زیر ردیف هدر جستجو/سورت
-            top: (typeof stickyTop !== "undefined" ? stickyTop : 88),
-            zIndex: 14,
-            margin: "0 auto",
-            width: "fit-content",
-            maxWidth: "70%",
-            minHeight: 28,
-            height: 28,
-            background: "rgba(40,40,40,0.92)",
-            color: "#bbb",
-            fontSize: 10,
-            padding: "0 14px",
-            borderRadius: 12,
-            pointerEvents: "auto",
-            textAlign: "center",
-            backdropFilter: "blur(4px)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            border: "1px solid #2a2a2a",
-            boxSizing: "border-box",
-          }}
-        >
-          {floatingCatLabel}
-        </div>
-      ) : null}
+        {groupedView && floatingCatLabel ? (
+          <div
+            onClick={() => {
+              const el = groupSectionRefs.current[floatingCatLabel];
+              if (!el || !stickyHeaderRef.current) return;
+              const headerBottom = stickyHeaderRef.current.getBoundingClientRect().bottom;
+              // به‌جای scrollIntoView (که تا بالای بالا می‌بره و پشت خودِ هدرِ sticky
+              // قایم می‌شه)، دقیقاً به اندازه‌ای اسکرول کن که هدر واقعیِ دسته درست
+              // زیرِ بلوک sticky هدر بیفته — همون لحظه هم لیبل شناور (چون دیگه شرط
+              // «هدر واقعی هنوز دیده نمی‌شه» برقرار نیست) هاید می‌شه، هم اسم دسته دیده می‌شه
+              const delta = el.getBoundingClientRect().top - headerBottom - 4;
+              const panelEl = document.querySelector('div[style*="position: fixed"]');
+              if (panelEl && typeof panelEl.scrollBy === "function") {
+                panelEl.scrollBy({ top: delta, behavior: "smooth" });
+              } else {
+                window.scrollBy({ top: delta, behavior: "smooth" });
+              }
+            }}
+            style={{
+              // قبلاً توی flow خودِ بلوک sticky هدر بود (marginTop:8)، یعنی پس‌زمینه‌ی
+              // تیره‌ی همون بلوک (که تمام عرض صفحه‌ست) کش می‌اومد پایین‌تر تا این لیبل
+              // رو هم بگیره — یه نوار مشکی عریض به‌جای یه حباب کوچیک شناور. الان با
+              // position:absolute کاملاً از اون flow بیرون اومده و مستقل شناوره (مثل
+              // دکمه‌ی اسکرول‌به‌بالا یا FAB قرمز +): فقط خودِ حباب پس‌زمینه داره، نه
+              // یه نوار زیرش. بلوک sticky هدر (که position:sticky خودش positioning
+              // context می‌سازه) لنگرشه، پس همیشه دقیقاً زیر ردیف Sort می‌مونه.
+              position: "absolute",
+              top: "100%",
+              left: 14,
+              marginTop: 6,
+              zIndex: 14,
+              width: "fit-content",
+              maxWidth: "70%",
+              minHeight: 28,
+              height: 28,
+              background: "rgba(40,40,40,0.92)",
+              color: "#bbb",
+              fontSize: 10,
+              padding: "0 14px",
+              borderRadius: 12,
+              pointerEvents: "auto",
+              textAlign: "center",
+              backdropFilter: "blur(4px)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              border: "1px solid #2a2a2a",
+              boxSizing: "border-box",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+            }}
+          >
+            {floatingCatLabel}
+          </div>
+        ) : null}
+      </div>
 
       {groupedView ? (
 
