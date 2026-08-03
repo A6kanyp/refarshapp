@@ -160,6 +160,21 @@ function RefreshLockButton({ onQuickRefresh, onHoldRefresh, onUndoRefresh, onRes
   const holdTimer = useRef(null);
   const didHold = useRef(false);
   const [showHoldPopup, setShowHoldPopup] = useState(false);
+  // آیتم جدید: با یه ضربه‌ی ساده (نه نگه‌داشتن)، آیکون رفرش ۳ ثانیه دایره‌ای
+  // بچرخه — فقط یه فیدبک بصری که «کاری انجام شد»، مستقل از منطق واقعیِ
+  // quickRefresh (Ash 🟡). دابل‌کلیک (ریست فیلترها) هم مشابه ولی ۴ ثانیه،
+  // سریع‌تر، و با اینرسی (شروع تند، کم‌کم کند و متوقف) — با یه keyframe جدا
+  // که مسافت بیشتر (۵ دور) رو با easing کندشونده (نه linear) طی می‌کنه، پس
+  // خودش به‌طور طبیعی هم سریع‌تر شروع می‌شه هم با اینرسی می‌ایسته، بدون نیاز
+  // به فیزیک واقعی توی JS
+  const [spinMode, setSpinMode] = useState(null); // null | "tap" | "doubleTap"
+  const spinTimeoutRef = useRef(null);
+
+  const triggerSpin = (mode, durationMs) => {
+    clearTimeout(spinTimeoutRef.current);
+    setSpinMode(mode);
+    spinTimeoutRef.current = setTimeout(() => setSpinMode(null), durationMs);
+  };
 
   const onPtrDown = () => {
     didHold.current = false;
@@ -178,12 +193,20 @@ function RefreshLockButton({ onQuickRefresh, onHoldRefresh, onUndoRefresh, onRes
     if (now - RefreshLockButton._lastTap < 350) {
       RefreshLockButton._lastTap = 0;
       onResetFilters?.();
+      triggerSpin("doubleTap", 4000);
     } else {
       RefreshLockButton._lastTap = now;
       onQuickRefresh?.();
+      triggerSpin("tap", 3000);
     }
   };
   const onPtrCancel = () => clearTimeout(holdTimer.current);
+  useEffect(() => () => clearTimeout(spinTimeoutRef.current), []);
+
+  const spinStyle =
+    spinMode === "tap" ? { animation: "ashRefreshSpin 1s linear 3" } :
+    spinMode === "doubleTap" ? { animation: "ashRefreshSpinFast 4s cubic-bezier(0.15,0.65,0.35,1) 1" } :
+    undefined;
 
   // چیدمان ۴ دکمه‌ی مربعی طبق آخرین توضیح دقیق کاربر: ردیف بالا = قفل (راست) و
   // آزاد (چپ)، ردیف پایین = Undo (راست) و رفرش (چپ). چون کل اپ RTL هست، ترتیب
@@ -197,10 +220,11 @@ function RefreshLockButton({ onQuickRefresh, onHoldRefresh, onUndoRefresh, onRes
 
   return (
     <>
+      <style>{`@keyframes ashRefreshSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}@keyframes ashRefreshSpinFast{from{transform:rotate(0deg)}to{transform:rotate(1800deg)}}`}</style>
       <button onPointerDown={onPtrDown} onPointerUp={onPtrUp} onPointerCancel={onPtrCancel}
         style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: "50%", background: hasPending ? "#3a1212" : "#1c1c1c", border: "1px solid " + (hasPending ? "#8B1A1A" : "#2a2a2a"), color: hasPending ? "#e08a8a" : "#888", cursor: "pointer", flexShrink: 0 }}
-        title="ضربه = رفرش نمایش | نگه‌دار = باز شدن منوی قفل/آزادسازی">
-        <RotateCcw size={16} color={hasPending ? "#e08a8a" : "#888"} />
+        title="ضربه = رفرش نمایش | دو ضربه = ریست فیلترها | نگه‌دار = باز شدن منوی قفل/آزادسازی">
+        <RotateCcw size={16} color={hasPending ? "#e08a8a" : "#888"} style={spinStyle} />
         {hasPending && <span style={{ position: "absolute", top: 3, right: 3, width: 6, height: 6, borderRadius: "50%", background: "#e08a8a" }} />}
       </button>
 
@@ -231,9 +255,13 @@ function RefreshLockButton({ onQuickRefresh, onHoldRefresh, onUndoRefresh, onRes
             </button>
             <button
               style={{ ...squareBtnStyle, background: "#1c1c1c", color: "#ccc" }}
-              onClick={() => { setShowHoldPopup(false); onQuickRefresh?.(); }}
+              onClick={() => {
+                setShowHoldPopup(false);
+                onQuickRefresh?.();
+                triggerSpin("tap", 3000);
+              }}
             >
-              <RotateCcw size={16} />
+              <RotateCcw size={16} style={spinStyle} />
               رفرش
             </button>
           </div>
@@ -273,18 +301,25 @@ function ManagementPanelModal({ onClose, children, onQuickRefresh, onHoldRefresh
   const handleExit = () => setShowExitConfirm(true);
   const confirmExit = () => { setShowExitConfirm(false); setIsPanelUnlocked(false); onClose(); };
 
-  // باگ واقعی: دکمه‌ی بک سخت‌افزاری/ژست اندروید یه مسیر جدا داشت (پایین‌تر توی
-  // App.jsx، pushBackHandler(() => setShowManagementPanel(false)))، که پنل رو
-  // مستقیم می‌بست بدون رد شدن از همین پاپ‌آپ تایید — یعنی «خروج» با دکمه‌ی توی
-  // برنامه تایید می‌گرفت ولی با بک سخت‌افزاری بی‌صدا و بی‌تاییدیه می‌رفت کاتالوگ.
-  // الان خودِ این کامپوننت مسئول ثبت بک‌هندلره: وقتی پنل بازه، بک صرفاً همون
-  // handleExit (نمایش تاییدیه) رو صدا می‌زنه — دقیقاً هم‌رفتار با دکمه‌ی خروج.
+  // آیتم ۹ (دامپ اخیر کاربر): دکمه‌ی بک سخت‌افزاری/سوایپ لبه پنل رو بدون تایید
+  // می‌بست، چون یه هندلر جدا توی App.jsx مستقیم `onClose` (بستن واقعی پنل) رو
+  // صدا می‌زد — درحالی‌که دکمه‌ی «خروج» همیشه از `handleExit` (باز کردن پاپ‌آپ
+  // تایید) رد می‌شد. اون هندلر بیرونی حذف شد؛ الان دقیقاً همینجا، داخل خودِ
+  // پنل، دو تا هندلر جداگونه ثبت می‌شه که رفتارشون کاملاً هم‌راستا با بقیه‌ی
+  // پاپ‌آپ‌های تاییدِ اپه (بک = بستن بالاترین چیزِ باز):
+  // ۱) اگه پاپ‌آپ تایید از قبل باز نیست → بک باید همون کاری رو بکنه که خودِ
+  //    دکمه‌ی «خروج» می‌کنه (یعنی اول پاپ‌آپ تایید رو باز کنه، نه بستن مستقیم پنل)
+  // ۲) اگه پاپ‌آپ تایید باز است → بک باید فقط همون پاپ‌آپ رو ببنده (لغو تایید)،
+  //    نه این‌که تاییدش کنه و پنل واقعاً بسته بشه
   useEffect(() => {
-    return pushBackHandler(() => {
-      if (isPanelUnlocked) handleExit();
-      else onClose();
-    });
-  }, [isPanelUnlocked]);
+    if (!isPanelUnlocked || showExitConfirm) return;
+    return pushBackHandler(handleExit);
+  }, [isPanelUnlocked, showExitConfirm]);
+
+  useEffect(() => {
+    if (!showExitConfirm) return;
+    return pushBackHandler(() => setShowExitConfirm(false));
+  }, [showExitConfirm]);
 
   if (!isPanelUnlocked) return <PinScreen onUnlock={handleUnlock} onCancel={onClose} />;
 
@@ -549,7 +584,7 @@ function MgmtTabs({ productTotals, groupedProducts, materialsWithRemaining, cust
       <div style={{ display: mgmtTab === "materials" ? "block" : "none" }}><MaterialTab stickyTop={stickyTop} materials={materialsWithRemaining} products={productTotals} setData={setData} onRequestDelete={onRequestDeleteMaterial} onAddPurchase={addMaterialPurchase} onUpdateProcurement={updateProcurement} onDeleteProcurement={deleteProcurement} onAddBatch={addBatch} onUpdateBatch={updateBatch} onDeleteBatch={deleteBatch} onLockBatch={lockBatch} onUnlockBatch={unlockBatch} onAddStick={addStick} onUpdateStick={updateStick} onDeleteStick={deleteStick} onBulkApply={bulkApplyMaterial} sortOrder={sortOrderMaterials} setSortOrder={setSortOrderMaterials} notify={notify} refreshResetTick={refreshResetTick} /></div>
       <div style={{ display: mgmtTab === "woodCutting" ? "block" : "none" }}><WoodCuttingTab stickyTop={stickyTop} materials={materialsWithRemaining} products={productTotals} woodCuttingSessions={woodCuttingSessions} onSaveSession={onSaveSession} onDeleteSession={onDeleteSession} onExport={onExportWoodCutting} /></div>
       <div style={{ display: mgmtTab === "gallery" ? "block" : "none" }}><GalleryTab businessCard={myBusinessCard} stickyTop={stickyTop} customerStats={customerStats} productTotals={productTotals} setData={setData} onRequestDeleteCustomer={onRequestDeleteCustomer} sortOrder={sortOrderGallery} setSortOrder={setSortOrderGallery} notify={notify} refreshResetTick={refreshResetTick} /></div>
-      <div style={{ display: mgmtTab === "accounting" ? "block" : "none" }}><AccountingTab stickyTop={stickyTop} acc={accounting} customers={data.customers || []} productTotals={productTotals} onExportExcel={handleExportExcel} onExportJson={handleExportJson} onImportExcelClick={() => xlsxImportRef.current?.click()} onImportJsonClick={() => jsonImportRef.current?.click()} setData={setData} notify={notify} businessCard={myBusinessCard} invoiceDrafts={data.invoiceDrafts || []} /></div>
+      <div style={{ display: mgmtTab === "accounting" ? "block" : "none" }}><AccountingTab stickyTop={stickyTop} acc={accounting} customers={data.customers || []} productTotals={productTotals} onExportExcel={handleExportExcel} onExportJson={handleExportJson} onImportExcelClick={() => xlsxImportRef.current?.click()} onImportJsonClick={() => jsonImportRef.current?.click()} setData={setData} notify={notify} businessCard={myBusinessCard} invoiceDrafts={data.invoiceDrafts || []} refreshResetTick={refreshResetTick} /></div>
       <div style={{ display: mgmtTab === "sync" ? "block" : "none" }}><SyncTab stickyTop={stickyTop} data={data} setData={setData} notify={notify} onExportExcel={handleExportExcel} onExportPreviewExcel={handleExportPreviewExcel} onExportJson={handleExportJson} onImportExcelClick={() => xlsxImportRef.current?.click()} onImportJsonClick={() => jsonImportRef.current?.click()} hideFloatingSync={hideFloatingSync} /></div>
       </div>
       </div>
@@ -1623,9 +1658,10 @@ export default function App() {
     return pushBackHandler(() => setShowBasket(false));
   }, [showBasket]);
 
-  // نکته: بک‌هندلر پنل مدیریت قبلاً اینجا بود (setShowManagementPanel(false) مستقیم،
-  // بدون تاییدیه) — الان داخل خودِ ManagementPanelModal ثبت می‌شه تا از همون پاپ‌آپ
-  // تایید خروج رد بشه (دقیقاً هم‌رفتار با دکمه‌ی «خروج» توی پنل)
+  // آیتم ۹: هندلر بک این پنل از اینجا حذف شد — قبلاً مستقیم `setShowManagementPanel(false)`
+  // می‌کرد و پاپ‌آپ تایید خروج (`showExitConfirm` داخل خودِ ManagementPanelModal) رو
+  // دور می‌زد. الان دقیقاً همون هندلینگ داخل خودِ ManagementPanelModal ثبت می‌شه، جایی
+  // که به state تاییدِ خروج دسترسی داره.
 
   // دکمه‌ی Back سخت‌افزاری اندروید / سوایپ لبه: اول به مودال بازِ ثبت‌شده
   // (استک بالا) فرصت می‌ده خودش رو ببنده؛ اگه چیزی باز نبود و روی تب پیش‌فرض
@@ -3237,6 +3273,9 @@ export default function App() {
           p.hiddenFromCatalog ? "بله" : "خیر",
           p.qty != null ? toNum(p.qty) : 1,
           p.image || "",
+          // ستون جدید همیشه در انتها اضافه می‌شه، نه وسط — دقیقاً برای این‌که
+          // باگ حیاتیِ column-shift که قبلاً کل import رو می‌ترکوند (مستند
+          // بالای همین فایل) دوباره تکرار نشه (Ash 🟡، آیتم ۷ - تکمیل export/import)
           p.isCalligraphy ? "بله" : "خیر"
         ];
         wsProductsRows.push(rowData);
@@ -4394,6 +4433,8 @@ export default function App() {
                 return 1;
               })(),
               image: String(row[34] || "").trim() || null,
+              // ستون ۳۵ (انتهایی، امن) — فایل‌های قدیمی‌تر که این ستون رو
+              // ندارن، خودکار false می‌گیرن (Ash 🟡)
               isCalligraphy: row[35] === "بله" || row[35] === true
             });
           });

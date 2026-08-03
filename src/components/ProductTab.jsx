@@ -15,7 +15,7 @@ import { toNum, fmt, fmtCode, fmtDate, todayISO, parseDims, dimsArea, getProduct
 import { SCRATCH_KEYS, saveScratch, loadScratch, clearScratch } from "../scratchpad";
 import { saveFile, shareText } from "../utils/nativeSave";
 import { compressImageFile } from "../utils/imageCompress";
-import { saveImageToFolder, IMAGE_CATEGORIES, useResolvedImageSrc, autoDetectImagesForCode } from "../utils/imageStorage";
+import { saveImageToFolder, IMAGE_CATEGORIES, useResolvedImageSrc, autoDetectImagesForCode, deleteImageFile } from "../utils/imageStorage";
 import { handleEnterNavigate } from "../utils/formNav";
 import { pushBackHandler } from "../utils/backButton";
 import {
@@ -395,7 +395,7 @@ function ProductCard({ p, customers, materials, onEdit, onDelete, onImageUpload,
     <div style={{ background:"#161616", border:"1px solid #232323", borderRadius:10, marginBottom:7, overflow:"hidden", opacity: p.hiddenFromCatalog ? 0.55 : 1 }}>
       <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", cursor:"pointer" }} onClick={() => onToggleExpand(p.id)}>
         <div style={{ width:40, height:40, borderRadius:6, background:"#111", overflow:"hidden", flexShrink:0, cursor:"pointer", position:"relative" }}
-          onClick={(e) => { e.stopPropagation(); if (p.image) onOpenLightbox(p.id); }}>
+          onClick={(e) => { e.stopPropagation(); onOpenLightbox(p.id); }}>
           {p.image ? (
             <ProductImage filename={p.image} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
           ) : (
@@ -741,6 +741,18 @@ export function ImageLightbox({ products, currentId, onNavigate, onClose, onAddT
     const remaining = Object.keys(ptrsRef.current).length;
 
     if (remaining < 2) lastDistRef.current = null;
+    // باگ pinch-zoom: وقتی با دو انگشت زوم می‌کردیم، `lastPanRef` هیچ‌وقت
+    // آپدیت نمی‌شد (فقط توی حالت تک‌انگشتی آپدیت می‌شه) — پس مقدارش از قبل از
+    // شروع pinch (یا حتی قدیمی‌تر) باقی می‌موند. با ول‌کردن یکی از دو انگشت،
+    // یه پوینتر تنها می‌مونه؛ حرکت بعدیش `dx/dy` رو نسبت به همون موقعیت خیلی
+    // قدیمی حساب می‌کرد → یه جهش ناگهانی چندسانتی توی تصویر. فیکس: وقتی از ۲
+    // انگشت به ۱ انگشت می‌رسیم، `lastPanRef` رو به موقعیت *فعلی* همون انگشتِ
+    // باقی‌مونده sync می‌کنیم، نه این‌که دست‌نخورده از قبل بمونه.
+    if (remaining === 1) {
+      const remainingId = Object.keys(ptrsRef.current)[0];
+      const pt = ptrsRef.current[remainingId];
+      if (pt) lastPanRef.current = { x: pt.x, y: pt.y };
+    }
     if (remaining === 0) {
       lastPanRef.current = null;
       if (swipeStartRef.current && scaleRef.current <= 1) {
@@ -792,7 +804,7 @@ export function ImageLightbox({ products, currentId, onNavigate, onClose, onAddT
         <button style={S.iconBtn} onClick={onClose} onPointerDown={(e) => e.stopPropagation()}>
           <X size={18} color="#fff" />
         </button>
-        <span style={{ flex: 1, fontSize: 12, color: "#ccc" }}>#{fmtCode(product.code)} · {product.name}</span>
+        <span style={{ flex: 1, fontSize: 14, color: "#F5F0EB", fontWeight: 700 }}>#{fmtCode(product.code)} · {product.name}</span>
         {onAddToBasket && product.status !== "sold" && (
           <button
             style={{ ...S.iconBtn, width: 44, height: 44, borderRadius: "50%", background: "rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center" }}
@@ -928,9 +940,12 @@ export function ImageLightbox({ products, currentId, onNavigate, onClose, onAddT
                 </div>
               )}
               {product.description && (
-                <div style={{ fontSize: 11.5, color: "#ccc", marginBottom: 8, whiteSpace: "pre-wrap", lineHeight: 1.65, fontWeight: 500 }}>
-                  {product.description}
-                </div>
+                <>
+                  <div style={{ height: 10 }} />
+                  <div style={{ fontSize: 11.5, color: "#ccc", marginBottom: 8, whiteSpace: "pre-wrap", lineHeight: 1.65, fontWeight: 500 }}>
+                    {product.description}
+                  </div>
+                </>
               )}
               {/* یک ردیف خط خالی بین آخرین مشخصات محصول و ردیف بها (خواسته‌ی کاربر) */}
               <div style={{ height: 10 }} />
@@ -1742,7 +1757,13 @@ export function ProductEditor({
     const codeStr = fmtCode(local.code != null ? local.code : nextCode);
     setAutoScanning(true);
     try {
-      const found = await autoDetectImagesForCode(codeStr);
+      let found;
+      try {
+        found = await autoDetectImagesForCode(codeStr);
+      } catch (err) {
+        if (opts.manual) showToast(`خطا در خواندن پوشه‌ی عکس: ${err.message || err}`, "error");
+        return;
+      }
       if (found.length === 0) {
         if (opts.manual) showToast("عکسی با این کد در پوشه پیدا نشد", "error");
         return;
@@ -1772,8 +1793,17 @@ export function ProductEditor({
 
   const handleRemoveImage = (idx) => {
     setLocalWithScratch((l) => {
+      const removed = (l.images || [])[idx];
       const all = (l.images || []).filter((_, i) => i !== idx);
       const newImage = all.length > 0 ? all[0] : null;
+      // آیتم ۵ (دامپ اخیر): حذف عکس از محصول قبلاً فقط اسم فایل رو از رکورد
+      // برمی‌داشت، فایل فیزیکی توی پوشه دست‌نخورده می‌موند (برخلاف الگوی از قبل
+      // موجود توی BusinessCardModal که همین‌جا هم پیروی شد). عکس‌های محصول
+      // یکتا هستن (اسم‌شون شامل کد محصوله)، پس بین محصولات مختلف مشترک نیستن —
+      // حذف فیزیکی امن است.
+      if (removed) {
+        deleteImageFile(removed, IMAGE_CATEGORIES.PRODUCT).catch(() => {});
+      }
       return { ...l, image: newImage, images: all };
     });
   };
@@ -2051,7 +2081,7 @@ export function ProductEditor({
         <div style={{ padding: "12px 14px" }}>
           <div style={S.sectionLabel}>تصاویر محصول (اول = آیکون)</div>
           <div style={{ display: "flex", gap: 8, marginBottom: 12, overflowX: "auto", paddingBottom: 4, WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
-            {(local.images || (local.image ? [local.image] : [])).map((img, i) => (
+            {(local.images || (local.image ? [local.image] : [])).map((img, i, arr) => (
               <div key={i} style={{ width: 60, height: 60, background: "#111", borderRadius: 8, overflow: "hidden", flexShrink: 0, position: "relative", border: i === 0 ? "2px solid #8B1A1A" : "1px solid #2a2a2a" }}>
                 <ProductImage filename={img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} loading="lazy" />
                 {i === 0 && (
@@ -2059,6 +2089,37 @@ export function ProductEditor({
                 )}
                 <button style={{ position: "absolute", top: 2, right: 2, background: "rgba(0,0,0,0.7)", border: "none", borderRadius: "50%", color: "#fff", width: 16, height: 16, fontSize: 9, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
                   onClick={() => handleRemoveImage(i)}>✕</button>
+                {/* جابجایی ترتیب عکس‌ها — drag-and-drop واقعیِ HTML5 روی صفحه‌لمسی موبایل
+                    (وب‌ویوی اندروید) قابل‌اعتماد نیست، پس به‌جاش دو دکمه‌ی کوچیک
+                    جابجایی چپ/راست اضافه شد؛ عکسِ اول همیشه آیکون/جلد محصوله */}
+                {arr.length > 1 && (
+                  <div style={{ position: "absolute", top: 2, left: 2, display: "flex", gap: 2 }}>
+                    {i > 0 && (
+                      <button
+                        type="button"
+                        title="جابجایی به جلو"
+                        onClick={() => setLocalWithScratch((l) => {
+                          const all = [...(l.images || [])];
+                          [all[i - 1], all[i]] = [all[i], all[i - 1]];
+                          return { ...l, image: all[0] || null, images: all };
+                        })}
+                        style={{ background: "rgba(0,0,0,0.7)", border: "none", borderRadius: "50%", color: "#fff", width: 16, height: 16, fontSize: 9, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                      >‹</button>
+                    )}
+                    {i < arr.length - 1 && (
+                      <button
+                        type="button"
+                        title="جابجایی به عقب"
+                        onClick={() => setLocalWithScratch((l) => {
+                          const all = [...(l.images || [])];
+                          [all[i], all[i + 1]] = [all[i + 1], all[i]];
+                          return { ...l, image: all[0] || null, images: all };
+                        })}
+                        style={{ background: "rgba(0,0,0,0.7)", border: "none", borderRadius: "50%", color: "#fff", width: 16, height: 16, fontSize: 9, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                      >›</button>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
             <label style={{ width: 60, height: 60, background: "#1c1c1c", border: "1px dashed #333", borderRadius: 8, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, gap: 3 }}>
