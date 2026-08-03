@@ -3525,7 +3525,6 @@ export default function MaterialTab({
               style={{
                 ...S.chip,
                 flexShrink: 0,
-                padding: "6px 8px",
                 display: "flex",
                 alignItems: "center",
                 gap: 3,

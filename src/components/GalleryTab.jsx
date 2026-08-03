@@ -236,7 +236,7 @@ function GalleryStatusFilter({ value, onChange }) {
     <div ref={wrapRef} style={{ position: "relative" }}>
       <button
         type="button"
-        style={{ ...T.chip, padding: "6px 10px", fontSize: 10, ...(selected.length > 0 ? { borderColor: "#8B1A1A", color: "#e08a8a" } : {}) }}
+        style={{ ...T.chip, fontSize: 10, ...(selected.length > 0 ? { borderColor: "#8B1A1A", color: "#e08a8a" } : {}) }}
         onClick={() => setOpen((o) => !o)}
       >
         {label}
