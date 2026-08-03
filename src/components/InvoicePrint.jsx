@@ -65,12 +65,15 @@ export default function InvoicePrint({
   }, [onClose]);
 
   const [scale, setScale] = useState(1);
+  // کاربر: از لحظه‌ی زدن دکمه‌ی سیو/اشتراک تا وقتی توست موفقیت میاد، خودِ آیکون
+  // دکمه باید بچرخه (مثل دکمه‌ی سینک) و بعدش برگرده حالت عادی. مقدار: null یا
+  // یکی از "pdf" | "image" | "sharePdf" | "shareImage"
+  const [savingAction, setSavingAction] = useState(null);
   const containerRef = useRef(null);
   const paperRef = useRef(null);
   const [paperHeight, setPaperHeight] = useState(1123);
   const [isCompact, setIsCompact] = useState(window.innerWidth < 640);
   // کدوم دکمه‌ی ذخیره/اشتراک الان در حال کاره — تا نوتیف/toast نهایی نیومده همون دکمه می‌چرخه
-  const [busyAction, setBusyAction] = useState(null); // null | "pdf" | "image" | "sharePdf" | "shareImage"
 
   const handlePrint = () => {
     window.print();
@@ -79,7 +82,7 @@ export default function InvoicePrint({
   const handleSaveAsPDF = () => {
     const paperElement = paperRef.current;
     if (!paperElement) return;
-    setBusyAction("pdf");
+    setSavingAction("pdf");
     waitForProductImagesResolved(paperElement).then(() => {
 
     // Create an off-screen container to render the A4 page at 1x scale
@@ -135,13 +138,13 @@ export default function InvoicePrint({
         const pdfBlob = pdf.output("blob");
         await saveFile(pdfBlob, `Factor_${safeName}_${safeId}.pdf`, { subdir: REFARSH_SAVE_DIRS.BILLS_PDF, share: false });
         showToast("PDF فاکتور ذخیره شد", "success");
-        setBusyAction(null);
+        setSavingAction(null);
         
         document.body.removeChild(cloneContainer);
       }).catch(err => {
         console.error("Error saving PDF:", err);
         alert("خطا در ذخیره فایل PDF");
-        setBusyAction(null);
+        setSavingAction(null);
         if (cloneContainer.parentNode) {
           document.body.removeChild(cloneContainer);
         }
@@ -208,7 +211,7 @@ export default function InvoicePrint({
   const handleSaveAsImage = () => {
     const paperElement = paperRef.current;
     if (!paperElement) return;
-    setBusyAction("image");
+    setSavingAction("image");
     waitForProductImagesResolved(paperElement).then(() => {
 
     // Create an off-screen container to render the A4 page at 1x scale
@@ -234,7 +237,7 @@ export default function InvoicePrint({
     // صبر کن img های کپی‌شده واقعاً لود بشن (نه صرفاً یه timeout ثابت)
     waitForImagesToLoad(clonedPaper).then(() => {
       html2canvas(clonedPaper, {
-        scale: 2, // قبلاً 3 بود؛ چون سرعت ذخیره/اشتراک عکس فاکتور خیلی کند بود، دقیقاً هم‌سطح PDF (که سریع بود) کاهش داده شد — پیکسل نهایی ~۴۴٪ کمتر، افت کیفیت محسوس نیست ولی سرعت تولید canvas تقریباً نصف می‌شه
+        scale: 2, // کاهش از 3 به 2 برای سرعت (کاربر: خیلی زمان‌بر بود) — همون کیفیتی که PDF ازش استفاده می‌کنه، مساحت پیکسل تقریباً نصف می‌شه
         useCORS: true,
         backgroundColor: "#ffffff",
         logging: false,
@@ -246,14 +249,14 @@ export default function InvoicePrint({
         const safeName = (invoiceData.customer?.name || "Invoice").replace(/[^a-zA-Z0-9؀-\u06FF\s-]/g, '').trim().replace(/\s+/g, '_');
         await saveFile(canvas.toDataURL("image/png", 1.0), `Factor_${safeName}_${safeId}.png`, { subdir: REFARSH_SAVE_DIRS.BILLS_IMAGE, share: false });
         showToast("عکس فاکتور ذخیره شد", "success");
-        setBusyAction(null);
+        setSavingAction(null);
         
         // Cleanup cloned elements
         document.body.removeChild(cloneContainer);
       }).catch(err => {
         console.error("Error saving image:", err);
         alert("خطا در ذخیره تصویر فاکتور");
-        setBusyAction(null);
+        setSavingAction(null);
         if (cloneContainer.parentNode) {
           document.body.removeChild(cloneContainer);
         }
@@ -282,7 +285,7 @@ export default function InvoicePrint({
     await waitForImagesToLoad(clonedPaper);
     try {
       const canvas = await html2canvas(clonedPaper, {
-        scale: 2, useCORS: true, backgroundColor: "#ffffff", logging: false, width: 794, allowTaint: true, // قبلاً 3 بود، برای سرعت کاهش داده شد
+        scale: 2, useCORS: true, backgroundColor: "#ffffff", logging: false, width: 794, allowTaint: true, // کاهش از 3 به 2 برای سرعت
       });
       return { canvas, cleanup: () => { if (cloneContainer.parentNode) document.body.removeChild(cloneContainer); } };
     } catch (e) {
@@ -292,7 +295,7 @@ export default function InvoicePrint({
   };
 
   const handleSharePDF = async () => {
-    setBusyAction("sharePdf");
+    setSavingAction("sharePdf");
     try {
       const cap = await captureCanvas();
       if (!cap) return;
@@ -312,12 +315,12 @@ export default function InvoicePrint({
       console.error(err);
       alert("خطا در اشتراک PDF");
     } finally {
-      setBusyAction(null);
+      setSavingAction(null);
     }
   };
 
   const handleShareImage = async () => {
-    setBusyAction("shareImage");
+    setSavingAction("shareImage");
     try {
       const cap = await captureCanvas();
       if (!cap) return;
@@ -330,7 +333,7 @@ export default function InvoicePrint({
       console.error(err);
       alert("خطا در اشتراک تصویر");
     } finally {
-      setBusyAction(null);
+      setSavingAction(null);
     }
   };
 
@@ -537,7 +540,7 @@ export default function InvoicePrint({
           {/* Save as PDF → آبی (ذخیره‌ی خودکار در Documents/refarsh/factor/pdf) */}
           <button 
             onClick={handleSaveAsPDF} 
-            disabled={busyAction === "pdf"}
+            disabled={savingAction === "pdf"}
             style={{ 
               display: 'flex',
               alignItems: 'center',
@@ -548,19 +551,19 @@ export default function InvoicePrint({
               color: '#9ec9f5', 
               border: '1px solid #2a5080', 
               borderRadius: 6, 
-              cursor: busyAction === "pdf" ? 'default' : 'pointer', 
-              opacity: busyAction === "pdf" ? 0.7 : 1,
+              cursor: savingAction === "pdf" ? 'default' : 'pointer', 
+              opacity: savingAction === "pdf" ? 0.7 : 1,
               transition: "all 0.2s" 
             }}
             title="ذخیره PDF در Documents/refarsh/factor/pdf"
           >
-            {busyAction === "pdf" ? <RefreshCw size={15} className="animate-spin" /> : <FileDown size={15} />}
+            {savingAction === "pdf" ? <RefreshCw size={15} className="animate-spin" /> : <FileDown size={15} />}
           </button>
 
           {/* Save as Image → آبی (ذخیره‌ی خودکار در Documents/refarsh/factor/image) */}
           <button 
             onClick={handleSaveAsImage} 
-            disabled={busyAction === "image"}
+            disabled={savingAction === "image"}
             style={{ 
               display: 'flex',
               alignItems: 'center',
@@ -571,12 +574,12 @@ export default function InvoicePrint({
               color: '#9ec9f5', 
               border: '1px solid #2a5080', 
               borderRadius: 6, 
-              cursor: busyAction === "image" ? 'default' : 'pointer', 
-              opacity: busyAction === "image" ? 0.7 : 1,
+              cursor: savingAction === "image" ? 'default' : 'pointer', 
+              opacity: savingAction === "image" ? 0.7 : 1,
             }}
             title="ذخیره تصویر در Documents/refarsh/factor/image"
           >
-            {busyAction === "image" ? <RefreshCw size={15} className="animate-spin" /> : <Download size={15} />}
+            {savingAction === "image" ? <RefreshCw size={15} className="animate-spin" /> : <Download size={15} />}
           </button>
 
           {/* Copy Invoice Text */}
@@ -602,31 +605,31 @@ export default function InvoicePrint({
           {/* Share PDF → قرمز */}
           <button
             onClick={handleSharePDF}
-            disabled={busyAction === "sharePdf"}
+            disabled={savingAction === "sharePdf"}
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               width: '32px', height: '32px', background: '#8B1A1A', color: '#fff',
-              border: 'none', borderRadius: 6, cursor: busyAction === "sharePdf" ? 'default' : 'pointer',
-              opacity: busyAction === "sharePdf" ? 0.7 : 1,
+              border: 'none', borderRadius: 6, cursor: savingAction === "sharePdf" ? 'default' : 'pointer',
+              opacity: savingAction === "sharePdf" ? 0.7 : 1,
             }}
             title="اشتراک PDF"
           >
-            {busyAction === "sharePdf" ? <RefreshCw size={15} className="animate-spin" /> : <FileDown size={15} />}
+            {savingAction === "sharePdf" ? <RefreshCw size={15} className="animate-spin" /> : <FileDown size={15} />}
           </button>
 
           {/* Share Image → مشکی */}
           <button
             onClick={handleShareImage}
-            disabled={busyAction === "shareImage"}
+            disabled={savingAction === "shareImage"}
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               width: '32px', height: '32px', background: '#232323', color: '#ddd',
-              border: '1px solid #333', borderRadius: 6, cursor: busyAction === "shareImage" ? 'default' : 'pointer',
-              opacity: busyAction === "shareImage" ? 0.7 : 1,
+              border: '1px solid #333', borderRadius: 6, cursor: savingAction === "shareImage" ? 'default' : 'pointer',
+              opacity: savingAction === "shareImage" ? 0.7 : 1,
             }}
             title="اشتراک تصویر"
           >
-            {busyAction === "shareImage" ? <RefreshCw size={15} className="animate-spin" /> : <Download size={15} />}
+            {savingAction === "shareImage" ? <RefreshCw size={15} className="animate-spin" /> : <Download size={15} />}
           </button>
         </div>
       </div>

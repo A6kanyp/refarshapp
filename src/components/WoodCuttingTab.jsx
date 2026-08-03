@@ -594,8 +594,20 @@ export default function WoodCuttingTab({ stickyTop, materials, products, persist
   const [selectedStickIds, setSelectedStickIds] = useState([]);
   const [selectedPanelIds, setSelectedPanelIds] = useState([]);
   const [showLoadModal, setShowLoadModal] = useState(false);
-  // کدوم دکمه‌ی ذخیره‌ی عکس الان در حال کاره — "1d" | "2d" | "both" | null
-  const [savingTarget, setSavingTarget] = useState(null);
+  // کاربر: از لحظه‌ی زدن دکمه‌ی ذخیره‌ی عکس ۱D/۲D تا وقتی توست موفقیت میاد،
+  // خودِ آیکون دکمه باید بچرخه (مثل دکمه‌ی سینک)
+  const [savingTarget, setSavingTarget] = useState(null); // null | "1d" | "2d" | "both"
+  const saveAsJpgWithSpinner = async (ref, fileName, targetKey) => {
+    setSavingTarget(targetKey);
+    try {
+      await handleSaveAsJpg(ref, fileName);
+    } catch (_) {
+      // خودِ handleSaveAsJpg قبلاً toast خطا رو نشون داده، اینجا فقط از
+      // unhandled rejection جلوگیری می‌کنیم
+    } finally {
+      setSavingTarget(null);
+    }
+  };
 
   const handleSaveAllAsJpg = async () => {
     const has1D = show1D && results1DRef.current;
@@ -1209,7 +1221,7 @@ export default function WoodCuttingTab({ stickyTop, materials, products, persist
           <>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8, marginBottom: 4 }}>
               <div style={{ ...T.sectionLabel, margin: 0 }}>برنامه برش ۱D</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}><button style={{ ...T.iconBtn, color: "#8B1A1A" }} title="ذخیره به صورت تصویر" disabled={savingTarget === "1d" || savingTarget === "both"} onClick={async () => { setSavingTarget("1d"); try { await handleSaveAsJpg(results1DRef, "nesting_1d"); } finally { setSavingTarget(null); } }}>{(savingTarget === "1d" || savingTarget === "both") ? <RefreshCw size={16} className="animate-spin" /> : <ImageIcon size={16} />}</button><ToggleBtn label="نمایش ۱D" value={show1D} onChange={setShow1D} /></div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}><button style={{ ...T.iconBtn, color: "#8B1A1A" }} title="ذخیره به صورت تصویر" disabled={savingTarget === "1d" || savingTarget === "both"} onClick={() => saveAsJpgWithSpinner(results1DRef, "nesting_1d", "1d")}>{(savingTarget === "1d" || savingTarget === "both") ? <RefreshCw size={16} className="animate-spin" /> : <ImageIcon size={16} />}</button><ToggleBtn label="نمایش ۱D" value={show1D} onChange={setShow1D} /></div>
             </div>
 {show1D && (
               <div ref={plankContainerRef} style={{ width: "100%", maxWidth: "100%", overflowX: "auto", boxSizing: "border-box", WebkitOverflowScrolling: "touch" }}>
@@ -1391,7 +1403,7 @@ export default function WoodCuttingTab({ stickyTop, materials, products, persist
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 16, marginBottom: 8 }}>
               <div style={{ ...T.sectionLabel, margin: 0 }}>پانل صفحه پشت کار — نستینگ ۲D</div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <button style={{ ...T.iconBtn, color: "#8B1A1A" }} title="ذخیره به صورت تصویر" disabled={savingTarget === "2d" || savingTarget === "both"} onClick={async () => { setSavingTarget("2d"); try { await handleSaveAsJpg(results2DRef, "nesting_2d"); } finally { setSavingTarget(null); } }}>{(savingTarget === "2d" || savingTarget === "both") ? <RefreshCw size={16} className="animate-spin" /> : <ImageIcon size={16} />}</button>
+                <button style={{ ...T.iconBtn, color: "#8B1A1A" }} title="ذخیره به صورت تصویر" disabled={savingTarget === "2d" || savingTarget === "both"} onClick={() => saveAsJpgWithSpinner(results2DRef, "nesting_2d", "2d")}>{(savingTarget === "2d" || savingTarget === "both") ? <RefreshCw size={16} className="animate-spin" /> : <ImageIcon size={16} />}</button>
                 <ToggleBtn label="نمایش ۲D" value={show2D} onChange={setShow2D} />
               </div>
             </div>

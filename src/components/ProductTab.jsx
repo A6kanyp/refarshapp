@@ -783,8 +783,9 @@ export function ImageLightbox({ products, currentId, onNavigate, onClose, onAddT
         const dy = e.clientY - swipeStartRef.current.y;
         // فقط سوایپ افقی واضح (نه اسکرول عمودی اتفاقی)
         if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.2) {
-          if (dx < 0) {
-            // انگشت به چپ → عکس بعدی همین محصول، وگرنه محصول بعدی
+          if (dx > 0) {
+            // انگشت به راست → عکس بعدی همین محصول، وگرنه محصول بعدی
+            // (جهت قبلاً برعکس بود طبق گزارش کاربر — الان راست=بعدی، چپ=قبلی)
             if (imgIdx < allImages.length - 1) {
               setImgIdx((i) => i + 1);
               applyTransform(1, 0, 0);
@@ -792,7 +793,7 @@ export function ImageLightbox({ products, currentId, onNavigate, onClose, onAddT
               onNavigate(products[prodIdx + 1].id);
             }
           } else {
-            // انگشت به راست → عکس قبلی همین محصول، وگرنه محصول قبلی
+            // انگشت به چپ → عکس قبلی همین محصول، وگرنه محصول قبلی
             if (imgIdx > 0) {
               setImgIdx((i) => i - 1);
               applyTransform(1, 0, 0);
@@ -839,21 +840,17 @@ export function ImageLightbox({ products, currentId, onNavigate, onClose, onAddT
         )}
       </div>
 
-      {(imgIdx > 0 || prodIdx > 0) && (
-        <button onPointerDown={(e) => e.stopPropagation()} onClick={() => {
-          if (imgIdx > 0) { setImgIdx((i) => i - 1); applyTransform(1, 0, 0); }
-          else if (prodIdx > 0) onNavigate(products[prodIdx - 1].id);
-        }}
-          style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", background: "rgba(0,0,0,0.55)", border: "none", borderRadius: "50%", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 6 }}>
+      {prodIdx > 0 && (
+        <button onPointerDown={(e) => e.stopPropagation()} onClick={() => onNavigate(products[prodIdx - 1].id)}
+          style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", background: "rgba(0,0,0,0.55)", border: "none", borderRadius: "50%", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 6 }}
+          title="محصول قبلی">
           <ChevronLeft size={18} color="#ddd" />
         </button>
       )}
-      {(imgIdx < allImages.length - 1 || prodIdx < products.length - 1) && (
-        <button onPointerDown={(e) => e.stopPropagation()} onClick={() => {
-          if (imgIdx < allImages.length - 1) { setImgIdx((i) => i + 1); applyTransform(1, 0, 0); }
-          else if (prodIdx < products.length - 1) onNavigate(products[prodIdx + 1].id);
-        }}
-          style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "rgba(0,0,0,0.55)", border: "none", borderRadius: "50%", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 6 }}>
+      {prodIdx < products.length - 1 && (
+        <button onPointerDown={(e) => e.stopPropagation()} onClick={() => onNavigate(products[prodIdx + 1].id)}
+          style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "rgba(0,0,0,0.55)", border: "none", borderRadius: "50%", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 6 }}
+          title="محصول بعدی">
           <ChevronRight size={18} color="#ddd" />
         </button>
       )}
