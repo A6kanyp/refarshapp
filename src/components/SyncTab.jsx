@@ -7,7 +7,7 @@ import {
   Cloud, CloudLightning, RefreshCw, CheckCircle2,
   AlertTriangle, FileDown, FileUp, Trash2, Database,
   HelpCircle, Wifi, WifiOff, Clock, HardDrive, Info,
-  FolderOpen, Save, X, Check, ChevronDown, ChevronUp, Plus, Edit3, LayoutGrid
+  FolderOpen, Save, X, Check, ChevronDown, ChevronUp, Plus, Edit3, LayoutGrid, ImagePlus
 } from "lucide-react";
 import {
   performSynchronization,
@@ -19,7 +19,8 @@ import {
   API_BASE_URL_OVERRIDE_KEY
 } from "../utils/syncManager";
 import { getDefaultData } from "../dataModels";
-import { getImageFolderName } from "../utils/imageStorage";
+import { getImageFolderName, autoDetectImagesForCodes } from "../utils/imageStorage";
+import { fmtCode } from "../mathCore";
 import { useAuth } from "../contexts/AuthContext.jsx";
 
 function formatRelativeTime(timestamp) {
@@ -86,6 +87,7 @@ export default function SyncTab({
 
   const [showPathEditor, setShowPathEditor] = useState(false);
   const [showServerEditor, setShowServerEditor] = useState(false);
+  const [scanningImages, setScanningImages] = useState(false);
   const [serverUrlInput, setServerUrlInput] = useState(() => {
     try { return localStorage.getItem(API_BASE_URL_OVERRIDE_KEY) || ""; } catch (_) { return ""; }
   });
@@ -123,6 +125,47 @@ export default function SyncTab({
 
   // getApiBase از syncManager می‌آد — الان اول localStorage (اگه کاربر توی
   // همین تب دستی ذخیره کرده باشه) بعد env رو چک می‌کنه
+
+  // «بررسی پوشه‌ی عکس‌ها» گروهی — آیتم جدید کاربر: دقیقاً همون منطق تشخیص
+  // خودکار عکس بر اساس کدِ فرم ویرایش تک‌محصول (imageStorage.js)، ولی یه‌جا
+  // برای همه‌ی محصولات، بدون نیاز به باز کردن فرم ویرایش هرکدوم جدا
+  const handleBulkImageScan = async () => {
+    if (!data?.products?.length) {
+      notify && notify("محصولی برای بررسی نیست");
+      return;
+    }
+    setScanningImages(true);
+    try {
+      const codes = data.products.map((p) => fmtCode(p.code));
+      const foundByCode = await autoDetectImagesForCodes(codes);
+      let productsChanged = 0;
+      let imagesAdded = 0;
+      const updatedProducts = data.products.map((p) => {
+        const codeStr = fmtCode(p.code);
+        const found = foundByCode[codeStr];
+        if (!found || !found.length) return p;
+        const current = p.images || (p.image ? [p.image] : []);
+        const currentSet = new Set(current);
+        const newOnes = found.filter((f) => !currentSet.has(f));
+        if (!newOnes.length) return p;
+        productsChanged += 1;
+        imagesAdded += newOnes.length;
+        const merged = [...current, ...newOnes];
+        return { ...p, image: p.image || merged[0] || null, images: merged };
+      });
+      if (productsChanged > 0) {
+        setData((d) => ({ ...d, products: updatedProducts }));
+        notify && notify(`${imagesAdded} تصویر جدید برای ${productsChanged} محصول پیدا و وصل شد`);
+      } else {
+        notify && notify("عکس جدیدی توی پوشه پیدا نشد (همه از قبل وصل بودن یا کدی مطابقت نداشت)");
+      }
+    } catch (err) {
+      console.error("Bulk image scan failed:", err);
+      notify && notify("خطا در بررسی پوشه‌ی عکس‌ها");
+    } finally {
+      setScanningImages(false);
+    }
+  };
 
   const testConnection = async () => {
     setPinging(true);
@@ -559,6 +602,21 @@ export default function SyncTab({
               </div>
             </div>
           )}
+        </div>
+
+        {/* ── بررسی پوشه‌ی عکس‌ها (گروهی) ── */}
+        <div className="mt-4 pt-4 border-t border-[#1f1f1f]">
+          <button
+            onClick={handleBulkImageScan}
+            disabled={scanningImages}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-[#2a2a2a] bg-[#161616] hover:border-[#3a3a3a] text-[11px] text-[#ccc] hover:text-white transition-all cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+          >
+            <ImagePlus size={14} className={scanningImages ? "animate-pulse" : ""} />
+            {scanningImages ? "در حال بررسی پوشه..." : "بررسی پوشه‌ی عکس‌ها برای همه‌ی محصولات"}
+          </button>
+          <p className="text-[9px] text-[#666] mt-2 leading-relaxed">
+            هر عکسی که مستقیم با فایل‌منیجر (نه از داخل اپ) توی پوشه‌ی عکس محصولات گذاشته باشی و اسمش با قرارداد کد محصول (مثلاً برای کد ۴: <span dir="ltr" className="font-mono">000401.jpg</span>) مطابقت داشته باشه، با این دکمه یه‌جا به محصول مربوطه وصل می‌شه — بدون نیاز به باز کردن فرم ویرایش تک‌تک محصولات.
+          </p>
         </div>
       </div>
 

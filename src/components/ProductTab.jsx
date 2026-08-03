@@ -85,7 +85,7 @@ function cycleSort(current) {
 }
 
 // ── دکمه سورت ──
-function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onToggleGrouped, groupByTypeActive, onGroupByType }) {
+function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onToggleGrouped, groupByTypeActive, onGroupByType, groupByFabricActive, onGroupByFabric }) {
   const [showPopup, setShowPopup] = useState(false);
   const wrapRef = useRef(null);
   const baseOrder = String(sortOrder || "").replace(/_desc$/, "");
@@ -141,16 +141,16 @@ function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onTogg
                 display: "block",
                 width: "100%",
                 padding: "8px 10px",
-                background: groupedView ? "#2a1414" : "transparent",
+                background: groupByFabricActive ? "#2a1414" : "transparent",
                 border: "none",
                 borderRadius: 4,
-                color: groupedView ? "#d88888" : "#ddd",
+                color: groupByFabricActive ? "#d88888" : "#ddd",
                 fontSize: 11,
                 fontFamily: "inherit",
                 cursor: "pointer",
                 textAlign: "right",
               }}
-              onClick={() => { if (!groupedView) onToggleGrouped(); }}
+              onClick={onGroupByFabric}
             >
               بر اساس فرش
             </button>
@@ -3187,7 +3187,7 @@ export function CatalogTab({
               >
                 <Tag size={13} />
               </button>
-              <FilterPopup open={showTypeFilterMenu} onClose={() => setShowTypeFilterMenu(false)} width={220} maxHeight={320}>
+              <AnchoredFloatingPopup open={showTypeFilterMenu} onClose={() => setShowTypeFilterMenu(false)} anchorRef={typeFilterBtnRef} width={220}>
                   <button
                     style={{ display: "block", width: "100%", textAlign: "right", padding: "8px 8px", background: (typeFilter || []).length === 0 ? "#2a1414" : "transparent", border: "none", color: (typeFilter || []).length === 0 ? "#d88888" : "#ddd", fontSize: 11, fontFamily: "inherit", cursor: "pointer", borderRadius: 4 }}
                     onClick={() => setTypeFilter([])}
@@ -3218,7 +3218,7 @@ export function CatalogTab({
                   >
                     کالیگرافی
                   </button>
-              </FilterPopup>
+              </AnchoredFloatingPopup>
             </div>
           )}
 
@@ -3887,7 +3887,7 @@ export default function ProductTab({
               >
                 <Tag size={13} />
               </button>
-              <FilterPopup open={showTypeFilterMenu} onClose={() => setShowTypeFilterMenu(false)} width={220} maxHeight={320}>
+              <AnchoredFloatingPopup open={showTypeFilterMenu} onClose={() => setShowTypeFilterMenu(false)} anchorRef={typeFilterBtnRef} width={220}>
                   <button
                     style={{ display: "block", width: "100%", textAlign: "right", padding: "8px 8px", background: (typeFilter || []).length === 0 ? "#2a1414" : "transparent", border: "none", color: (typeFilter || []).length === 0 ? "#d88888" : "#ddd", fontSize: 11, fontFamily: "inherit", cursor: "pointer", borderRadius: 4 }}
                     onClick={() => setTypeFilter([])}
@@ -3918,7 +3918,7 @@ export default function ProductTab({
                   >
                     کالیگرافی
                   </button>
-              </FilterPopup>
+              </AnchoredFloatingPopup>
             </div>
           )}
 
@@ -3932,6 +3932,11 @@ export default function ProductTab({
             groupByTypeActive={groupedView && sortMode === "type"}
             onGroupByType={() => {
               if (setSortMode) setSortMode("type");
+              if (!groupedView) toggleGroupedView();
+            }}
+            groupByFabricActive={groupedView && sortMode === "fabric"}
+            onGroupByFabric={() => {
+              if (setSortMode) setSortMode("fabric");
               if (!groupedView) toggleGroupedView();
             }}
           />

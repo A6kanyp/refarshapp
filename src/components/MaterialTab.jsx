@@ -2311,14 +2311,12 @@ function MaterialCard({
           )}
 
           {/* دکمه‌های بولک/ویرایش/حذف — بالای لیست محصولات لینک‌شده */}
-          {/* «افزودن به محصولات» قبلاً flex:1 داشت و کل عرض ردیف رو پر می‌کرد،
-              برخلاف دکمه‌های ویرایش/حذف کنارش که باریک (اندازه‌ی محتوا) بودن —
-              همون چیزی که کاربر «باریک نبودن دکمه‌های اکسپند متریال» می‌گفت.
-              الان اونم فقط به اندازه‌ی متنش عرض می‌گیره؛ justifyContent:space-between
-              روی خودِ ردیف باعث می‌شه دکمه‌های ویرایش/حذف سمت راست بمونن (Ash 🟡) */}
-          <div style={{ display: "flex", gap: 6, marginTop: 10, justifyContent: "space-between" }}>
+          {/* تصحیح کاربر: مشکل اون‌موقع ارتفاع نبود، عرض بود — این دکمه باید فضای
+              باقیمانده‌ی ردیف رو تا دکمه‌های ویرایش/حذف پر کنه (نه فقط اندازه‌ی
+              متنش). حذف flex:1 (نشست قبلی Ash) این عرض رو خراب کرده بود، برگردوندم */}
+          <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
             <button
-              style={{ ...S.chip, color: "#7aa8d8" }}
+              style={{ ...S.chip, color: "#7aa8d8", flex: 1, justifyContent: "center" }}
               onClick={() => onBulkApply(mat)}
             >
               افزودن به محصولات
@@ -3432,7 +3430,7 @@ export default function MaterialTab({
                   : filterOptions.filter((o) => matGroupFilter.includes(o.key)).map((o) => o.label).join("،")}
               </span>
             </button>
-            <FilterPopup open={showTypeMenu} onClose={() => setShowTypeMenu(false)} width={220} maxHeight={320}>
+            <AnchoredFloatingPopup open={showTypeMenu} onClose={() => setShowTypeMenu(false)} anchorRef={typeFilterBtnRef} width={220}>
               {filterOptions.map((opt) => {
                 const isAllOpt = opt.key === "all";
                 const isSelected = isAllOpt ? matGroupFilter.length === 0 : matGroupFilter.includes(opt.key);
@@ -3469,7 +3467,7 @@ export default function MaterialTab({
                   </button>
                 );
               })}
-            </FilterPopup>
+            </AnchoredFloatingPopup>
           </div>
 
           {allFiltered.some((m) => m.hidden || (() => {

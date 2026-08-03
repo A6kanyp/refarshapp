@@ -2943,8 +2943,53 @@ export default function App() {
     return { ...d, materials, products: syncPercentPricedProducts(materials, d.products) };
   });
   const deleteBatch = (mId, bId) => setData((d) => {
-    const materials = d.materials.map((m) => m.id === mId ? { ...m, batches: (m.batches || []).filter((b) => b.id !== bId) } : m);
-    return { ...d, materials, products: syncPercentPricedProducts(materials, d.products) };
+    // باگ واقعی (گزارش کاربر): قبلاً این تابع فقط بچ رو از آرایه پاک می‌کرد، بدون
+    // این‌که به لاین‌آیتم‌های محصولاتی که به همین بچ قفل شده بودن (batchId) کاری
+    // داشته باشه — یعنی هزینه‌ی قفل‌شده «مستقیم آزاد» می‌شد (نه آبی/معلق برای
+    // آزادسازی دستی)، و از اون به بعد هم اون لاین‌آیتم‌ها به یه بچ ناموجود اشاره
+    // می‌کردن (orphan) و هیچ‌وقت درست Undo/رفرش نمی‌شدن. الان دقیقاً مثل حذف کامل
+    // محصول (`deleteProduct`) عمل می‌کنه: لاین‌آیتم قفل‌شده به پشتِ صفِ آزادسازی
+    // (آبی، `pendingReleaseCredits`) می‌ره، نه این‌که فوری و بی‌سروصدا محو بشه.
+    const mIdx = d.materials.findIndex((m) => m.id === mId);
+    if (mIdx === -1) return d;
+    const m = d.materials[mIdx];
+    const batch = (m.batches || []).find((b) => b.id === bId);
+    if (!batch) return d;
+
+    let credits = [...(m.pendingReleaseCredits || [])];
+    const products = d.products.map((p) => {
+      let changed = false;
+      const lineItems = (p.lineItems || []).map((li) => {
+        if (li.materialId !== mId || li.batchId !== bId) return li;
+        if (li.deductedAt || li.pendingUnlock) {
+          const cost = toNum(li.deductedCost != null ? li.deductedCost : li.cost || 0);
+          if (cost > 0 || (li.woodCuts && li.woodCuts.length)) {
+            credits.push({
+              id: uid(),
+              cost,
+              qty: toNum(li.deductedQty || 0),
+              fromProductId: p.id,
+              fromProductName: p.name || "",
+              woodCuts: li.woodCuts || null,
+              woodLocked: !!li.woodLocked,
+              batchId: bId,
+            });
+          }
+          changed = true;
+          return { ...li, pendingUnlock: true, deductedAt: null, _orphanedBatch: true };
+        }
+        // معلق (زرد، قفل‌نشده) با حذف بچ فقط از بین می‌رود — چیزی برای آزادسازی نیست
+        changed = true;
+        return { ...li, _toRemove: true };
+      }).filter((li) => !li._toRemove);
+      return changed ? { ...p, lineItems } : p;
+    });
+
+    const materials = d.materials.map((mm, i) => {
+      if (i !== mIdx) return mm;
+      return { ...mm, batches: (mm.batches || []).filter((b) => b.id !== bId), pendingReleaseCredits: credits };
+    });
+    return { ...d, materials, products: syncPercentPricedProducts(materials, products) };
   });
   const lockBatch = (mId, bId) => {
     updateBatch(mId, bId, { locked: true });
