@@ -246,6 +246,32 @@ export async function autoDetectImagesForCode(code) {
   return matches.map((m) => m.file);
 }
 
+/**
+ * نسخه‌ی گروهیِ autoDetectImagesForCode — برای دکمه‌ی «بررسی پوشه‌ی عکس‌ها» توی
+ * تب همگام‌سازی: به‌جای این‌که برای هر محصول جدا پوشه رو لیست کنه (کند)، فقط یه‌بار
+ * کل پوشه‌ی عکس‌های محصول رو می‌خونه، بعد بر اساس کدِ هر محصول محلی match می‌کنه.
+ * @param {string[]} codes - آرایه‌ی کدهای فرمت‌شده‌ی محصولات (مثلاً ["0001","0002",...])
+ * @returns {Promise<Record<string,string[]>>} نگاشت کد → لیست اسم‌فایل‌های پیداشده (به ترتیب شماره)
+ */
+export async function autoDetectImagesForCodes(codes) {
+  const files = await listFilesInCategory(IMAGE_CATEGORIES.PRODUCT);
+  const result = {};
+  const codeSet = new Set((codes || []).map((c) => String(c || "").trim()).filter(Boolean));
+  for (const codeStr of codeSet) {
+    const re = new RegExp(`^${codeStr}(\\d{2})\\.[a-zA-Z0-9]+$`);
+    const matches = [];
+    for (const f of files) {
+      const mm = f.match(re);
+      if (mm) matches.push({ file: f, idx: parseInt(mm[1], 10) });
+    }
+    if (matches.length) {
+      matches.sort((a, b) => a.idx - b.idx);
+      result[codeStr] = matches.map((mm) => mm.file);
+    }
+  }
+  return result;
+}
+
 
 export async function imageFileExists(filename, category) {
   if (!filename) return false;

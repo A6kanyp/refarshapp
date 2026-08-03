@@ -73,6 +73,7 @@ export default function InvoicePrint({
   const paperRef = useRef(null);
   const [paperHeight, setPaperHeight] = useState(1123);
   const [isCompact, setIsCompact] = useState(window.innerWidth < 640);
+  // کدوم دکمه‌ی ذخیره/اشتراک الان در حال کاره — تا نوتیف/toast نهایی نیومده همون دکمه می‌چرخه
 
   const handlePrint = () => {
     window.print();
@@ -550,7 +551,8 @@ export default function InvoicePrint({
               color: '#9ec9f5', 
               border: '1px solid #2a5080', 
               borderRadius: 6, 
-              cursor: 'pointer', 
+              cursor: savingAction === "pdf" ? 'default' : 'pointer', 
+              opacity: savingAction === "pdf" ? 0.7 : 1,
               transition: "all 0.2s" 
             }}
             title="ذخیره PDF در Documents/refarsh/factor/pdf"
@@ -572,7 +574,8 @@ export default function InvoicePrint({
               color: '#9ec9f5', 
               border: '1px solid #2a5080', 
               borderRadius: 6, 
-              cursor: 'pointer', 
+              cursor: savingAction === "image" ? 'default' : 'pointer', 
+              opacity: savingAction === "image" ? 0.7 : 1,
             }}
             title="ذخیره تصویر در Documents/refarsh/factor/image"
           >
@@ -606,7 +609,8 @@ export default function InvoicePrint({
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               width: '32px', height: '32px', background: '#8B1A1A', color: '#fff',
-              border: 'none', borderRadius: 6, cursor: 'pointer',
+              border: 'none', borderRadius: 6, cursor: savingAction === "sharePdf" ? 'default' : 'pointer',
+              opacity: savingAction === "sharePdf" ? 0.7 : 1,
             }}
             title="اشتراک PDF"
           >
@@ -620,7 +624,8 @@ export default function InvoicePrint({
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               width: '32px', height: '32px', background: '#232323', color: '#ddd',
-              border: '1px solid #333', borderRadius: 6, cursor: 'pointer',
+              border: '1px solid #333', borderRadius: 6, cursor: savingAction === "shareImage" ? 'default' : 'pointer',
+              opacity: savingAction === "shareImage" ? 0.7 : 1,
             }}
             title="اشتراک تصویر"
           >

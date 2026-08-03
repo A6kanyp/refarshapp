@@ -2,7 +2,7 @@
 // WoodCuttingTab.jsx - Refarsh Clean (اصلاح خطاهای build)
 // ============================================================
 import React, { useState, useMemo, memo, useRef, useEffect } from "react";
-import { Trash2, ChevronDown, ChevronUp, RotateCcw, Plus, Eye, EyeOff, Download, X, Package, Save, Upload, Image as ImageIcon, FileText, Clock } from "lucide-react";
+import { Trash2, ChevronDown, ChevronUp, RotateCcw, Plus, Eye, EyeOff, Download, X, Package, Save, Upload, Image as ImageIcon, FileText, Clock, RefreshCw } from "lucide-react";
 import html2canvas from "html2canvas";
 import { saveFile, REFARSH_SAVE_DIRS } from "../utils/nativeSave";
 import { toNum, normalizeNumericInput, fmtCode, formatProductDims } from "../mathCore";
@@ -562,7 +562,7 @@ export default function WoodCuttingTab({ stickyTop, materials, products, persist
 
     return html2canvas(el, { 
       backgroundColor: "#0a0a0a",
-      scale: 2,
+      scale: 1.5, // قبلاً 2 بود؛ چون این بخش SVG سنگین داره و کندی گزارش‌شده بود، برای سرعت کم شد
       useCORS: true,
       logging: false,
       width: naturalWidth,
@@ -969,7 +969,8 @@ export default function WoodCuttingTab({ stickyTop, materials, products, persist
           alignItems: "center",
           justifyContent: "center",
           zIndex: 40,
-          cursor: "pointer",
+          cursor: savingTarget === "both" ? "default" : "pointer",
+          opacity: savingTarget === "both" ? 0.7 : 1,
           boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
         }}
         title="ذخیره به‌صورت تصویر — هر کدوم از ۱D/۲D که فعال باشه"
