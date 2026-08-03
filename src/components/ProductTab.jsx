@@ -2081,7 +2081,7 @@ export function ProductEditor({
         <div style={{ padding: "12px 14px" }}>
           <div style={S.sectionLabel}>تصاویر محصول (اول = آیکون)</div>
           <div style={{ display: "flex", gap: 8, marginBottom: 12, overflowX: "auto", paddingBottom: 4, WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
-            {(local.images || (local.image ? [local.image] : [])).map((img, i) => (
+            {(local.images || (local.image ? [local.image] : [])).map((img, i, arr) => (
               <div key={i} style={{ width: 60, height: 60, background: "#111", borderRadius: 8, overflow: "hidden", flexShrink: 0, position: "relative", border: i === 0 ? "2px solid #8B1A1A" : "1px solid #2a2a2a" }}>
                 <ProductImage filename={img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} loading="lazy" />
                 {i === 0 && (
@@ -2089,6 +2089,37 @@ export function ProductEditor({
                 )}
                 <button style={{ position: "absolute", top: 2, right: 2, background: "rgba(0,0,0,0.7)", border: "none", borderRadius: "50%", color: "#fff", width: 16, height: 16, fontSize: 9, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
                   onClick={() => handleRemoveImage(i)}>✕</button>
+                {/* جابجایی ترتیب عکس‌ها — drag-and-drop واقعیِ HTML5 روی صفحه‌لمسی موبایل
+                    (وب‌ویوی اندروید) قابل‌اعتماد نیست، پس به‌جاش دو دکمه‌ی کوچیک
+                    جابجایی چپ/راست اضافه شد؛ عکسِ اول همیشه آیکون/جلد محصوله */}
+                {arr.length > 1 && (
+                  <div style={{ position: "absolute", top: 2, left: 2, display: "flex", gap: 2 }}>
+                    {i > 0 && (
+                      <button
+                        type="button"
+                        title="جابجایی به جلو"
+                        onClick={() => setLocalWithScratch((l) => {
+                          const all = [...(l.images || [])];
+                          [all[i - 1], all[i]] = [all[i], all[i - 1]];
+                          return { ...l, image: all[0] || null, images: all };
+                        })}
+                        style={{ background: "rgba(0,0,0,0.7)", border: "none", borderRadius: "50%", color: "#fff", width: 16, height: 16, fontSize: 9, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                      >‹</button>
+                    )}
+                    {i < arr.length - 1 && (
+                      <button
+                        type="button"
+                        title="جابجایی به عقب"
+                        onClick={() => setLocalWithScratch((l) => {
+                          const all = [...(l.images || [])];
+                          [all[i], all[i + 1]] = [all[i + 1], all[i]];
+                          return { ...l, image: all[0] || null, images: all };
+                        })}
+                        style={{ background: "rgba(0,0,0,0.7)", border: "none", borderRadius: "50%", color: "#fff", width: 16, height: 16, fontSize: 9, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                      >›</button>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
             <label style={{ width: 60, height: 60, background: "#1c1c1c", border: "1px dashed #333", borderRadius: 8, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, gap: 3 }}>
