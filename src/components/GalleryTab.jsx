@@ -3,7 +3,7 @@
 // ============================================================
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { pushBackHandler } from "../utils/backButton";
-import { Plus, Edit3, Trash2, Edit2, ChevronDown, ChevronUp, Phone, X, RotateCcw, Landmark, Undo2, Camera, Copy, Share2, Receipt, Printer, Search, CheckCircle2, Circle, Clock, ShoppingBag } from "lucide-react";
+import { Plus, Edit3, Trash2, Edit2, ChevronDown, ChevronUp, Phone, X, RotateCcw, Landmark, Undo2, Camera, Copy, Share2, Receipt, Printer, Search, CheckCircle2, Circle, Clock, ShoppingBag, Eye, EyeOff } from "lucide-react";
 import { toNum, fmt, fmtCode, fmtDate, todayISO, formatProductDims, qtySuffix } from "../mathCore";
 import { emptyCustomer, GALLERY_COLOR_PALETTE, uid } from "../dataModels";
 import { formatPhoneInput, parsePhoneInput, getJalaliTimestamp } from "../utils/formatters";
@@ -825,7 +825,7 @@ function CustomerCard({
 
   return (
     <>
-      <div style={T.card}>
+      <div style={{ ...T.card, opacity: stat.hidden ? 0.45 : 1 }}>
         {isGallery && <div style={{ height: 3, background: col, borderRadius: "9px 9px 0 0" }} />}
         <div
           style={{
@@ -924,6 +924,21 @@ function CustomerCard({
               )}
             </div>
           </div>
+          <button
+            style={{ ...T.iconBtn, width: 22, height: 22, justifyContent: "center" }}
+            title={stat.hidden ? "نمایش دادن (از حالت مخفی خارج کن)" : "مخفی کن (از لیست‌های انتخاب/ارجاع حذف می‌شه)"}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (setData) {
+                setData((d) => ({
+                  ...d,
+                  customers: (d.customers || []).map((c) => (c.id === stat.id ? { ...c, hidden: !c.hidden } : c)),
+                }));
+              }
+            }}
+          >
+            {stat.hidden ? <EyeOff size={12} color="#555" /> : <Eye size={12} color="#555" />}
+          </button>
           <button
             style={{ ...T.iconBtn, width: 22, height: 22, justifyContent: "center" }}
             onClick={(e) => { e.stopPropagation(); onEdit(stat); }}

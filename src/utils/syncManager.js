@@ -3,6 +3,7 @@
 // ============================================================
 
 import { loadData, saveData, migrateData } from "../dataModels";
+import { fmtCode } from "../mathCore";
 
 const DELETED_REGISTRY_KEY = "refarsh_deleted_records_v1";
 const SYNC_STATE_KEY = "refarsh_sync_state_v1";
@@ -25,7 +26,14 @@ const AUDIT_LOG_MAX = 300;
 
 // اسم قابل‌نمایش هر رکورد برای لاگ تغییرات (بر اساس فیلدهای رایج مدل‌های مختلف)
 function entityDisplayName(item) {
-  return item?.name || item?.label || item?.title || item?.buyerName || "بدون نام";
+  const base = item?.name || item?.label || item?.title || item?.buyerName || "بدون نام";
+  // درخواست کاربر: توی «ردپای تغییرات»، جلوی محصولات کدشون هم نوشته بشه —
+  // فقط محصولات فیلد `code` دارن (متریال/مشتری/... ندارن)، پس این هیچ تداخلی
+  // با بقیه‌ی موجودیت‌ها نداره
+  if (item?.code != null && item.code !== "") {
+    return `#${fmtCode(item.code)} ${base}`;
+  }
+  return base;
 }
 
 const ENTITY_LABELS = {

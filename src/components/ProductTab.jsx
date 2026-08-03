@@ -411,7 +411,7 @@ function ProductCard({ p, customers, materials, onEdit, onDelete, onImageUpload,
   const buyerGenderPrefix = buyerCust?.gender === "خانم" ? "خانم " : buyerCust?.gender === "آقا" ? "آقای " : "";
   const buyerDisplayName = buyerCust ? `${buyerGenderPrefix}${buyerCust.name}` : p.buyerName;
 
-  const galleryCustomers = customers.filter(c => c.kind === "gallery");
+  const galleryCustomers = customers.filter(c => c.kind === "gallery" && !c.hidden);
   const [showGalleryPicker, setShowGalleryPicker] = useState(false);
 
   return (
@@ -1195,7 +1195,7 @@ export function BasketPanel({ basket, onRemove, onConfirm, onClose, customers, o
                 <CustomerSmartSelect
                   value={customerName}
                   onChange={handleCustomerChange}
-                  options={customers.filter(c => c.kind === "customer")}
+                  options={customers.filter(c => c.kind === "customer" && !c.hidden)}
                   placeholder="نام مشتری..."
                 />
               </div>
@@ -1208,7 +1208,7 @@ export function BasketPanel({ basket, onRemove, onConfirm, onClose, customers, o
                   value={selectedGallery?.id || null}
                   includeWarehouse={false}
                   placeholder="انتخاب گالری مقصد"
-                  options={customers.filter(c => c.kind === "gallery")}
+                  options={customers.filter(c => c.kind === "gallery" && !c.hidden)}
                   onChange={(id) => {
                     setErrors(prev => ({ ...prev, gallery: false }));
                     setSelectedGallery(customers.find(c => c.id === id) || null);
@@ -1253,7 +1253,15 @@ export function BasketPanel({ basket, onRemove, onConfirm, onClose, customers, o
                         </div>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: 10.5, color: "#ccc" }}>#{fmtCode(p.code)} {p.name}</div>
-                          <div style={{ fontSize: 9, color: "#666" }}>{formatProductDims(p)}{qtySuffix(p)}</div>
+                          <div style={{ fontSize: 9, color: "#666" }}>
+                            {formatProductDims(p)}{qtySuffix(p)}
+                            {(() => {
+                              const gal = p.status === "available" && p.location
+                                ? customers.find((c) => c.id === p.location && c.kind === "gallery")
+                                : null;
+                              return gal ? <span style={{ color: "#a89bd4" }}> — پیش {gal.name}</span> : null;
+                            })()}
+                          </div>
                         </div>
                         <div style={{ fontSize: 10, color: "#F5F0EB" }}>{fmt(toNum(p.salePrice))}</div>
                       </div>
@@ -1905,7 +1913,7 @@ export function ProductEditor({
     }
   };
 
-  const galleryCustomers = customers.filter(c => c.kind === "gallery");
+  const galleryCustomers = customers.filter(c => c.kind === "gallery" && !c.hidden);
 
   const handleGalleryChange = (item) => {
     if (item) {
@@ -2072,7 +2080,7 @@ export function ProductEditor({
     setLocalWithScratch((l) => ({ ...l, buyerPhone: clean }));
   };
 
-  const buyerList = customers.filter(c => c.kind === "customer");
+  const buyerList = customers.filter(c => c.kind === "customer" && !c.hidden);
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", zIndex: 120, display: "flex", flexDirection: "column" }} dir="rtl">
@@ -3023,7 +3031,7 @@ export function CatalogTab({
   const [lightboxId, setLightboxId] = useState(null);
   const [search, setSearch] = useState("");
 
-  const galleryCustomers = customers.filter((c) => c.kind === "gallery");
+  const galleryCustomers = customers.filter((c) => c.kind === "gallery" && !c.hidden);
 
   const {
     selectedWarehouse,
@@ -3573,7 +3581,7 @@ export default function ProductTab({
     return pushBackHandler(() => setShowBasket(false));
   }, [showBasket]);
 
-  const galleryCustomers = customers.filter((c) => c.kind === "gallery");
+  const galleryCustomers = customers.filter((c) => c.kind === "gallery" && !c.hidden);
 
   const {
     selectedWarehouse,
