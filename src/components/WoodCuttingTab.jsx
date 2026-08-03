@@ -562,7 +562,7 @@ export default function WoodCuttingTab({ stickyTop, materials, products, persist
 
     return html2canvas(el, { 
       backgroundColor: "#0a0a0a",
-      scale: 2,
+      scale: 1.5, // قبلاً 2 بود؛ چون این بخش SVG سنگین داره و کندی گزارش‌شده بود، برای سرعت کم شد
       useCORS: true,
       logging: false,
       width: naturalWidth,
