@@ -76,11 +76,20 @@ export default function SyncTab({
     try {
       let matchedCount = 0;
       let newImagesCount = 0;
+      let realError = null;
       const updates = {};
       for (const p of data.products) {
         if (p.code == null) continue;
         const codeStr = fmtCode(p.code);
-        const found = await autoDetectImagesForCode(codeStr);
+        let found;
+        try {
+          found = await autoDetectImagesForCode(codeStr);
+        } catch (err) {
+          // خطای واقعی (نه فقط «پوشه خالیه») — نگهش می‌داریم تا آخر گزارش بدیم،
+          // ولی بقیه‌ی محصولات رو هم امتحان می‌کنیم (شاید فقط یه محصول مشکل داره)
+          realError = err;
+          continue;
+        }
         if (found.length === 0) continue;
         const current = p.images || (p.image ? [p.image] : []);
         const currentSet = new Set(current);
@@ -98,7 +107,11 @@ export default function SyncTab({
         }));
       }
       setBulkImageScanResult({ checked: data.products.length, matched: matchedCount, newImages: newImagesCount });
-      if (notify) notify(matchedCount > 0 ? `${newImagesCount} عکس جدید برای ${matchedCount} محصول پیدا و وصل شد` : "عکس جدیدی که قبلاً وصل نبود پیدا نشد");
+      if (realError) {
+        if (notify) notify(`خطا در خواندن پوشه‌ی عکس: ${realError.message || realError}`);
+      } else if (notify) {
+        notify(matchedCount > 0 ? `${newImagesCount} عکس جدید برای ${matchedCount} محصول پیدا و وصل شد` : "عکس جدیدی که قبلاً وصل نبود پیدا نشد");
+      }
     } finally {
       setBulkImageScanning(false);
     }

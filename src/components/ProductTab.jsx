@@ -15,7 +15,7 @@ import { toNum, fmt, fmtCode, fmtDate, todayISO, parseDims, dimsArea, getProduct
 import { SCRATCH_KEYS, saveScratch, loadScratch, clearScratch } from "../scratchpad";
 import { saveFile, shareText } from "../utils/nativeSave";
 import { compressImageFile } from "../utils/imageCompress";
-import { saveImageToFolder, IMAGE_CATEGORIES, useResolvedImageSrc, autoDetectImagesForCode } from "../utils/imageStorage";
+import { saveImageToFolder, IMAGE_CATEGORIES, useResolvedImageSrc, autoDetectImagesForCode, deleteImageFile } from "../utils/imageStorage";
 import { handleEnterNavigate } from "../utils/formNav";
 import { pushBackHandler } from "../utils/backButton";
 import {
@@ -1757,7 +1757,13 @@ export function ProductEditor({
     const codeStr = fmtCode(local.code != null ? local.code : nextCode);
     setAutoScanning(true);
     try {
-      const found = await autoDetectImagesForCode(codeStr);
+      let found;
+      try {
+        found = await autoDetectImagesForCode(codeStr);
+      } catch (err) {
+        if (opts.manual) showToast(`خطا در خواندن پوشه‌ی عکس: ${err.message || err}`, "error");
+        return;
+      }
       if (found.length === 0) {
         if (opts.manual) showToast("عکسی با این کد در پوشه پیدا نشد", "error");
         return;
@@ -1787,8 +1793,17 @@ export function ProductEditor({
 
   const handleRemoveImage = (idx) => {
     setLocalWithScratch((l) => {
+      const removed = (l.images || [])[idx];
       const all = (l.images || []).filter((_, i) => i !== idx);
       const newImage = all.length > 0 ? all[0] : null;
+      // آیتم ۵ (دامپ اخیر): حذف عکس از محصول قبلاً فقط اسم فایل رو از رکورد
+      // برمی‌داشت، فایل فیزیکی توی پوشه دست‌نخورده می‌موند (برخلاف الگوی از قبل
+      // موجود توی BusinessCardModal که همین‌جا هم پیروی شد). عکس‌های محصول
+      // یکتا هستن (اسم‌شون شامل کد محصوله)، پس بین محصولات مختلف مشترک نیستن —
+      // حذف فیزیکی امن است.
+      if (removed) {
+        deleteImageFile(removed, IMAGE_CATEGORIES.PRODUCT).catch(() => {});
+      }
       return { ...l, image: newImage, images: all };
     });
   };
