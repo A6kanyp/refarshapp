@@ -1,7 +1,7 @@
 import { pushBackHandler } from "../utils/backButton";
 import { useRegisterOpenModal } from "../utils/modalRegistry";
 import React, { useEffect, useState, useRef } from "react";
-import { X, Printer, Download, Copy, FileDown } from "lucide-react";
+import { X, Printer, Download, Copy, FileDown, RefreshCw } from "lucide-react";
 import html2canvas from "html2canvas";
 import InvoiceTemplate from "./InvoiceTemplate";
 import { fmt, toNum } from "../mathCore";
@@ -65,6 +65,10 @@ export default function InvoicePrint({
   }, [onClose]);
 
   const [scale, setScale] = useState(1);
+  // کاربر: از لحظه‌ی زدن دکمه‌ی سیو/اشتراک تا وقتی توست موفقیت میاد، خودِ آیکون
+  // دکمه باید بچرخه (مثل دکمه‌ی سینک) و بعدش برگرده حالت عادی. مقدار: null یا
+  // یکی از "pdf" | "image" | "sharePdf" | "shareImage"
+  const [savingAction, setSavingAction] = useState(null);
   const containerRef = useRef(null);
   const paperRef = useRef(null);
   const [paperHeight, setPaperHeight] = useState(1123);
@@ -77,6 +81,7 @@ export default function InvoicePrint({
   const handleSaveAsPDF = () => {
     const paperElement = paperRef.current;
     if (!paperElement) return;
+    setSavingAction("pdf");
     waitForProductImagesResolved(paperElement).then(() => {
 
     // Create an off-screen container to render the A4 page at 1x scale
@@ -132,11 +137,13 @@ export default function InvoicePrint({
         const pdfBlob = pdf.output("blob");
         await saveFile(pdfBlob, `Factor_${safeName}_${safeId}.pdf`, { subdir: REFARSH_SAVE_DIRS.BILLS_PDF, share: false });
         showToast("PDF فاکتور ذخیره شد", "success");
+        setSavingAction(null);
         
         document.body.removeChild(cloneContainer);
       }).catch(err => {
         console.error("Error saving PDF:", err);
         alert("خطا در ذخیره فایل PDF");
+        setSavingAction(null);
         if (cloneContainer.parentNode) {
           document.body.removeChild(cloneContainer);
         }
@@ -203,6 +210,7 @@ export default function InvoicePrint({
   const handleSaveAsImage = () => {
     const paperElement = paperRef.current;
     if (!paperElement) return;
+    setSavingAction("image");
     waitForProductImagesResolved(paperElement).then(() => {
 
     // Create an off-screen container to render the A4 page at 1x scale
@@ -228,7 +236,7 @@ export default function InvoicePrint({
     // صبر کن img های کپی‌شده واقعاً لود بشن (نه صرفاً یه timeout ثابت)
     waitForImagesToLoad(clonedPaper).then(() => {
       html2canvas(clonedPaper, {
-        scale: 3, // Premium quality (3x resolution)
+        scale: 2, // کاهش از 3 به 2 برای سرعت (کاربر: خیلی زمان‌بر بود) — همون کیفیتی که PDF ازش استفاده می‌کنه، مساحت پیکسل تقریباً نصف می‌شه
         useCORS: true,
         backgroundColor: "#ffffff",
         logging: false,
@@ -240,12 +248,14 @@ export default function InvoicePrint({
         const safeName = (invoiceData.customer?.name || "Invoice").replace(/[^a-zA-Z0-9؀-\u06FF\s-]/g, '').trim().replace(/\s+/g, '_');
         await saveFile(canvas.toDataURL("image/png", 1.0), `Factor_${safeName}_${safeId}.png`, { subdir: REFARSH_SAVE_DIRS.BILLS_IMAGE, share: false });
         showToast("عکس فاکتور ذخیره شد", "success");
+        setSavingAction(null);
         
         // Cleanup cloned elements
         document.body.removeChild(cloneContainer);
       }).catch(err => {
         console.error("Error saving image:", err);
         alert("خطا در ذخیره تصویر فاکتور");
+        setSavingAction(null);
         if (cloneContainer.parentNode) {
           document.body.removeChild(cloneContainer);
         }
@@ -274,7 +284,7 @@ export default function InvoicePrint({
     await waitForImagesToLoad(clonedPaper);
     try {
       const canvas = await html2canvas(clonedPaper, {
-        scale: 3, useCORS: true, backgroundColor: "#ffffff", logging: false, width: 794, allowTaint: true,
+        scale: 2, useCORS: true, backgroundColor: "#ffffff", logging: false, width: 794, allowTaint: true, // کاهش از 3 به 2 برای سرعت
       });
       return { canvas, cleanup: () => { if (cloneContainer.parentNode) document.body.removeChild(cloneContainer); } };
     } catch (e) {
@@ -284,6 +294,7 @@ export default function InvoicePrint({
   };
 
   const handleSharePDF = async () => {
+    setSavingAction("sharePdf");
     try {
       const cap = await captureCanvas();
       if (!cap) return;
@@ -302,10 +313,13 @@ export default function InvoicePrint({
     } catch (err) {
       console.error(err);
       alert("خطا در اشتراک PDF");
+    } finally {
+      setSavingAction(null);
     }
   };
 
   const handleShareImage = async () => {
+    setSavingAction("shareImage");
     try {
       const cap = await captureCanvas();
       if (!cap) return;
@@ -317,6 +331,8 @@ export default function InvoicePrint({
     } catch (err) {
       console.error(err);
       alert("خطا در اشتراک تصویر");
+    } finally {
+      setSavingAction(null);
     }
   };
 
@@ -523,6 +539,7 @@ export default function InvoicePrint({
           {/* Save as PDF → آبی (ذخیره‌ی خودکار در Documents/refarsh/factor/pdf) */}
           <button 
             onClick={handleSaveAsPDF} 
+            disabled={savingAction === "pdf"}
             style={{ 
               display: 'flex',
               alignItems: 'center',
@@ -538,12 +555,13 @@ export default function InvoicePrint({
             }}
             title="ذخیره PDF در Documents/refarsh/factor/pdf"
           >
-            <FileDown size={15} />
+            {savingAction === "pdf" ? <RefreshCw size={15} className="animate-spin" /> : <FileDown size={15} />}
           </button>
 
           {/* Save as Image → آبی (ذخیره‌ی خودکار در Documents/refarsh/factor/image) */}
           <button 
             onClick={handleSaveAsImage} 
+            disabled={savingAction === "image"}
             style={{ 
               display: 'flex',
               alignItems: 'center',
@@ -558,7 +576,7 @@ export default function InvoicePrint({
             }}
             title="ذخیره تصویر در Documents/refarsh/factor/image"
           >
-            <Download size={15} />
+            {savingAction === "image" ? <RefreshCw size={15} className="animate-spin" /> : <Download size={15} />}
           </button>
 
           {/* Copy Invoice Text */}
@@ -584,6 +602,7 @@ export default function InvoicePrint({
           {/* Share PDF → قرمز */}
           <button
             onClick={handleSharePDF}
+            disabled={savingAction === "sharePdf"}
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               width: '32px', height: '32px', background: '#8B1A1A', color: '#fff',
@@ -591,12 +610,13 @@ export default function InvoicePrint({
             }}
             title="اشتراک PDF"
           >
-            <FileDown size={15} />
+            {savingAction === "sharePdf" ? <RefreshCw size={15} className="animate-spin" /> : <FileDown size={15} />}
           </button>
 
           {/* Share Image → مشکی */}
           <button
             onClick={handleShareImage}
+            disabled={savingAction === "shareImage"}
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               width: '32px', height: '32px', background: '#232323', color: '#ddd',
@@ -604,7 +624,7 @@ export default function InvoicePrint({
             }}
             title="اشتراک تصویر"
           >
-            <Download size={15} />
+            {savingAction === "shareImage" ? <RefreshCw size={15} className="animate-spin" /> : <Download size={15} />}
           </button>
         </div>
       </div>
