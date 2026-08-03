@@ -173,7 +173,7 @@ export default function GlobalHeader({
 
   const startContinuousSpin = () => {
     stopSpinLoop();
-    spinVelocityRef.current = 9; // درجه در هر فریم — تقریباً معادل چرخش قبلی (0.7s/360deg)
+    spinVelocityRef.current = -9; // درجه در هر فریم — منفی یعنی خلاف جهت عقربه‌های ساعت (طبق خواسته‌ی کاربر، جهتش برعکس بود)
     const tick = () => {
       spinAngleRef.current += spinVelocityRef.current;
       setRefreshRotation(spinAngleRef.current);
