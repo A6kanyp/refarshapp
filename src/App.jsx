@@ -160,6 +160,11 @@ function RefreshLockButton({ onQuickRefresh, onHoldRefresh, onUndoRefresh, onRes
   const holdTimer = useRef(null);
   const didHold = useRef(false);
   const [showHoldPopup, setShowHoldPopup] = useState(false);
+  // آیتم جدید: با یه ضربه‌ی ساده (نه نگه‌داشتن)، آیکون رفرش ۳ ثانیه دایره‌ای
+  // بچرخه — فقط یه فیدبک بصری که «کاری انجام شد»، مستقل از منطق واقعیِ
+  // quickRefresh (Ash 🟡)
+  const [isSpinning, setIsSpinning] = useState(false);
+  const spinTimeoutRef = useRef(null);
 
   const onPtrDown = () => {
     didHold.current = false;
@@ -181,9 +186,13 @@ function RefreshLockButton({ onQuickRefresh, onHoldRefresh, onUndoRefresh, onRes
     } else {
       RefreshLockButton._lastTap = now;
       onQuickRefresh?.();
+      clearTimeout(spinTimeoutRef.current);
+      setIsSpinning(true);
+      spinTimeoutRef.current = setTimeout(() => setIsSpinning(false), 3000);
     }
   };
   const onPtrCancel = () => clearTimeout(holdTimer.current);
+  useEffect(() => () => clearTimeout(spinTimeoutRef.current), []);
 
   // چیدمان ۴ دکمه‌ی مربعی طبق آخرین توضیح دقیق کاربر: ردیف بالا = قفل (راست) و
   // آزاد (چپ)، ردیف پایین = Undo (راست) و رفرش (چپ). چون کل اپ RTL هست، ترتیب
@@ -197,10 +206,11 @@ function RefreshLockButton({ onQuickRefresh, onHoldRefresh, onUndoRefresh, onRes
 
   return (
     <>
+      <style>{`@keyframes ashRefreshSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
       <button onPointerDown={onPtrDown} onPointerUp={onPtrUp} onPointerCancel={onPtrCancel}
         style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: "50%", background: hasPending ? "#3a1212" : "#1c1c1c", border: "1px solid " + (hasPending ? "#8B1A1A" : "#2a2a2a"), color: hasPending ? "#e08a8a" : "#888", cursor: "pointer", flexShrink: 0 }}
         title="ضربه = رفرش نمایش | نگه‌دار = باز شدن منوی قفل/آزادسازی">
-        <RotateCcw size={16} color={hasPending ? "#e08a8a" : "#888"} />
+        <RotateCcw size={16} color={hasPending ? "#e08a8a" : "#888"} style={isSpinning ? { animation: "ashRefreshSpin 1s linear 3" } : undefined} />
         {hasPending && <span style={{ position: "absolute", top: 3, right: 3, width: 6, height: 6, borderRadius: "50%", background: "#e08a8a" }} />}
       </button>
 
@@ -231,9 +241,15 @@ function RefreshLockButton({ onQuickRefresh, onHoldRefresh, onUndoRefresh, onRes
             </button>
             <button
               style={{ ...squareBtnStyle, background: "#1c1c1c", color: "#ccc" }}
-              onClick={() => { setShowHoldPopup(false); onQuickRefresh?.(); }}
+              onClick={() => {
+                setShowHoldPopup(false);
+                onQuickRefresh?.();
+                clearTimeout(spinTimeoutRef.current);
+                setIsSpinning(true);
+                spinTimeoutRef.current = setTimeout(() => setIsSpinning(false), 3000);
+              }}
             >
-              <RotateCcw size={16} />
+              <RotateCcw size={16} style={isSpinning ? { animation: "ashRefreshSpin 1s linear 3" } : undefined} />
               رفرش
             </button>
           </div>
