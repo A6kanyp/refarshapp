@@ -1894,7 +1894,7 @@ export default function GalleryTab({
           marginBottom: 12,
           display: "flex",
           gap: 6,
-          alignItems: "center",
+          alignItems: "flex-start",
         }}
       >
         <div style={{ flex: 1, display: "flex", alignItems: "center", background: "#161616", border: "1px solid #232323", borderRadius: 8, padding: "6px 10px", gap: 6 }}>

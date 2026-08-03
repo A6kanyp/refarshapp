@@ -3114,7 +3114,7 @@ export function CatalogTab({
           borderBottom: "1px solid #141414",
         }}
       >
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
           <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", background: "#161616", border: "1px solid #232323", borderRadius: 8, padding: "6px 10px", gap: 6 }}>
             <Search size={13} color="#555" style={{ flexShrink: 0 }} />
             <input onFocus={(e) => e.target.select()}
@@ -3832,7 +3832,7 @@ export default function ProductTab({
           marginBottom: 12,
         }}
       >
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
           <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", background: "#161616", border: "1px solid #232323", borderRadius: 8, padding: "6px 10px", gap: 6 }}>
             <Search size={13} color="#555" style={{ flexShrink: 0 }} />
             <input onFocus={(e) => e.target.select()}
