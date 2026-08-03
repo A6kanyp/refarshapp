@@ -162,9 +162,19 @@ function RefreshLockButton({ onQuickRefresh, onHoldRefresh, onUndoRefresh, onRes
   const [showHoldPopup, setShowHoldPopup] = useState(false);
   // آیتم جدید: با یه ضربه‌ی ساده (نه نگه‌داشتن)، آیکون رفرش ۳ ثانیه دایره‌ای
   // بچرخه — فقط یه فیدبک بصری که «کاری انجام شد»، مستقل از منطق واقعیِ
-  // quickRefresh (Ash 🟡)
-  const [isSpinning, setIsSpinning] = useState(false);
+  // quickRefresh (Ash 🟡). دابل‌کلیک (ریست فیلترها) هم مشابه ولی ۴ ثانیه،
+  // سریع‌تر، و با اینرسی (شروع تند، کم‌کم کند و متوقف) — با یه keyframe جدا
+  // که مسافت بیشتر (۵ دور) رو با easing کندشونده (نه linear) طی می‌کنه، پس
+  // خودش به‌طور طبیعی هم سریع‌تر شروع می‌شه هم با اینرسی می‌ایسته، بدون نیاز
+  // به فیزیک واقعی توی JS
+  const [spinMode, setSpinMode] = useState(null); // null | "tap" | "doubleTap"
   const spinTimeoutRef = useRef(null);
+
+  const triggerSpin = (mode, durationMs) => {
+    clearTimeout(spinTimeoutRef.current);
+    setSpinMode(mode);
+    spinTimeoutRef.current = setTimeout(() => setSpinMode(null), durationMs);
+  };
 
   const onPtrDown = () => {
     didHold.current = false;
@@ -183,16 +193,20 @@ function RefreshLockButton({ onQuickRefresh, onHoldRefresh, onUndoRefresh, onRes
     if (now - RefreshLockButton._lastTap < 350) {
       RefreshLockButton._lastTap = 0;
       onResetFilters?.();
+      triggerSpin("doubleTap", 4000);
     } else {
       RefreshLockButton._lastTap = now;
       onQuickRefresh?.();
-      clearTimeout(spinTimeoutRef.current);
-      setIsSpinning(true);
-      spinTimeoutRef.current = setTimeout(() => setIsSpinning(false), 3000);
+      triggerSpin("tap", 3000);
     }
   };
   const onPtrCancel = () => clearTimeout(holdTimer.current);
   useEffect(() => () => clearTimeout(spinTimeoutRef.current), []);
+
+  const spinStyle =
+    spinMode === "tap" ? { animation: "ashRefreshSpin 1s linear 3" } :
+    spinMode === "doubleTap" ? { animation: "ashRefreshSpinFast 4s cubic-bezier(0.15,0.65,0.35,1) 1" } :
+    undefined;
 
   // چیدمان ۴ دکمه‌ی مربعی طبق آخرین توضیح دقیق کاربر: ردیف بالا = قفل (راست) و
   // آزاد (چپ)، ردیف پایین = Undo (راست) و رفرش (چپ). چون کل اپ RTL هست، ترتیب
@@ -206,11 +220,11 @@ function RefreshLockButton({ onQuickRefresh, onHoldRefresh, onUndoRefresh, onRes
 
   return (
     <>
-      <style>{`@keyframes ashRefreshSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
+      <style>{`@keyframes ashRefreshSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}@keyframes ashRefreshSpinFast{from{transform:rotate(0deg)}to{transform:rotate(1800deg)}}`}</style>
       <button onPointerDown={onPtrDown} onPointerUp={onPtrUp} onPointerCancel={onPtrCancel}
         style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: "50%", background: hasPending ? "#3a1212" : "#1c1c1c", border: "1px solid " + (hasPending ? "#8B1A1A" : "#2a2a2a"), color: hasPending ? "#e08a8a" : "#888", cursor: "pointer", flexShrink: 0 }}
-        title="ضربه = رفرش نمایش | نگه‌دار = باز شدن منوی قفل/آزادسازی">
-        <RotateCcw size={16} color={hasPending ? "#e08a8a" : "#888"} style={isSpinning ? { animation: "ashRefreshSpin 1s linear 3" } : undefined} />
+        title="ضربه = رفرش نمایش | دو ضربه = ریست فیلترها | نگه‌دار = باز شدن منوی قفل/آزادسازی">
+        <RotateCcw size={16} color={hasPending ? "#e08a8a" : "#888"} style={spinStyle} />
         {hasPending && <span style={{ position: "absolute", top: 3, right: 3, width: 6, height: 6, borderRadius: "50%", background: "#e08a8a" }} />}
       </button>
 
@@ -244,12 +258,10 @@ function RefreshLockButton({ onQuickRefresh, onHoldRefresh, onUndoRefresh, onRes
               onClick={() => {
                 setShowHoldPopup(false);
                 onQuickRefresh?.();
-                clearTimeout(spinTimeoutRef.current);
-                setIsSpinning(true);
-                spinTimeoutRef.current = setTimeout(() => setIsSpinning(false), 3000);
+                triggerSpin("tap", 3000);
               }}
             >
-              <RotateCcw size={16} style={isSpinning ? { animation: "ashRefreshSpin 1s linear 3" } : undefined} />
+              <RotateCcw size={16} style={spinStyle} />
               رفرش
             </button>
           </div>
@@ -572,7 +584,7 @@ function MgmtTabs({ productTotals, groupedProducts, materialsWithRemaining, cust
       <div style={{ display: mgmtTab === "materials" ? "block" : "none" }}><MaterialTab stickyTop={stickyTop} materials={materialsWithRemaining} products={productTotals} setData={setData} onRequestDelete={onRequestDeleteMaterial} onAddPurchase={addMaterialPurchase} onUpdateProcurement={updateProcurement} onDeleteProcurement={deleteProcurement} onAddBatch={addBatch} onUpdateBatch={updateBatch} onDeleteBatch={deleteBatch} onLockBatch={lockBatch} onUnlockBatch={unlockBatch} onAddStick={addStick} onUpdateStick={updateStick} onDeleteStick={deleteStick} onBulkApply={bulkApplyMaterial} sortOrder={sortOrderMaterials} setSortOrder={setSortOrderMaterials} notify={notify} refreshResetTick={refreshResetTick} /></div>
       <div style={{ display: mgmtTab === "woodCutting" ? "block" : "none" }}><WoodCuttingTab stickyTop={stickyTop} materials={materialsWithRemaining} products={productTotals} woodCuttingSessions={woodCuttingSessions} onSaveSession={onSaveSession} onDeleteSession={onDeleteSession} onExport={onExportWoodCutting} /></div>
       <div style={{ display: mgmtTab === "gallery" ? "block" : "none" }}><GalleryTab businessCard={myBusinessCard} stickyTop={stickyTop} customerStats={customerStats} productTotals={productTotals} setData={setData} onRequestDeleteCustomer={onRequestDeleteCustomer} sortOrder={sortOrderGallery} setSortOrder={setSortOrderGallery} notify={notify} refreshResetTick={refreshResetTick} /></div>
-      <div style={{ display: mgmtTab === "accounting" ? "block" : "none" }}><AccountingTab stickyTop={stickyTop} acc={accounting} customers={data.customers || []} productTotals={productTotals} onExportExcel={handleExportExcel} onExportJson={handleExportJson} onImportExcelClick={() => xlsxImportRef.current?.click()} onImportJsonClick={() => jsonImportRef.current?.click()} setData={setData} notify={notify} businessCard={myBusinessCard} invoiceDrafts={data.invoiceDrafts || []} /></div>
+      <div style={{ display: mgmtTab === "accounting" ? "block" : "none" }}><AccountingTab stickyTop={stickyTop} acc={accounting} customers={data.customers || []} productTotals={productTotals} onExportExcel={handleExportExcel} onExportJson={handleExportJson} onImportExcelClick={() => xlsxImportRef.current?.click()} onImportJsonClick={() => jsonImportRef.current?.click()} setData={setData} notify={notify} businessCard={myBusinessCard} invoiceDrafts={data.invoiceDrafts || []} refreshResetTick={refreshResetTick} /></div>
       <div style={{ display: mgmtTab === "sync" ? "block" : "none" }}><SyncTab stickyTop={stickyTop} data={data} setData={setData} notify={notify} onExportExcel={handleExportExcel} onExportPreviewExcel={handleExportPreviewExcel} onExportJson={handleExportJson} onImportExcelClick={() => xlsxImportRef.current?.click()} onImportJsonClick={() => jsonImportRef.current?.click()} hideFloatingSync={hideFloatingSync} /></div>
       </div>
       </div>

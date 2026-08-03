@@ -887,6 +887,16 @@ function AllInvoicesModal({ invoices, onClose, setData, notify, customers, onVie
   const [addingItemInvId, setAddingItemInvId] = useState(null);
   const [addItemQuery, setAddItemQuery] = useState("");
 
+  // با دابل‌کلیک روی دکمه‌ی رفرش هدر، فیلترهای این تب هم مثل بقیه‌ی
+  // تب‌ها (محصولات/متریال/گالری) به حالت پیش‌فرض برگردن — قبلاً این تب اصلاً
+  // گوش نمی‌داد (Ash 🟡)
+  useEffect(() => {
+    if (!refreshResetTick) return;
+    setSearchQuery("");
+    setFilterDate("");
+    setSortOrder("date");
+  }, [refreshResetTick]);
+
   // States for the inline editing form
   const [editBuyerName, setEditBuyerName] = useState("");
   const [editBuyerPhone, setEditBuyerPhone] = useState("");
@@ -1573,6 +1583,7 @@ export default function AccountingTab({
   notify,
   businessCard,
   invoiceDrafts,
+  refreshResetTick,
 }) {
   const [showCalc, setShowCalc] = useState(false);
   useEffect(() => {
