@@ -385,15 +385,15 @@ else {
               </td>
               <td style={{ textAlign: "center" }}>
                 {item.discountPct >= 100 ? (
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "#fce4ec", color: "#c2185b", border: "1px solid #c2185b", borderRadius: "4px", padding: "2px 7px", fontSize: "10px", fontWeight: "700" }}>
-                    {"\u{1F381}\uFE0E"} هدیه
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "#fce4ec", color: "#c2185b", border: "1px solid #c2185b", borderRadius: "4px", padding: "2px 7px", fontSize: "10px", fontWeight: "700", direction: "rtl", unicodeBidi: "plaintext" }}>
+                    هدیه {"\u{1F381}\uFE0E"}
                   </span>
                 ) : item.isAvailableInGallery ? (
                   <span style={{ color: "#666", fontSize: "10px", fontWeight: "bold" }}>موجود در گالری</span>
                 ) : item.isSettled ? (
-                  <span className="badge-settled">تسویه شده</span>
+                  <span className="badge-settled" style={{ direction: "rtl", unicodeBidi: "plaintext" }}>تسویه شده</span>
                 ) : (
-                  <span className="badge-pending">بدهکار</span>
+                  <span className="badge-pending" style={{ direction: "rtl", unicodeBidi: "plaintext" }}>بدهکار</span>
                 )}
               </td>
             </tr>
