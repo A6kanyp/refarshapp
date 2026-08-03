@@ -136,30 +136,53 @@ function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onTogg
       <FilterPopup open={showPopup} onClose={() => setShowPopup(false)} width={170}>
         {onToggleGrouped && (
           <>
-            <button
-              style={{
-                display: "block",
-                width: "100%",
-                padding: "8px 10px",
-                background: !groupByTypeActive && groupedView ? "#2a1414" : "transparent",
-                border: "none",
-                borderRadius: 4,
-                color: !groupByTypeActive && groupedView ? "#d88888" : "#ddd",
-                fontSize: 11,
-                fontFamily: "inherit",
-                cursor: "pointer",
-                textAlign: "right",
-              }}
-              onClick={() => {
-                // قبلاً وقتی groupedView از قبل true بود (مثلاً چون الان روی «بر اساس نوع»
-                // بودیم) این کلیک هیچ کاری نمی‌کرد، چون فقط groupedView رو روشن می‌کرد نه
-                // sortMode رو برمی‌گردوند به fabric — پس گیر می‌کرد رو نوع. الان صریح برمی‌گرده.
-                if (onGroupByFabric) onGroupByFabric();
-                else if (!groupedView) onToggleGrouped?.();
-              }}
-            >
-              بر اساس فرش
-            </button>
+            {onGroupByFabric && (
+              <button
+                style={{
+                  display: "block",
+                  width: "100%",
+                  padding: "8px 10px",
+                  background: !groupByTypeActive && groupedView ? "#2a1414" : "transparent",
+                  border: "none",
+                  borderRadius: 4,
+                  color: !groupByTypeActive && groupedView ? "#d88888" : "#ddd",
+                  fontSize: 11,
+                  fontFamily: "inherit",
+                  cursor: "pointer",
+                  textAlign: "right",
+                }}
+                onClick={() => {
+                  // قبلاً وقتی groupedView از قبل true بود (مثلاً چون الان روی «بر اساس نوع»
+                  // بودیم) این کلیک هیچ کاری نمی‌کرد، چون فقط groupedView رو روشن می‌کرد نه
+                  // sortMode رو برمی‌گردوند به fabric — پس گیر می‌کرد رو نوع. الان صریح برمی‌گرده.
+                  onGroupByFabric();
+                }}
+              >
+                بر اساس فرش
+              </button>
+            )}
+            {/* حالت ساده‌ی گروه‌بندی — برای مصرف‌کننده‌هایی مثل تب کاتالوگ که زیرمدهای
+                فرش/نوع نمی‌خوان، فقط یه دسته‌بندی/یکجا ساده (آیتم جدید کاربر) */}
+            {!onGroupByFabric && !onGroupByType && (
+              <button
+                style={{
+                  display: "block",
+                  width: "100%",
+                  padding: "8px 10px",
+                  background: groupedView ? "#2a1414" : "transparent",
+                  border: "none",
+                  borderRadius: 4,
+                  color: groupedView ? "#d88888" : "#ddd",
+                  fontSize: 11,
+                  fontFamily: "inherit",
+                  cursor: "pointer",
+                  textAlign: "right",
+                }}
+                onClick={() => { if (!groupedView) onToggleGrouped(); }}
+              >
+                دسته‌بندی
+              </button>
+            )}
             <button
               style={{
                 display: "block",
@@ -2933,6 +2956,11 @@ export function CatalogTab({
   myBusinessCard,
   productTypes = [],
 }) {
+  // آیتم جدید کاربر: گروه‌بندی تب کاتالوگ مثل تب محصولات — پیش‌فرض دسته‌بندی
+  // (بر اساس نوع محصول)، با موجود بالا/ناموجود پایین توی هر دسته؛ یا «یکجا» (تخت)
+  const [groupedView, setGroupedView] = useState(true);
+  const toggleGroupedView = () => setGroupedView((v) => !v);
+
   const confirmPurchase = (items, customerName, settled = true) => {
     setData((d) => {
       let customersList = [...(d.customers || [])];
@@ -3046,6 +3074,30 @@ export function CatalogTab({
       })
       .sort(sortFn);
   }, [products, search, statusFilter, selectedWarehouse, selectedGalleries, sortOrder]);
+
+  // آیتم جدید: دسته‌بندی بر اساس نوع محصول، با موجود(available) بالا و ناموجود(sold) پایین توی هر دسته
+  const groupedCatalog = useMemo(() => {
+    if (!groupedView) return null;
+    const byAvailability = (arr) => {
+      const avail = arr.filter((p) => p.status === "available");
+      const rest = arr.filter((p) => p.status !== "available");
+      return [...avail, ...rest];
+    };
+    const buckets = new Map();
+    filtered.forEach((p) => {
+      const key = p.productTypeId || "__none__";
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push(p);
+    });
+    const groups = [];
+    buckets.forEach((items, key) => {
+      const typeObj = productTypes.find((t) => t.id === key);
+      groups.push({ key, label: typeObj ? typeObj.name : "بدون دسته", items: byAvailability(items) });
+    });
+    // دسته‌های بدون‌نام همیشه ته لیست
+    groups.sort((a, b) => (a.key === "__none__" ? 1 : b.key === "__none__" ? -1 : 0));
+    return groups;
+  }, [filtered, groupedView, productTypes]);
 
   const allProductsForLightbox = products.filter((p) => p.image);
 
@@ -3289,15 +3341,19 @@ export function CatalogTab({
             </div>
           )}
 
-          <SortButton sortOrder={sortOrder} setSortOrder={setSortOrder} modes={SORT_MODES} style={{}} />
+          <SortButton
+            sortOrder={sortOrder}
+            setSortOrder={setSortOrder}
+            modes={SORT_MODES}
+            style={{}}
+            groupedView={groupedView}
+            onToggleGrouped={toggleGroupedView}
+          />
         </div>
       </div>
 
-      <div
-        className="grid grid-cols-2 landscape:grid-cols-3 xl:grid-cols-4"
-        style={{ gap: 8 }}
-      >
-        {filtered.map((p, idx) => {
+      {(() => {
+        const renderTile = (p, idx) => {
           const inBasket = basket?.some((b) => b.id === p.id) || false;
           const isSold = p.status === "sold";
           return (
@@ -3383,8 +3439,26 @@ export function CatalogTab({
               </div>
             </div>
           );
-        })}
-      </div>
+        };
+
+        if (groupedView && groupedCatalog) {
+          return groupedCatalog.map((g) => (
+            <div key={g.key} style={{ marginBottom: 18 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#d88888", padding: "4px 2px", marginBottom: 8 }}>
+                {g.label} <span style={{ color: "#555", fontWeight: 400 }}>({g.items.length})</span>
+              </div>
+              <div className="grid grid-cols-2 landscape:grid-cols-3 xl:grid-cols-4" style={{ gap: 8 }}>
+                {g.items.map((p, idx) => renderTile(p, idx))}
+              </div>
+            </div>
+          ));
+        }
+        return (
+          <div className="grid grid-cols-2 landscape:grid-cols-3 xl:grid-cols-4" style={{ gap: 8 }}>
+            {filtered.map((p, idx) => renderTile(p, idx))}
+          </div>
+        );
+      })()}
 
       {filtered.length === 0 && (
         <div style={{ textAlign: "center", color: "#444", fontSize: 12, padding: "40px 0" }}>محصولی پیدا نشد</div>
