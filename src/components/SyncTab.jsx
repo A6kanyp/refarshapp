@@ -7,7 +7,7 @@ import {
   Cloud, CloudLightning, RefreshCw, CheckCircle2,
   AlertTriangle, FileDown, FileUp, Trash2, Database,
   HelpCircle, Wifi, WifiOff, Clock, HardDrive, Info,
-  FolderOpen, Save, X, Check, ChevronDown, ChevronUp, Plus, Edit3, LayoutGrid, ImagePlus
+  FolderOpen, Save, X, Check, ChevronDown, ChevronUp, Plus, Edit3, LayoutGrid
 } from "lucide-react";
 import {
   performSynchronization,
@@ -19,7 +19,7 @@ import {
   API_BASE_URL_OVERRIDE_KEY
 } from "../utils/syncManager";
 import { getDefaultData } from "../dataModels";
-import { getImageFolderName, autoDetectImagesForCodes } from "../utils/imageStorage";
+import { getImageFolderName, autoDetectImagesForCode } from "../utils/imageStorage";
 import { fmtCode } from "../mathCore";
 import { useAuth } from "../contexts/AuthContext.jsx";
 
@@ -62,6 +62,61 @@ export default function SyncTab({
   const [showPinInput, setShowPinInput] = useState(false);
   const [showAuditLog, setShowAuditLog] = useState(false);
   const [auditFilter, setAuditFilter] = useState("all");
+  const [bulkImageScanning, setBulkImageScanning] = useState(false);
+  const [bulkImageScanResult, setBulkImageScanResult] = useState(null); // { checked, matched, newImages } | null
+
+  // مثل autoScanForImages توی فرم تک‌محصولی (ProductTab.jsx)، ولی یکجا برای همه‌ی
+  // محصولات: هر محصول رو با کدش توی پوشه‌ی عکس می‌گرده، هر عکس جدیدی که طبق قرارداد
+  // نام‌گذاری (کد+شماره دورقمی) پیدا بشه رو به لیست عکس‌های همون محصول اضافه می‌کنه.
+  // چیزی از عکس‌های موجود حذف نمی‌کنه، فقط جدیدها رو اضافه.
+  const handleBulkScanImages = async () => {
+    if (!data?.products?.length || !setData) return;
+    setBulkImageScanning(true);
+    setBulkImageScanResult(null);
+    try {
+      let matchedCount = 0;
+      let newImagesCount = 0;
+      let realError = null;
+      const updates = {};
+      for (const p of data.products) {
+        if (p.code == null) continue;
+        const codeStr = fmtCode(p.code);
+        let found;
+        try {
+          found = await autoDetectImagesForCode(codeStr);
+        } catch (err) {
+          // خطای واقعی (نه فقط «پوشه خالیه») — نگهش می‌داریم تا آخر گزارش بدیم،
+          // ولی بقیه‌ی محصولات رو هم امتحان می‌کنیم (شاید فقط یه محصول مشکل داره)
+          realError = err;
+          continue;
+        }
+        if (found.length === 0) continue;
+        const current = p.images || (p.image ? [p.image] : []);
+        const currentSet = new Set(current);
+        const newOnes = found.filter((f) => !currentSet.has(f));
+        if (newOnes.length === 0) continue;
+        matchedCount++;
+        newImagesCount += newOnes.length;
+        const merged = [...current, ...newOnes];
+        updates[p.id] = { image: p.image || merged[0] || null, images: merged };
+      }
+      if (Object.keys(updates).length > 0) {
+        setData((d) => ({
+          ...d,
+          products: d.products.map((p) => (updates[p.id] ? { ...p, ...updates[p.id] } : p)),
+        }));
+      }
+      setBulkImageScanResult({ checked: data.products.length, matched: matchedCount, newImages: newImagesCount });
+      if (realError) {
+        if (notify) notify(`خطا در خواندن پوشه‌ی عکس: ${realError.message || realError}`);
+      } else if (notify) {
+        notify(matchedCount > 0 ? `${newImagesCount} عکس جدید برای ${matchedCount} محصول پیدا و وصل شد` : "عکس جدیدی که قبلاً وصل نبود پیدا نشد");
+      }
+    } finally {
+      setBulkImageScanning(false);
+    }
+  };
+
 
   const auditLog = Array.isArray(data?.auditLog) ? data.auditLog : [];
   const filteredAuditLog = useMemo(() => {
@@ -87,7 +142,6 @@ export default function SyncTab({
 
   const [showPathEditor, setShowPathEditor] = useState(false);
   const [showServerEditor, setShowServerEditor] = useState(false);
-  const [scanningImages, setScanningImages] = useState(false);
   const [serverUrlInput, setServerUrlInput] = useState(() => {
     try { return localStorage.getItem(API_BASE_URL_OVERRIDE_KEY) || ""; } catch (_) { return ""; }
   });
@@ -125,47 +179,6 @@ export default function SyncTab({
 
   // getApiBase از syncManager می‌آد — الان اول localStorage (اگه کاربر توی
   // همین تب دستی ذخیره کرده باشه) بعد env رو چک می‌کنه
-
-  // «بررسی پوشه‌ی عکس‌ها» گروهی — آیتم جدید کاربر: دقیقاً همون منطق تشخیص
-  // خودکار عکس بر اساس کدِ فرم ویرایش تک‌محصول (imageStorage.js)، ولی یه‌جا
-  // برای همه‌ی محصولات، بدون نیاز به باز کردن فرم ویرایش هرکدوم جدا
-  const handleBulkImageScan = async () => {
-    if (!data?.products?.length) {
-      notify && notify("محصولی برای بررسی نیست");
-      return;
-    }
-    setScanningImages(true);
-    try {
-      const codes = data.products.map((p) => fmtCode(p.code));
-      const foundByCode = await autoDetectImagesForCodes(codes);
-      let productsChanged = 0;
-      let imagesAdded = 0;
-      const updatedProducts = data.products.map((p) => {
-        const codeStr = fmtCode(p.code);
-        const found = foundByCode[codeStr];
-        if (!found || !found.length) return p;
-        const current = p.images || (p.image ? [p.image] : []);
-        const currentSet = new Set(current);
-        const newOnes = found.filter((f) => !currentSet.has(f));
-        if (!newOnes.length) return p;
-        productsChanged += 1;
-        imagesAdded += newOnes.length;
-        const merged = [...current, ...newOnes];
-        return { ...p, image: p.image || merged[0] || null, images: merged };
-      });
-      if (productsChanged > 0) {
-        setData((d) => ({ ...d, products: updatedProducts }));
-        notify && notify(`${imagesAdded} تصویر جدید برای ${productsChanged} محصول پیدا و وصل شد`);
-      } else {
-        notify && notify("عکس جدیدی توی پوشه پیدا نشد (همه از قبل وصل بودن یا کدی مطابقت نداشت)");
-      }
-    } catch (err) {
-      console.error("Bulk image scan failed:", err);
-      notify && notify("خطا در بررسی پوشه‌ی عکس‌ها");
-    } finally {
-      setScanningImages(false);
-    }
-  };
 
   const testConnection = async () => {
     setPinging(true);
@@ -559,6 +572,23 @@ export default function SyncTab({
               </div>
             </div>
           )}
+
+          <button
+            className="flex items-center justify-center gap-2 w-full mt-3 py-2.5 px-3 rounded-lg text-[11px] font-inherit cursor-pointer disabled:opacity-60"
+            style={{ background: "#161616", border: "1px solid #2a2a2a", color: "#7aa8d8" }}
+            onClick={handleBulkScanImages}
+            disabled={bulkImageScanning}
+          >
+            {bulkImageScanning ? <RefreshCw size={13} className="animate-spin" /> : <FolderOpen size={13} />}
+            {bulkImageScanning ? "در حال بررسی پوشه..." : "بررسی پوشه‌ی عکس و وصل‌کردن خودکار به همه‌ی محصولات"}
+          </button>
+          {bulkImageScanResult && !bulkImageScanning && (
+            <div className="text-[9.5px] text-[#666] mt-2 leading-relaxed">
+              {bulkImageScanResult.matched > 0
+                ? `از بین ${bulkImageScanResult.checked} محصول، ${bulkImageScanResult.matched} تا عکس جدید پیدا کردن (${bulkImageScanResult.newImages} عکس در کل).`
+                : `از بین ${bulkImageScanResult.checked} محصول، عکس جدیدی که قبلاً وصل نبود پیدا نشد.`}
+            </div>
+          )}
         </div>
 
         {/* ── تنظیم آدرس سرور (base URL) — آیتم ۱۵۴ رودمپ ── */}
@@ -602,21 +632,6 @@ export default function SyncTab({
               </div>
             </div>
           )}
-        </div>
-
-        {/* ── بررسی پوشه‌ی عکس‌ها (گروهی) ── */}
-        <div className="mt-4 pt-4 border-t border-[#1f1f1f]">
-          <button
-            onClick={handleBulkImageScan}
-            disabled={scanningImages}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-[#2a2a2a] bg-[#161616] hover:border-[#3a3a3a] text-[11px] text-[#ccc] hover:text-white transition-all cursor-pointer disabled:opacity-50 disabled:cursor-wait"
-          >
-            <ImagePlus size={14} className={scanningImages ? "animate-pulse" : ""} />
-            {scanningImages ? "در حال بررسی پوشه..." : "بررسی پوشه‌ی عکس‌ها برای همه‌ی محصولات"}
-          </button>
-          <p className="text-[9px] text-[#666] mt-2 leading-relaxed">
-            هر عکسی که مستقیم با فایل‌منیجر (نه از داخل اپ) توی پوشه‌ی عکس محصولات گذاشته باشی و اسمش با قرارداد کد محصول (مثلاً برای کد ۴: <span dir="ltr" className="font-mono">000401.jpg</span>) مطابقت داشته باشه، با این دکمه یه‌جا به محصول مربوطه وصل می‌شه — بدون نیاز به باز کردن فرم ویرایش تک‌تک محصولات.
-          </p>
         </div>
       </div>
 

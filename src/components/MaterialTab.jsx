@@ -35,13 +35,13 @@ const S = {
     border: "1px solid #2a2a2a",
     color: "#888",
     fontSize: 10,
-    padding: "6px 9px",
-    borderRadius: 12,
+    padding: "2px 9px",
+    borderRadius: 11,
     cursor: "pointer",
     fontFamily: "inherit",
     whiteSpace: "nowrap",
-    minHeight: 32,
-    height: 32,
+    minHeight: 22,
+    height: 22,
     boxSizing: "border-box",
     display: "inline-flex",
     alignItems: "center",
@@ -162,7 +162,7 @@ function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onTogg
       <button
         style={{
           ...S.chip,
-          padding: "6px 10px",
+          padding: "2px 10px",
           fontSize: 10,
           position: "relative",
           ...style,
@@ -971,10 +971,10 @@ export function BulkApplyMaterialPage({ material, products = [], allMaterials = 
 
             {/* جستجوگر کوچک + فیلتر دسته‌بندی فرش */}
             <div style={{ display: "flex", gap: 6, marginBottom: showFabricFilter ? 4 : 8 }}>
-              <div style={{ display: "flex", alignItems: "center", background: "#161616", border: "1px solid #232323", borderRadius: 6, padding: "4px 8px", gap: 6, flex: 1 }}>
+              <div style={{ display: "flex", alignItems: "center", background: "#161616", border: "1px solid #232323", borderRadius: 6, padding: "4px 8px", gap: 6, flex: 1, minWidth: 0 }}>
                 <Search size={12} color="#444" />
                 <input onFocus={(e) => e.target.select()}
-                  style={{ background: "transparent", border: "none", outline: "none", color: "#ddd", fontSize: 10.5, flex: 1, fontFamily: "inherit" }}
+                  style={{ background: "transparent", border: "none", outline: "none", color: "#ddd", fontSize: 10.5, flex: 1, minWidth: 0, fontFamily: "inherit" }}
                   placeholder="جستجوی سریع محصول..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -1562,7 +1562,7 @@ function MaterialCard({
           </div>
         </div>
         <button
-          style={{ ...S.iconBtn, width: 32, height: 32, justifyContent: "center" }}
+          style={{ ...S.iconBtn, width: 22, height: 22, justifyContent: "center" }}
           onClick={(e) => {
             e.stopPropagation();
             onToggleHidden(mat.id);
@@ -2311,9 +2311,10 @@ function MaterialCard({
           )}
 
           {/* دکمه‌های بولک/ویرایش/حذف — بالای لیست محصولات لینک‌شده */}
-          {/* تصحیح کاربر: مشکل اون‌موقع ارتفاع نبود، عرض بود — این دکمه باید فضای
-              باقیمانده‌ی ردیف رو تا دکمه‌های ویرایش/حذف پر کنه (نه فقط اندازه‌ی
-              متنش). حذف flex:1 (نشست قبلی Ash) این عرض رو خراب کرده بود، برگردوندم */}
+          {/* «افزودن به محصولات» باید عریض بمونه (flex:1) و بقیه‌ی فضای خالی ردیف رو پر کنه؛
+              فقط دکمه‌های ویرایش/حذف کناریش باید باریک (اندازه‌ی آیکون) بمونن. نسخه‌ی قبلی
+              اشتباهاً flex:1 رو از این دکمه برداشته بود و به‌جاش فکر کرده بود مشکل جای دیگه‌ایه —
+              الان برگشت */}
           <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
             <button
               style={{ ...S.chip, color: "#7aa8d8", flex: 1, justifyContent: "center" }}
@@ -3410,7 +3411,7 @@ export default function MaterialTab({
               ref={typeFilterBtnRef}
               style={{
                 ...S.chip,
-                padding: "6px 8px",
+                padding: "2px 8px",
                 fontSize: 10,
                 position: "relative",
                 display: "flex",
@@ -3430,7 +3431,7 @@ export default function MaterialTab({
                   : filterOptions.filter((o) => matGroupFilter.includes(o.key)).map((o) => o.label).join("،")}
               </span>
             </button>
-            <AnchoredFloatingPopup open={showTypeMenu} onClose={() => setShowTypeMenu(false)} anchorRef={typeFilterBtnRef} width={220}>
+            <FilterPopup open={showTypeMenu} onClose={() => setShowTypeMenu(false)} width={220} maxHeight={320}>
               {filterOptions.map((opt) => {
                 const isAllOpt = opt.key === "all";
                 const isSelected = isAllOpt ? matGroupFilter.length === 0 : matGroupFilter.includes(opt.key);
@@ -3467,7 +3468,7 @@ export default function MaterialTab({
                   </button>
                 );
               })}
-            </AnchoredFloatingPopup>
+            </FilterPopup>
           </div>
 
           {allFiltered.some((m) => m.hidden || (() => {
@@ -3497,7 +3498,7 @@ export default function MaterialTab({
             <button
               style={{
                 ...S.chip,
-                padding: "6px 10px",
+                padding: "2px 10px",
                 fontSize: 10,
                 position: "relative",
                 background: stockFilter !== "all" ? "#2a1414" : "#1c1c1c",
@@ -3560,10 +3561,17 @@ export default function MaterialTab({
               }
             }}
             style={{
-              // دیگه sticky جدا نیست: همون بلوک هدر (که خودش sticky هست) رو حمل می‌کنه،
-              // پس همیشه دقیقاً زیر ردیف Sort می‌شینه و هیچ‌وقت روی هدر جستجو نمیاد.
-              // سمت چپ صفحه (نه وسط) — طبق خواسته‌ی کاربر
-              marginTop: 8,
+              // قبلاً توی flow خودِ بلوک sticky هدر بود (marginTop:8)، یعنی پس‌زمینه‌ی
+              // تیره‌ی همون بلوک (که تمام عرض صفحه‌ست) کش می‌اومد پایین‌تر تا این لیبل
+              // رو هم بگیره — یه نوار مشکی عریض به‌جای یه حباب کوچیک شناور. الان با
+              // position:absolute کاملاً از اون flow بیرون اومده و مستقل شناوره (مثل
+              // دکمه‌ی اسکرول‌به‌بالا یا FAB قرمز +): فقط خودِ حباب پس‌زمینه داره، نه
+              // یه نوار زیرش. بلوک sticky هدر (که position:sticky خودش positioning
+              // context می‌سازه) لنگرشه، پس همیشه دقیقاً زیر ردیف Sort می‌مونه.
+              position: "absolute",
+              top: "100%",
+              left: 14,
+              marginTop: 6,
               zIndex: 14,
               width: "fit-content",
               maxWidth: "70%",
@@ -3582,9 +3590,7 @@ export default function MaterialTab({
               justifyContent: "center",
               border: "1px solid #2a2a2a",
               boxSizing: "border-box",
-              // سمت چپ صفحه، نه وسط
-              marginLeft: 0,
-              marginRight: "auto",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
             }}
           >
             {floatingCatLabel}

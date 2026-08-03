@@ -54,8 +54,8 @@ const T = {
     border: "1px solid #2a2a2a",
     color: "#888",
     fontSize: 10,
-    padding: "6px 9px",
-    borderRadius: 12,
+    padding: "2px 9px",
+    borderRadius: 11,
     cursor: "pointer",
     fontFamily: "inherit",
     display: "inline-flex",
@@ -63,8 +63,8 @@ const T = {
     justifyContent: "center",
     gap: 4,
     whiteSpace: "nowrap",
-    minHeight: 32,
-    height: 32,
+    minHeight: 22,
+    height: 22,
     boxSizing: "border-box",
   },
 };
@@ -887,6 +887,16 @@ function AllInvoicesModal({ invoices, onClose, setData, notify, customers, onVie
   const [addingItemInvId, setAddingItemInvId] = useState(null);
   const [addItemQuery, setAddItemQuery] = useState("");
 
+  // با دابل‌کلیک روی دکمه‌ی رفرش هدر، فیلترهای این تب هم مثل بقیه‌ی
+  // تب‌ها (محصولات/متریال/گالری) به حالت پیش‌فرض برگردن — قبلاً این تب اصلاً
+  // گوش نمی‌داد (Ash 🟡)
+  useEffect(() => {
+    if (!refreshResetTick) return;
+    setSearchQuery("");
+    setFilterDate("");
+    setSortOrder("date");
+  }, [refreshResetTick]);
+
   // States for the inline editing form
   const [editBuyerName, setEditBuyerName] = useState("");
   const [editBuyerPhone, setEditBuyerPhone] = useState("");
@@ -1129,7 +1139,7 @@ function AllInvoicesModal({ invoices, onClose, setData, notify, customers, onVie
             <button
               style={{
                 ...T.chip,
-                padding: "7px 11px",
+                padding: "2px 11px",
                 fontSize: 10.5,
                 background: "transparent",
                 border: "1px solid #2a2a2a",
@@ -1573,6 +1583,7 @@ export default function AccountingTab({
   notify,
   businessCard,
   invoiceDrafts,
+  refreshResetTick,
 }) {
   const [showCalc, setShowCalc] = useState(false);
   useEffect(() => {

@@ -15,7 +15,7 @@ import { toNum, fmt, fmtCode, fmtDate, todayISO, parseDims, dimsArea, getProduct
 import { SCRATCH_KEYS, saveScratch, loadScratch, clearScratch } from "../scratchpad";
 import { saveFile, shareText } from "../utils/nativeSave";
 import { compressImageFile } from "../utils/imageCompress";
-import { saveImageToFolder, IMAGE_CATEGORIES, useResolvedImageSrc, autoDetectImagesForCode } from "../utils/imageStorage";
+import { saveImageToFolder, IMAGE_CATEGORIES, useResolvedImageSrc, autoDetectImagesForCode, deleteImageFile } from "../utils/imageStorage";
 import { handleEnterNavigate } from "../utils/formNav";
 import { pushBackHandler } from "../utils/backButton";
 import {
@@ -60,7 +60,7 @@ function ProductImage({ filename, alt = "", style, loading, className, ...rest }
 const S = {
   input: { width:"100%", background:"#1c1c1c", border:"1px solid #2a2a2a", borderRadius:6, padding:"7px 10px", color:"#ddd", fontFamily:"inherit", fontSize:11, outline:"none", boxSizing:"border-box" },
   iconBtn: { background:"transparent", border:"none", cursor:"pointer", padding:"4px 6px", display:"flex", alignItems:"center" },
-  chip: { background:"#1c1c1c", border:"1px solid #2a2a2a", color:"#888", fontSize:10, padding:"6px 9px", borderRadius:12, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap", display:"inline-flex", alignItems:"center", justifyContent:"center", minHeight:32, height:32, boxSizing:"border-box" },
+  chip: { background:"#1c1c1c", border:"1px solid #2a2a2a", color:"#888", fontSize:10, padding:"2px 9px", borderRadius:11, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap", display:"inline-flex", alignItems:"center", justifyContent:"center", minHeight:22, height:22, boxSizing:"border-box" },
   chipActive: { background:"#2a1414", border:"1px solid #8B1A1A", color:"#d88888" },
   chipYellow: { background:"#3a2a10", border:"1px solid #d4b400", color:"#f2c94c" },
   sectionLabel: { fontSize:10, color:"#666", fontWeight:600, letterSpacing:1, textTransform:"uppercase", margin:"14px 0 7px" },
@@ -85,7 +85,7 @@ function cycleSort(current) {
 }
 
 // ── دکمه سورت ──
-function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onToggleGrouped, groupByTypeActive, onGroupByType, groupByFabricActive, onGroupByFabric }) {
+function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onToggleGrouped, groupByTypeActive, onGroupByType, onGroupByFabric }) {
   const [showPopup, setShowPopup] = useState(false);
   const wrapRef = useRef(null);
   const baseOrder = String(sortOrder || "").replace(/_desc$/, "");
@@ -123,7 +123,7 @@ function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onTogg
       <button
         style={{
           ...S.chip,
-          padding: "6px 10px",
+          padding: "2px 10px",
           fontSize: 10,
           position: "relative",
           ...style,
@@ -141,16 +141,22 @@ function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onTogg
                 display: "block",
                 width: "100%",
                 padding: "8px 10px",
-                background: groupByFabricActive ? "#2a1414" : "transparent",
+                background: !groupByTypeActive && groupedView ? "#2a1414" : "transparent",
                 border: "none",
                 borderRadius: 4,
-                color: groupByFabricActive ? "#d88888" : "#ddd",
+                color: !groupByTypeActive && groupedView ? "#d88888" : "#ddd",
                 fontSize: 11,
                 fontFamily: "inherit",
                 cursor: "pointer",
                 textAlign: "right",
               }}
-              onClick={onGroupByFabric}
+              onClick={() => {
+                // قبلاً وقتی groupedView از قبل true بود (مثلاً چون الان روی «بر اساس نوع»
+                // بودیم) این کلیک هیچ کاری نمی‌کرد، چون فقط groupedView رو روشن می‌کرد نه
+                // sortMode رو برمی‌گردوند به fabric — پس گیر می‌کرد رو نوع. الان صریح برمی‌گرده.
+                if (onGroupByFabric) onGroupByFabric();
+                else if (!groupedView) onToggleGrouped?.();
+              }}
             >
               بر اساس فرش
             </button>
@@ -389,7 +395,7 @@ function ProductCard({ p, customers, materials, onEdit, onDelete, onImageUpload,
     <div style={{ background:"#161616", border:"1px solid #232323", borderRadius:10, marginBottom:7, overflow:"hidden", opacity: p.hiddenFromCatalog ? 0.55 : 1 }}>
       <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", cursor:"pointer" }} onClick={() => onToggleExpand(p.id)}>
         <div style={{ width:40, height:40, borderRadius:6, background:"#111", overflow:"hidden", flexShrink:0, cursor:"pointer", position:"relative" }}
-          onClick={(e) => { e.stopPropagation(); if (p.image) onOpenLightbox(p.id); }}>
+          onClick={(e) => { e.stopPropagation(); onOpenLightbox(p.id); }}>
           {p.image ? (
             <ProductImage filename={p.image} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
           ) : (
@@ -735,6 +741,18 @@ export function ImageLightbox({ products, currentId, onNavigate, onClose, onAddT
     const remaining = Object.keys(ptrsRef.current).length;
 
     if (remaining < 2) lastDistRef.current = null;
+    // باگ pinch-zoom: وقتی با دو انگشت زوم می‌کردیم، `lastPanRef` هیچ‌وقت
+    // آپدیت نمی‌شد (فقط توی حالت تک‌انگشتی آپدیت می‌شه) — پس مقدارش از قبل از
+    // شروع pinch (یا حتی قدیمی‌تر) باقی می‌موند. با ول‌کردن یکی از دو انگشت،
+    // یه پوینتر تنها می‌مونه؛ حرکت بعدیش `dx/dy` رو نسبت به همون موقعیت خیلی
+    // قدیمی حساب می‌کرد → یه جهش ناگهانی چندسانتی توی تصویر. فیکس: وقتی از ۲
+    // انگشت به ۱ انگشت می‌رسیم، `lastPanRef` رو به موقعیت *فعلی* همون انگشتِ
+    // باقی‌مونده sync می‌کنیم، نه این‌که دست‌نخورده از قبل بمونه.
+    if (remaining === 1) {
+      const remainingId = Object.keys(ptrsRef.current)[0];
+      const pt = ptrsRef.current[remainingId];
+      if (pt) lastPanRef.current = { x: pt.x, y: pt.y };
+    }
     if (remaining === 0) {
       lastPanRef.current = null;
       if (swipeStartRef.current && scaleRef.current <= 1) {
@@ -786,7 +804,7 @@ export function ImageLightbox({ products, currentId, onNavigate, onClose, onAddT
         <button style={S.iconBtn} onClick={onClose} onPointerDown={(e) => e.stopPropagation()}>
           <X size={18} color="#fff" />
         </button>
-        <span style={{ flex: 1, fontSize: 12, color: "#ccc" }}>#{fmtCode(product.code)} · {product.name}</span>
+        <span style={{ flex: 1, fontSize: 14, color: "#F5F0EB", fontWeight: 700 }}>#{fmtCode(product.code)} · {product.name}</span>
         {onAddToBasket && product.status !== "sold" && (
           <button
             style={{ ...S.iconBtn, width: 44, height: 44, borderRadius: "50%", background: "rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center" }}
@@ -922,9 +940,12 @@ export function ImageLightbox({ products, currentId, onNavigate, onClose, onAddT
                 </div>
               )}
               {product.description && (
-                <div style={{ fontSize: 11.5, color: "#ccc", marginBottom: 8, whiteSpace: "pre-wrap", lineHeight: 1.65, fontWeight: 500 }}>
-                  {product.description}
-                </div>
+                <>
+                  <div style={{ height: 10 }} />
+                  <div style={{ fontSize: 11.5, color: "#ccc", marginBottom: 8, whiteSpace: "pre-wrap", lineHeight: 1.65, fontWeight: 500 }}>
+                    {product.description}
+                  </div>
+                </>
               )}
               {/* یک ردیف خط خالی بین آخرین مشخصات محصول و ردیف بها (خواسته‌ی کاربر) */}
               <div style={{ height: 10 }} />
@@ -1736,7 +1757,13 @@ export function ProductEditor({
     const codeStr = fmtCode(local.code != null ? local.code : nextCode);
     setAutoScanning(true);
     try {
-      const found = await autoDetectImagesForCode(codeStr);
+      let found;
+      try {
+        found = await autoDetectImagesForCode(codeStr);
+      } catch (err) {
+        if (opts.manual) showToast(`خطا در خواندن پوشه‌ی عکس: ${err.message || err}`, "error");
+        return;
+      }
       if (found.length === 0) {
         if (opts.manual) showToast("عکسی با این کد در پوشه پیدا نشد", "error");
         return;
@@ -1766,8 +1793,17 @@ export function ProductEditor({
 
   const handleRemoveImage = (idx) => {
     setLocalWithScratch((l) => {
+      const removed = (l.images || [])[idx];
       const all = (l.images || []).filter((_, i) => i !== idx);
       const newImage = all.length > 0 ? all[0] : null;
+      // آیتم ۵ (دامپ اخیر): حذف عکس از محصول قبلاً فقط اسم فایل رو از رکورد
+      // برمی‌داشت، فایل فیزیکی توی پوشه دست‌نخورده می‌موند (برخلاف الگوی از قبل
+      // موجود توی BusinessCardModal که همین‌جا هم پیروی شد). عکس‌های محصول
+      // یکتا هستن (اسم‌شون شامل کد محصوله)، پس بین محصولات مختلف مشترک نیستن —
+      // حذف فیزیکی امن است.
+      if (removed) {
+        deleteImageFile(removed, IMAGE_CATEGORIES.PRODUCT).catch(() => {});
+      }
       return { ...l, image: newImage, images: all };
     });
   };
@@ -3022,7 +3058,7 @@ export function CatalogTab({
             <button
               style={{
                 ...S.chip,
-                padding: "6px 8px",
+                padding: "2px 8px",
                 fontSize: 10,
                 position: "relative",
                 background: statusFilter.length > 0 ? "#2a1414" : "#1c1c1c",
@@ -3072,7 +3108,7 @@ export function CatalogTab({
             <button
               style={{
                 ...S.chip,
-                padding: "6px 10px",
+                padding: "2px 10px",
                 fontSize: 10,
                 position: "relative",
                 background: isLocationSelected() ? "#2a1414" : "#1c1c1c",
@@ -3177,7 +3213,7 @@ export function CatalogTab({
                 title={(typeFilter || []).length > 0 ? (typeFilter || []).map((id) => productTypes.find((t) => t.id === id)?.name).filter(Boolean).join("، ") : "همه"}
                 style={{
                   ...S.chip,
-                  padding: "6px 10px",
+                  padding: "2px 10px",
                   fontSize: 10,
                   background: (typeFilter || []).length > 0 ? "#2a1414" : "#1c1c1c",
                   border: (typeFilter || []).length > 0 ? "1px solid #8B1A1A" : "1px solid #2a2a2a",
@@ -3187,7 +3223,7 @@ export function CatalogTab({
               >
                 <Tag size={13} />
               </button>
-              <AnchoredFloatingPopup open={showTypeFilterMenu} onClose={() => setShowTypeFilterMenu(false)} anchorRef={typeFilterBtnRef} width={220}>
+              <FilterPopup open={showTypeFilterMenu} onClose={() => setShowTypeFilterMenu(false)} width={220} maxHeight={320}>
                   <button
                     style={{ display: "block", width: "100%", textAlign: "right", padding: "8px 8px", background: (typeFilter || []).length === 0 ? "#2a1414" : "transparent", border: "none", color: (typeFilter || []).length === 0 ? "#d88888" : "#ddd", fontSize: 11, fontFamily: "inherit", cursor: "pointer", borderRadius: 4 }}
                     onClick={() => setTypeFilter([])}
@@ -3218,7 +3254,7 @@ export function CatalogTab({
                   >
                     کالیگرافی
                   </button>
-              </AnchoredFloatingPopup>
+              </FilterPopup>
             </div>
           )}
 
@@ -3718,7 +3754,7 @@ export default function ProductTab({
             <button
               style={{
                 ...S.chip,
-                padding: "6px 8px",
+                padding: "2px 8px",
                 fontSize: 10,
                 position: "relative",
                 background: ((filterStatus || []).length > 0 && (filterStatus || []).length < 3) ? "#2a1414" : "#1c1c1c",
@@ -3772,7 +3808,7 @@ export default function ProductTab({
             <button
               style={{
                 ...S.chip,
-                padding: "6px 10px",
+                padding: "2px 10px",
                 fontSize: 10,
                 position: "relative",
                 background: isLocationSelected() ? "#2a1414" : "#1c1c1c",
@@ -3877,7 +3913,7 @@ export default function ProductTab({
                 title={(typeFilter || []).length > 0 ? (typeFilter || []).map((id) => productTypes.find((t) => t.id === id)?.name).filter(Boolean).join("، ") : "همه"}
                 style={{
                   ...S.chip,
-                  padding: "6px 10px",
+                  padding: "2px 10px",
                   fontSize: 10,
                   background: (typeFilter || []).length > 0 ? "#2a1414" : "#1c1c1c",
                   border: (typeFilter || []).length > 0 ? "1px solid #8B1A1A" : "1px solid #2a2a2a",
@@ -3887,7 +3923,7 @@ export default function ProductTab({
               >
                 <Tag size={13} />
               </button>
-              <AnchoredFloatingPopup open={showTypeFilterMenu} onClose={() => setShowTypeFilterMenu(false)} anchorRef={typeFilterBtnRef} width={220}>
+              <FilterPopup open={showTypeFilterMenu} onClose={() => setShowTypeFilterMenu(false)} width={220} maxHeight={320}>
                   <button
                     style={{ display: "block", width: "100%", textAlign: "right", padding: "8px 8px", background: (typeFilter || []).length === 0 ? "#2a1414" : "transparent", border: "none", color: (typeFilter || []).length === 0 ? "#d88888" : "#ddd", fontSize: 11, fontFamily: "inherit", cursor: "pointer", borderRadius: 4 }}
                     onClick={() => setTypeFilter([])}
@@ -3918,7 +3954,7 @@ export default function ProductTab({
                   >
                     کالیگرافی
                   </button>
-              </AnchoredFloatingPopup>
+              </FilterPopup>
             </div>
           )}
 
@@ -3930,13 +3966,12 @@ export default function ProductTab({
             groupedView={groupedView}
             onToggleGrouped={toggleGroupedView}
             groupByTypeActive={groupedView && sortMode === "type"}
-            onGroupByType={() => {
-              if (setSortMode) setSortMode("type");
-              if (!groupedView) toggleGroupedView();
-            }}
-            groupByFabricActive={groupedView && sortMode === "fabric"}
             onGroupByFabric={() => {
               if (setSortMode) setSortMode("fabric");
+              if (!groupedView) toggleGroupedView();
+            }}
+            onGroupByType={() => {
+              if (setSortMode) setSortMode("type");
               if (!groupedView) toggleGroupedView();
             }}
           />
@@ -3944,6 +3979,8 @@ export default function ProductTab({
             style={{
               ...S.chip,
               padding: "7px 10px",
+              height: 32,
+              minHeight: 32,
               position: "relative",
               background: basket.length > 0 ? "#2a1414" : "#1c1c1c",
               border: basket.length > 0 ? "1px solid #8B1A1A" : "1px solid #2a2a2a",
@@ -3989,8 +4026,14 @@ export default function ProductTab({
               }
             }}
             style={{
-              // سمت چپ صفحه (نه وسط) — طبق خواسته‌ی کاربر
-              marginTop: 8,
+              // قبلاً توی flow خودِ بلوک sticky هدر بود، یعنی پس‌زمینه‌ی تیره‌ی همون بلوک
+              // (تمام عرض صفحه) کش می‌اومد پایین‌تر تا این لیبل رو هم بگیره — یه نوار
+              // مشکی عریض به‌جای یه حباب کوچیک شناور. الان با position:absolute کاملاً
+              // مستقل شناوره (مثل دکمه‌ی اسکرول‌به‌بالا یا FAB قرمز +).
+              position: "absolute",
+              top: "100%",
+              left: 14,
+              marginTop: 6,
               zIndex: 14,
               width: "fit-content",
               maxWidth: "70%",
@@ -4009,8 +4052,7 @@ export default function ProductTab({
               justifyContent: "center",
               border: "1px solid #2a2a2a",
               boxSizing: "border-box",
-              marginLeft: 0,
-              marginRight: "auto",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
             }}
           >
             {floatingCatLabel}
