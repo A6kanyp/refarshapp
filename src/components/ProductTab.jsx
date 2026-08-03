@@ -123,7 +123,7 @@ function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onTogg
       <button
         style={{
           ...S.chip,
-          padding: "6px 10px",
+          padding: "2px 10px",
           fontSize: 10,
           position: "relative",
           ...style,
@@ -3028,7 +3028,7 @@ export function CatalogTab({
             <button
               style={{
                 ...S.chip,
-                padding: "6px 8px",
+                padding: "2px 8px",
                 fontSize: 10,
                 position: "relative",
                 background: statusFilter.length > 0 ? "#2a1414" : "#1c1c1c",
@@ -3078,7 +3078,7 @@ export function CatalogTab({
             <button
               style={{
                 ...S.chip,
-                padding: "6px 10px",
+                padding: "2px 10px",
                 fontSize: 10,
                 position: "relative",
                 background: isLocationSelected() ? "#2a1414" : "#1c1c1c",
@@ -3183,7 +3183,7 @@ export function CatalogTab({
                 title={(typeFilter || []).length > 0 ? (typeFilter || []).map((id) => productTypes.find((t) => t.id === id)?.name).filter(Boolean).join("، ") : "همه"}
                 style={{
                   ...S.chip,
-                  padding: "6px 10px",
+                  padding: "2px 10px",
                   fontSize: 10,
                   background: (typeFilter || []).length > 0 ? "#2a1414" : "#1c1c1c",
                   border: (typeFilter || []).length > 0 ? "1px solid #8B1A1A" : "1px solid #2a2a2a",
@@ -3724,7 +3724,7 @@ export default function ProductTab({
             <button
               style={{
                 ...S.chip,
-                padding: "6px 8px",
+                padding: "2px 8px",
                 fontSize: 10,
                 position: "relative",
                 background: ((filterStatus || []).length > 0 && (filterStatus || []).length < 3) ? "#2a1414" : "#1c1c1c",
@@ -3778,7 +3778,7 @@ export default function ProductTab({
             <button
               style={{
                 ...S.chip,
-                padding: "6px 10px",
+                padding: "2px 10px",
                 fontSize: 10,
                 position: "relative",
                 background: isLocationSelected() ? "#2a1414" : "#1c1c1c",
@@ -3883,7 +3883,7 @@ export default function ProductTab({
                 title={(typeFilter || []).length > 0 ? (typeFilter || []).map((id) => productTypes.find((t) => t.id === id)?.name).filter(Boolean).join("، ") : "همه"}
                 style={{
                   ...S.chip,
-                  padding: "6px 10px",
+                  padding: "2px 10px",
                   fontSize: 10,
                   background: (typeFilter || []).length > 0 ? "#2a1414" : "#1c1c1c",
                   border: (typeFilter || []).length > 0 ? "1px solid #8B1A1A" : "1px solid #2a2a2a",
@@ -3949,6 +3949,8 @@ export default function ProductTab({
             style={{
               ...S.chip,
               padding: "7px 10px",
+              height: 32,
+              minHeight: 32,
               position: "relative",
               background: basket.length > 0 ? "#2a1414" : "#1c1c1c",
               border: basket.length > 0 ? "1px solid #8B1A1A" : "1px solid #2a2a2a",

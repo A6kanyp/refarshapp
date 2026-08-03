@@ -273,6 +273,19 @@ function ManagementPanelModal({ onClose, children, onQuickRefresh, onHoldRefresh
   const handleExit = () => setShowExitConfirm(true);
   const confirmExit = () => { setShowExitConfirm(false); setIsPanelUnlocked(false); onClose(); };
 
+  // باگ واقعی: دکمه‌ی بک سخت‌افزاری/ژست اندروید یه مسیر جدا داشت (پایین‌تر توی
+  // App.jsx، pushBackHandler(() => setShowManagementPanel(false)))، که پنل رو
+  // مستقیم می‌بست بدون رد شدن از همین پاپ‌آپ تایید — یعنی «خروج» با دکمه‌ی توی
+  // برنامه تایید می‌گرفت ولی با بک سخت‌افزاری بی‌صدا و بی‌تاییدیه می‌رفت کاتالوگ.
+  // الان خودِ این کامپوننت مسئول ثبت بک‌هندلره: وقتی پنل بازه، بک صرفاً همون
+  // handleExit (نمایش تاییدیه) رو صدا می‌زنه — دقیقاً هم‌رفتار با دکمه‌ی خروج.
+  useEffect(() => {
+    return pushBackHandler(() => {
+      if (isPanelUnlocked) handleExit();
+      else onClose();
+    });
+  }, [isPanelUnlocked]);
+
   if (!isPanelUnlocked) return <PinScreen onUnlock={handleUnlock} onCancel={onClose} />;
 
   return (
@@ -1244,7 +1257,15 @@ function reverseOperation(srcMaterials, srcProducts, op) {
     const pIdx = products.findIndex(p => p.id === productId);
     if (pIdx === -1) return;
     const liIdx = products[pIdx].lineItems.findIndex(li => li.id === lineItemId);
-    if (liIdx === -1) return;
+    if (liIdx === -1) {
+      // باگ واقعی بود: بعد از یه unlock واقعی، خودِ لاین‌آیتم کاملاً از محصول
+      // حذف می‌شه (نه فقط pendingUnlock می‌شه) — پس اینجا هیچ‌وقت پیدا نمی‌شد و
+      // این تابع بی‌صدا هیچ کاری نمی‌کرد. یعنی موجودی متریال (deductCostQty)
+      // برمی‌گشت ولی خودِ محصول دیگه هیچ ردی از این متریال نداشت — undo از نظر
+      // کاربر «کار نمی‌کرد». الان اگه لاین‌آیتم پیدا نشه، دوباره به محصول اضافه‌ش می‌کنیم.
+      products[pIdx] = { ...products[pIdx], lineItems: [...products[pIdx].lineItems, { ...prevLi }] };
+      return;
+    }
     products[pIdx].lineItems[liIdx] = { ...prevLi };
   };
 
@@ -1602,10 +1623,9 @@ export default function App() {
     return pushBackHandler(() => setShowBasket(false));
   }, [showBasket]);
 
-  useEffect(() => {
-    if (!showManagementPanel) return;
-    return pushBackHandler(() => setShowManagementPanel(false));
-  }, [showManagementPanel]);
+  // نکته: بک‌هندلر پنل مدیریت قبلاً اینجا بود (setShowManagementPanel(false) مستقیم،
+  // بدون تاییدیه) — الان داخل خودِ ManagementPanelModal ثبت می‌شه تا از همون پاپ‌آپ
+  // تایید خروج رد بشه (دقیقاً هم‌رفتار با دکمه‌ی «خروج» توی پنل)
 
   // دکمه‌ی Back سخت‌افزاری اندروید / سوایپ لبه: اول به مودال بازِ ثبت‌شده
   // (استک بالا) فرصت می‌ده خودش رو ببنده؛ اگه چیزی باز نبود و روی تب پیش‌فرض

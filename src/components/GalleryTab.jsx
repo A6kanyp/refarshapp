@@ -155,7 +155,7 @@ function SortButton({ sortOrder, setSortOrder, modes }) {
       <button
         style={{
           ...T.chip,
-          padding: "6px 10px",
+          padding: "2px 10px",
           fontSize: 10,
           position: "relative",
         }}
