@@ -1238,12 +1238,11 @@ export default function WoodCuttingTab({ stickyTop, materials, products, persist
                   ضخامت {thicknessKey} — {result.usedSticks} چوب
                 </div>
                 {result.unfulfilledCount > 0 && (
-                  // فونت/آیکون هم‌اندازه‌ی خطای کمبود ۲D شد (قبلاً 10px/۱۴px بود،
-                  // بزرگ‌تر از ۲D بود و چون متن روی یک خط بود، عرض کادر ۱D رو با
-                  // خودش می‌کشید بزرگ‌تر — الان maxWidth = عرض واقعی کادر (همون
-                  // plankContainerWidth) گرفته و متن wrap می‌شه، پس دیگه چیزی رو
-                  // کش نمیاد (Ash 🟡)
-                  <div style={{ marginBottom: 10, padding: "6px 10px", background: "#3a1d1d", border: "1px solid #8B1A1A", borderRadius: 6, maxWidth: plankContainerWidth || "100%", boxSizing: "border-box" }}>
+                  // آیتم جدید کاربر: کادر قرمز دورش حذف شد تا شبیه ۲D (بدون قاب/بک‌گراند
+                  // رنگی) بشه — فقط متن با آیکون. maxWidth همچنان به عرض واقعی بخش ۱D
+                  // (plankContainerWidth) محدوده تا هیچ‌وقت از بخش خودش بزرگ‌تر نشه یا
+                  // مجبورش نکنه اسکرول بشه؛ اگه جا کم بیاد متن wrap می‌شه (از زیر خط قبل)
+                  <div style={{ marginBottom: 10, padding: "4px 0", maxWidth: plankContainerWidth || "100%", boxSizing: "border-box" }}>
                     <span style={{ fontSize: 9.5, color: "#e08a8a", fontWeight: 500, display: "flex", alignItems: "flex-start", gap: 6 }}>
                       <svg width="12" height="12" style={{ flexShrink: 0, marginTop: 1 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
                       <span style={{ flex: 1, minWidth: 0, whiteSpace: "normal", wordBreak: "break-word" }}>
@@ -1414,10 +1413,11 @@ export default function WoodCuttingTab({ stickyTop, materials, products, persist
                   <StatPill label="پانل‌ها" value={nestingData.layouts.reduce((s, l) => s + l.placements.length, 0)} />
                 </div>
                 {nestingData.unfulfilled && nestingData.unfulfilled.length > 0 && (
-                  <div style={{ marginBottom: 10 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 0" }}>
-                      <span style={{ fontSize: 9, color: "#e08a8a" }}>
-                        ⛔ بدون پنل مناسب — {
+                  <div style={{ marginBottom: 10, maxWidth: "100%", boxSizing: "border-box" }}>
+                    <span style={{ fontSize: 9.5, color: "#e08a8a", fontWeight: 500, display: "flex", alignItems: "flex-start", gap: 6 }}>
+                      <svg width="12" height="12" style={{ flexShrink: 0, marginTop: 1 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                      <span style={{ flex: 1, minWidth: 0, whiteSpace: "normal", wordBreak: "break-word" }}>
+                        بدون پنل مناسب — {
                           Array.from(
                             nestingData.unfulfilled.reduce((acc, p) => {
                               acc.set(p.label, (acc.get(p.label) || 0) + 1);
@@ -1426,7 +1426,7 @@ export default function WoodCuttingTab({ stickyTop, materials, products, persist
                           ).map(([label, qty]) => `${label} (${qty} عدد)`).join(" ، ")
                         }
                       </span>
-                    </div>
+                    </span>
                   </div>
                 )}
                 {(() => {
