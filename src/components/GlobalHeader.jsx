@@ -5,7 +5,9 @@ import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
 import {
   Package, Layers, Scissors, Users, Calculator,
   RotateCcw, BookOpen, X, Plus, Trash2, ShoppingBag, Receipt,
+  Lock, Unlock, Undo2,
 } from "lucide-react";
+import { FilterPopup } from "./FilterPopup";
 import { uid } from "../dataModels";
 import { scrollAppToTop } from "../utils/scrollToTop";
 import BusinessCardModal from "./BusinessCardModal";
@@ -140,7 +142,7 @@ function LinksConfigModal({ links, onChange, onClose }) {
 export default function GlobalHeader({
   activeTab, setActiveTab,
   hasPending,
-  onQuickRefresh, onHoldRefresh, onUndoRefresh, onResetFilters, refreshProblemTabs = [],
+  onQuickRefresh, onHoldRefresh, onUndoRefresh, onResetFilters, onCancelPendingLocks, onCancelPendingUnlocks, refreshProblemTabs = [],
   workshopLinks, onLinksChange,
   onManagementPanel,
   basket = [],
@@ -155,6 +157,11 @@ export default function GlobalHeader({
   const [showLinks, setShowLinks] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const [showBusinessCard, setShowBusinessCard] = useState(false);
+  // پاپ‌آپ ۷دکمه‌ای قفل/آزاد/Undo/لغو/رفرش — طبق بازطراحی جدید (رودمپ، بخش
+  // «خیلی مهم» بالای فایل)، دیگه نگه‌داشتن مستقیماً هردو مود رو اجرا نمی‌کنه؛
+  // یه منو باز می‌شه که هرکدوم از ۷ عملیات رو جدا و بدون‌ابهام انتخاب کنی —
+  // دقیقاً همون چیزی که داخل پنل مدیریت (RefreshLockButton در App.jsx) هست.
+  const [showHoldPopup, setShowHoldPopup] = useState(false);
   const holdTimer = useRef(null);
   const didHold = useRef(false);
   const refreshTimer = useRef(null);
@@ -222,7 +229,7 @@ export default function GlobalHeader({
     startContinuousSpin();
     refreshTimer.current = setTimeout(() => {
       refreshDidHold.current = true;
-      onHoldRefresh && onHoldRefresh();
+      setShowHoldPopup(true);
     }, 550);
   };
   const lastRefreshTapRef = useRef(0);
@@ -340,7 +347,7 @@ export default function GlobalHeader({
                   onPointerUp={onRefreshPointerUp}
                   onPointerCancel={onRefreshPointerUp}
                   onClick={onRefreshClick}
-                  title="تپ: رفرش نمایش | نگه‌دار ۵۵۰ms: قفل/آزادسازی | دو تپ سریع: بازگردانی"
+                  title="تپ: رفرش نمایش | نگه‌دار ۵۵۰ms: منوی قفل/آزاد/Undo/لغو | دو تپ سریع: ریست فیلترها"
                 >
                   <RotateCcw 
                     size={16} 
@@ -351,6 +358,69 @@ export default function GlobalHeader({
                   />
                   {hasPending && <span style={HS.pendingDot} />}
                 </button>
+
+                <FilterPopup open={showHoldPopup} onClose={() => setShowHoldPopup(false)} width={190}>
+                  <div style={{ padding: 10 }}>
+                    <div style={{ fontSize: 10, color: "#888", textAlign: "center", marginBottom: 8 }}>چه کاری انجام بشه؟</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button
+                          style={{ ...HS.holdRowBtn, background: "#1d3a24", color: "#5fd180" }}
+                          onClick={() => { setShowHoldPopup(false); onHoldRefresh && onHoldRefresh("lock"); }}
+                        >
+                          <Lock size={15} />
+                          قفل
+                        </button>
+                        <button
+                          style={{ ...HS.holdRowBtn, background: "#3a2414", color: "#e0a35a" }}
+                          onClick={() => { setShowHoldPopup(false); onHoldRefresh && onHoldRefresh("unlock"); }}
+                        >
+                          <Unlock size={15} />
+                          آزاد
+                        </button>
+                      </div>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button
+                          style={{ ...HS.holdRowBtn, background: "#1c1c1c", color: "#888" }}
+                          onClick={() => { setShowHoldPopup(false); onUndoRefresh && onUndoRefresh("lock"); }}
+                        >
+                          <Undo2 size={15} />
+                          Undo قفل
+                        </button>
+                        <button
+                          style={{ ...HS.holdRowBtn, background: "#1c1c1c", color: "#888" }}
+                          onClick={() => { setShowHoldPopup(false); onUndoRefresh && onUndoRefresh("unlock"); }}
+                        >
+                          <Undo2 size={15} />
+                          Undo آزاد
+                        </button>
+                      </div>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button
+                          style={{ ...HS.holdRowBtn, background: "#1c1c1c", color: "#d0b878" }}
+                          onClick={() => { setShowHoldPopup(false); onCancelPendingLocks && onCancelPendingLocks(); }}
+                        >
+                          <X size={15} />
+                          لغو معلق‌ها
+                        </button>
+                        <button
+                          style={{ ...HS.holdRowBtn, background: "#1c1c1c", color: "#d0b878" }}
+                          onClick={() => { setShowHoldPopup(false); onCancelPendingUnlocks && onCancelPendingUnlocks(); }}
+                        >
+                          <X size={15} />
+                          لغو منتظرآزادها
+                        </button>
+                      </div>
+                      <button
+                        style={{ ...HS.holdRowBtn, background: "#1c1c1c", color: "#ccc", flexDirection: "row" }}
+                        onClick={() => { setShowHoldPopup(false); onQuickRefresh && onQuickRefresh(); }}
+                      >
+                        <RotateCcw size={15} />
+                        رفرش
+                      </button>
+                    </div>
+                  </div>
+                </FilterPopup>
               </div>
             )}
           </div>
@@ -493,6 +563,10 @@ const HS = {
     padding: 0,
     touchAction: "manipulation",
     position: "relative",
+  },
+  holdRowBtn: {
+    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
+    padding: "10px 6px", borderRadius: 10, cursor: "pointer", fontFamily: "inherit", fontSize: 10, border: "1px solid #2a2a2a", flex: 1,
   },
   pendingDot: {
     position: "absolute",

@@ -156,7 +156,7 @@ function PinScreen({ onUnlock, onCancel }) {
   );
 }
 
-function RefreshLockButton({ onQuickRefresh, onHoldRefresh, onUndoRefresh, onResetFilters, hasPending }) {
+function RefreshLockButton({ onQuickRefresh, onHoldRefresh, onUndoRefresh, onResetFilters, onCancelPendingLocks, onCancelPendingUnlocks, hasPending }) {
   const holdTimer = useRef(null);
   const didHold = useRef(false);
   const [showHoldPopup, setShowHoldPopup] = useState(false);
@@ -208,14 +208,15 @@ function RefreshLockButton({ onQuickRefresh, onHoldRefresh, onUndoRefresh, onRes
     spinMode === "doubleTap" ? { animation: "ashRefreshSpinFast 4s cubic-bezier(0.15,0.65,0.35,1) 1" } :
     undefined;
 
-  // چیدمان ۴ دکمه‌ی مربعی طبق آخرین توضیح دقیق کاربر: ردیف بالا = قفل (راست) و
-  // آزاد (چپ)، ردیف پایین = Undo (راست) و رفرش (چپ). چون کل اپ RTL هست، ترتیب
-  // طبیعی DOM (بدون هیچ override دستی گرید) دقیقاً همین نتیجه رو می‌ده —
-  // نسخه‌ی قبلی یه `gridColumn: 1` اضافه و اشتباه روی دکمه‌ی رفرش داشت که کل
-  // چیدمان رو به‌هم می‌ریخت (باعث می‌شد به ردیف/ستون اشتباه پرت بشه)
-  const squareBtnStyle = {
+  // چیدمان جدید ۷دکمه‌ای (طبق دستور صریح مالک، جایگزین منطق قدیمیِ ۴حالته‌ی
+  // چندکلیکی که باعث تداخل بین چند نشست موازی شده بود — رودمپ، بخش «خیلی
+  // مهم» بالای فایل رو ببین): ۳ ردیفِ ۲تایی (قفل/آزاد ، Undo قفل/Undo آزاد ،
+  // لغو معلق‌ها/لغو منتظرآزادها) + یه دکمه‌ی کشیده‌ی تمام‌عرض «رفرش» زیر همه.
+  // هر دکمه دقیقاً یه کار مشخص و بدون ابهام می‌کنه؛ دیگه هیچ منطق چندکلیکی
+  // (تک/دابل/نگه‌داشتن) روی خودِ این ۷تا سوار نیست.
+  const rowBtnStyle = {
     display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
-    width: 56, height: 56, borderRadius: 10, cursor: "pointer", fontFamily: "inherit", fontSize: 10, border: "1px solid #2a2a2a",
+    padding: "10px 6px", borderRadius: 10, cursor: "pointer", fontFamily: "inherit", fontSize: 10, border: "1px solid #2a2a2a", flex: 1,
   };
 
   return (
@@ -228,40 +229,71 @@ function RefreshLockButton({ onQuickRefresh, onHoldRefresh, onUndoRefresh, onRes
         {hasPending && <span style={{ position: "absolute", top: 3, right: 3, width: 6, height: 6, borderRadius: "50%", background: "#e08a8a" }} />}
       </button>
 
-      <FilterPopup open={showHoldPopup} onClose={() => setShowHoldPopup(false)} width={150}>
+      <FilterPopup open={showHoldPopup} onClose={() => setShowHoldPopup(false)} width={190}>
         <div style={{ padding: 10 }}>
           <div style={{ fontSize: 10, color: "#888", textAlign: "center", marginBottom: 8 }}>چه کاری انجام بشه؟</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {/* ردیف ۱: قفل / آزاد */}
+            <div style={{ display: "flex", gap: 6 }}>
+              <button
+                style={{ ...rowBtnStyle, background: "#1d3a24", color: "#5fd180" }}
+                onClick={() => { setShowHoldPopup(false); onHoldRefresh?.("lock"); }}
+              >
+                <Lock size={15} />
+                قفل
+              </button>
+              <button
+                style={{ ...rowBtnStyle, background: "#3a2414", color: "#e0a35a" }}
+                onClick={() => { setShowHoldPopup(false); onHoldRefresh?.("unlock"); }}
+              >
+                <Unlock size={15} />
+                آزاد
+              </button>
+            </div>
+            {/* ردیف ۲: Undo قفل / Undo آزاد */}
+            <div style={{ display: "flex", gap: 6 }}>
+              <button
+                style={{ ...rowBtnStyle, background: "#1c1c1c", color: "#888" }}
+                onClick={() => { setShowHoldPopup(false); onUndoRefresh?.("lock"); }}
+              >
+                <Undo2 size={15} />
+                Undo قفل
+              </button>
+              <button
+                style={{ ...rowBtnStyle, background: "#1c1c1c", color: "#888" }}
+                onClick={() => { setShowHoldPopup(false); onUndoRefresh?.("unlock"); }}
+              >
+                <Undo2 size={15} />
+                Undo آزاد
+              </button>
+            </div>
+            {/* ردیف ۳: لغو معلق‌ها / لغو منتظرآزادها */}
+            <div style={{ display: "flex", gap: 6 }}>
+              <button
+                style={{ ...rowBtnStyle, background: "#1c1c1c", color: "#d0b878" }}
+                onClick={() => { setShowHoldPopup(false); onCancelPendingLocks?.(); }}
+              >
+                <X size={15} />
+                لغو معلق‌ها
+              </button>
+              <button
+                style={{ ...rowBtnStyle, background: "#1c1c1c", color: "#d0b878" }}
+                onClick={() => { setShowHoldPopup(false); onCancelPendingUnlocks?.(); }}
+              >
+                <X size={15} />
+                لغو منتظرآزادها
+              </button>
+            </div>
+            {/* ردیف ۴: Refresh — تمام‌عرض */}
             <button
-              style={{ ...squareBtnStyle, background: "#1d3a24", color: "#5fd180" }}
-              onClick={() => { setShowHoldPopup(false); onHoldRefresh?.("lock"); }}
-            >
-              <Lock size={16} />
-              قفل
-            </button>
-            <button
-              style={{ ...squareBtnStyle, background: "#3a2414", color: "#e0a35a" }}
-              onClick={() => { setShowHoldPopup(false); onHoldRefresh?.("unlock"); }}
-            >
-              <Unlock size={16} />
-              آزاد
-            </button>
-            <button
-              style={{ ...squareBtnStyle, background: "#1c1c1c", color: "#888" }}
-              onClick={() => { setShowHoldPopup(false); onUndoRefresh?.(); }}
-            >
-              <Undo2 size={16} />
-              Undo
-            </button>
-            <button
-              style={{ ...squareBtnStyle, background: "#1c1c1c", color: "#ccc" }}
+              style={{ ...rowBtnStyle, background: "#1c1c1c", color: "#ccc", flexDirection: "row" }}
               onClick={() => {
                 setShowHoldPopup(false);
                 onQuickRefresh?.();
                 triggerSpin("tap", 3000);
               }}
             >
-              <RotateCcw size={16} style={spinStyle} />
+              <RotateCcw size={15} style={spinStyle} />
               رفرش
             </button>
           </div>
@@ -272,7 +304,7 @@ function RefreshLockButton({ onQuickRefresh, onHoldRefresh, onUndoRefresh, onRes
 }
 
 // ── ManagementPanelModal ──
-function ManagementPanelModal({ onClose, children, onQuickRefresh, onHoldRefresh, onUndoRefresh, onResetFilters, hasPending, onOpenBusinessCardManager, activeTab, isAnyModalOpen, hideScrollButton, refreshResetTick, refreshProblemTabs = [] }) {
+function ManagementPanelModal({ onClose, children, onQuickRefresh, onHoldRefresh, onUndoRefresh, onResetFilters, onCancelPendingLocks, onCancelPendingUnlocks, hasPending, onOpenBusinessCardManager, activeTab, isAnyModalOpen, hideScrollButton, refreshResetTick, refreshProblemTabs = [] }) {
   const [isPanelUnlocked, setIsPanelUnlocked] = useState(false);
   const headerRef = useRef(null);
 
@@ -404,6 +436,8 @@ function ManagementPanelModal({ onClose, children, onQuickRefresh, onHoldRefresh
               onHoldRefresh={onHoldRefresh}
               onUndoRefresh={onUndoRefresh}
               onResetFilters={onResetFilters}
+              onCancelPendingLocks={onCancelPendingLocks}
+              onCancelPendingUnlocks={onCancelPendingUnlocks}
               hasPending={hasPending}
             />
           )}
@@ -2822,37 +2856,98 @@ export default function App() {
     }
   }, [data.products, data.materials, pendingBulkChanges, showToast, setData]);
 
-  // ── بازگردانی (Undo) — دو ضربه سریع روی دکمه رفرش پس از یک عملیات قفل/آزادسازی ──
-  // قبلاً فقط «آخرین» عملیات ثبت‌شده رو برمی‌گردوند (نه کل پاس رو با هم)؛
-  // این باعث می‌شد اگه یه پاس چند محصول رو باهم قفل/آزاد کرده بود، یه Undo
-  // فقط یکیشونو برگردونه و بقیه توی یه حالت ناقص/ناسازگار بمونن (که خودش
-  // باعث اعداد غلط توی حسابداری می‌شد). الان با passId مشترک، کل عملیات‌های
-  // همون پاس (نه فقط یکی) یک‌جا و به‌ترتیب معکوس برمی‌گردن.
-  const handleUndoRefresh = useCallback(() => {
+  // انواع عملیات که «قفل» حساب می‌شن در مقابل «آزادسازی» — برای تفکیک Undo
+  // قفل از Undo آزاد (بازطراحی ۷دکمه‌ای، طبق دستور صریح مالک: قبلاً چندتا نشست
+  // موازی روی یه Undo مشترک و مبهم کار کرده بودن و تداخل می‌شد)
+  const LOCK_OP_KINDS = useRef(new Set(["batchBulkLock", "poolLock", "woodLock", "batchAreaLock"])).current;
+  const isLockOp = useCallback((op) => LOCK_OP_KINDS.has(op.kind), [LOCK_OP_KINDS]);
+
+  // ── بازگردانی (Undo) — حالا با فیلتر نوع (قفل/آزاد) ──
+  // بدون آرگومان: رفتار قدیمی (آخرین پاس، هر نوعی). با "lock"/"unlock": فقط
+  // آخرین پاسی که حداقل یه عملیات از همون نوع داشت رو پیدا می‌کنه، و فقط
+  // عملیات‌های هم‌نوعِ همون پاس رو برمی‌گردونه (نه کل پاس رو، اگه پاس مخلوط
+  // "both" بوده باشه) — این دقیقاً همون چیزیه که ابهام/تداخل قبلی رو حل می‌کنه.
+  const handleUndoRefresh = useCallback((filterMode) => {
     const ops = undoOperationsRef.current;
-    if (!ops || ops.length === 0) {
-      showToast({ text: "چیزی برای بازگردانی وجود ندارد", type: "error", fontSize: 9 });
+    const matchesMode = (op) => !filterMode || (filterMode === "lock" ? isLockOp(op) : !isLockOp(op));
+
+    let lastIdx = -1;
+    for (let i = ops.length - 1; i >= 0; i--) {
+      if (matchesMode(ops[i])) { lastIdx = i; break; }
+    }
+    if (lastIdx === -1) {
+      const msg = filterMode === "lock" ? "چیزی برای بازگردانیِ قفل وجود ندارد"
+        : filterMode === "unlock" ? "چیزی برای بازگردانیِ آزادسازی وجود ندارد"
+        : "چیزی برای بازگردانی وجود ندارد";
+      showToast({ text: msg, type: "error", fontSize: 9 });
       return;
     }
-    const lastPassId = ops[ops.length - 1].__passId;
-    // همه‌ی عملیات‌های همین پاس (که پشت‌سرهم توی پشته‌ان چون با هم اضافه شدن)
-    let splitIdx = ops.length;
-    while (splitIdx > 0 && ops[splitIdx - 1].__passId === lastPassId) splitIdx--;
-    const passOps = ops.slice(splitIdx);
+    const lastPassId = ops[lastIdx].__passId;
+    // همه‌ی عملیات‌های هم‌نوعِ همین پاس (به ترتیب معکوس، جدیدترین اول)
+    const passOpsIdx = [];
+    for (let i = ops.length - 1; i >= 0; i--) {
+      if (ops[i].__passId === lastPassId && matchesMode(ops[i])) passOpsIdx.push(i);
+    }
+    const passOps = passOpsIdx.map((i) => ops[i]);
 
     let materials = data.materials;
     let products = data.products;
-    // به‌ترتیب معکوس (آخرین عملیاتِ همون پاس اول برگرده) تا وابستگی‌های
-    // ترتیبی (مثلاً چند خط از یه بچ) درست باز بشن
-    for (let i = passOps.length - 1; i >= 0; i--) {
-      const r = reverseOperation(materials, products, passOps[i]);
+    for (const op of passOps) {
+      const r = reverseOperation(materials, products, op);
       materials = r.materials;
       products = r.products;
     }
-    undoOperationsRef.current = ops.slice(0, splitIdx);
+    const removeSet = new Set(passOpsIdx);
+    undoOperationsRef.current = ops.filter((_, i) => !removeSet.has(i));
     setData((d) => ({ ...d, materials, products }));
     showToast({ text: passOps.length > 1 ? `${toPersianDigits(passOps.length)} مورد بازگردانی شد` : "عملیات بازگردانی انجام شد", type: "success", fontSize: 9 });
-  }, [data.materials, data.products, setData, showToast]);
+  }, [data.materials, data.products, setData, showToast, isLockOp]);
+
+  // ── لغو صف انتظار (نه Undo!) — ردیف ۳ از طراحی جدید ──
+  // این‌ها هیچ عملیات واقعاً انجام‌شده‌ای رو برنمی‌گردونن؛ فقط نیتِ صف‌شده‌ای
+  // که هنوز با «قفل»/«آزاد» واقعی commit نشده رو پاک می‌کنن — برای وقتی کاربر
+  // قبل از رفرش واقعی پشیمون می‌شه.
+  const handleCancelPendingLocks = useCallback(() => {
+    const bulkCount = pendingBulkChanges.filter((c) => c.action === "lock").length;
+    if (bulkCount === 0) {
+      showToast({ text: "چیزی برای لغو معلق‌ها نیست", type: "error", fontSize: 9 });
+      return;
+    }
+    setPendingBulkChanges((prev) => prev.filter((c) => c.action !== "lock"));
+    showToast({ text: `${toPersianDigits(bulkCount)} مورد معلق لغو شد`, type: "success", fontSize: 9 });
+  }, [pendingBulkChanges, showToast]);
+
+  const handleCancelPendingUnlocks = useCallback(() => {
+    const bulkCount = pendingBulkChanges.filter((c) => c.action === "unlock").length;
+    let liCount = 0;
+    data.products.forEach((p) => {
+      (p.lineItems || []).forEach((li) => {
+        // فقط حالت عادیِ «منتظر آزادسازی» (هنوز قفل واقعی‌ست، فقط علامت‌خورده)
+        // — حالت یتیم‌شدن بچ (deductedAt از قبل null شده) اینجا لمس نمی‌شه چون
+        // چیزی برای برگردوندن به حالت قفل نداره
+        if (li.pendingUnlock && li.deductedAt) liCount++;
+      });
+    });
+    if (bulkCount === 0 && liCount === 0) {
+      showToast({ text: "چیزی برای لغو منتظرآزادها نیست", type: "error", fontSize: 9 });
+      return;
+    }
+    if (bulkCount > 0) setPendingBulkChanges((prev) => prev.filter((c) => c.action !== "unlock"));
+    if (liCount > 0) {
+      setData((d) => ({
+        ...d,
+        products: d.products.map((p) => {
+          let changed = false;
+          const lineItems = (p.lineItems || []).map((li) => {
+            if (li.pendingUnlock && li.deductedAt) { changed = true; return { ...li, pendingUnlock: false }; }
+            return li;
+          });
+          return changed ? { ...p, lineItems } : p;
+        }),
+      }));
+    }
+    showToast({ text: `${toPersianDigits(bulkCount + liCount)} مورد منتظرآزاد لغو شد`, type: "success", fontSize: 9 });
+  }, [pendingBulkChanges, data.products, setData, showToast]);
 
 
   const holdRefresh = useCallback(async () => {
@@ -5182,6 +5277,8 @@ export default function App() {
         onQuickRefresh={handleQuickRefresh}
         onHoldRefresh={handleHoldRefresh}
         onUndoRefresh={handleUndoRefresh}
+        onCancelPendingLocks={handleCancelPendingLocks}
+        onCancelPendingUnlocks={handleCancelPendingUnlocks}
         onResetFilters={handleResetFilters}
         refreshProblemTabs={refreshProblemTabs}
         workshopLinks={data.workshopLinks || []}
@@ -5229,6 +5326,8 @@ export default function App() {
           onQuickRefresh={handleQuickRefresh}
           onHoldRefresh={handleHoldRefresh}
           onUndoRefresh={handleUndoRefresh}
+          onCancelPendingLocks={handleCancelPendingLocks}
+          onCancelPendingUnlocks={handleCancelPendingUnlocks}
           hasPending={hasPendingMaterialChanges}
           onOpenBusinessCardManager={() => setShowBusinessCardEditor(true)}
           activeTab={activeTab}
@@ -5287,6 +5386,8 @@ export default function App() {
             onQuickRefresh={handleQuickRefresh}
             onHoldRefresh={handleHoldRefresh}
             onUndoRefresh={handleUndoRefresh}
+            onCancelPendingLocks={handleCancelPendingLocks}
+            onCancelPendingUnlocks={handleCancelPendingUnlocks}
             hasPending={hasPendingMaterialChanges}
             woodCuttingSessions={data.woodCuttingSessions || []}
             onSaveSession={handleSaveWoodCuttingSession} onDeleteSession={handleDeleteWoodCuttingSession}
