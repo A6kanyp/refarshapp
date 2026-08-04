@@ -265,6 +265,21 @@ export async function autoDetectImagesForCode(code) {
 }
 
 /**
+ * تشخیصیِ محض — برای فهمیدن این‌که اگه «بررسی پوشه» چیزی پیدا نکرد، دلیلش
+ * پوشه‌ی خالیه یا فایل‌هایی هستن که فقط با قرارداد نام‌گذاری match نمی‌شن.
+ * (آیتم کاربر: «بررسی پوشه کار نمی‌کنه» — بدون این، نمی‌شد فهمید کدوم حالته)
+ */
+export async function listRawProductImageFiles() {
+  try {
+    return await listFilesInCategory(IMAGE_CATEGORIES.PRODUCT);
+  } catch (err) {
+    const msg = String(err?.message || err || "").toLowerCase();
+    if (msg.includes("not exist") || msg.includes("not found") || msg.includes("enoent")) return [];
+    throw err;
+  }
+}
+
+/**
  * نسخه‌ی گروهیِ autoDetectImagesForCode — برای دکمه‌ی «بررسی پوشه‌ی عکس‌ها» توی
  * تب همگام‌سازی: به‌جای این‌که برای هر محصول جدا پوشه رو لیست کنه (کند)، فقط یه‌بار
  * کل پوشه‌ی عکس‌های محصول رو می‌خونه، بعد بر اساس کدِ هر محصول محلی match می‌کنه.

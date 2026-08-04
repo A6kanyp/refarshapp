@@ -15,7 +15,7 @@ import { toNum, fmt, fmtCode, fmtDate, todayISO, parseDims, dimsArea, getProduct
 import { SCRATCH_KEYS, saveScratch, loadScratch, clearScratch } from "../scratchpad";
 import { saveFile, shareText } from "../utils/nativeSave";
 import { compressImageFile } from "../utils/imageCompress";
-import { saveImageToFolder, IMAGE_CATEGORIES, useResolvedImageSrc, autoDetectImagesForCode, deleteImageFile } from "../utils/imageStorage";
+import { saveImageToFolder, IMAGE_CATEGORIES, useResolvedImageSrc, autoDetectImagesForCode, deleteImageFile, listRawProductImageFiles } from "../utils/imageStorage";
 import { handleEnterNavigate } from "../utils/formNav";
 import { pushBackHandler } from "../utils/backButton";
 import {
@@ -1754,7 +1754,26 @@ export function ProductEditor({
       // که هم همیشه لاتین/عددیه، هم چون کد یکتاست تضمین می‌کنه اسم فایل با
       // هیچ محصول دیگه‌ای تداخل نداره. همچنین حالا چندانتخابی هم پشتیبانی می‌شه.
       const codeStr = fmtCode(local.code != null ? local.code : nextCode);
-      const startIdx = (local.images || []).length;
+      // فیکس تداخل نام‌گذاری: قبلاً شماره‌ی بعدی فقط بر اساس تعداد عکس‌های
+      // «لینک‌شده» به رکورد محصول محاسبه می‌شد، نه چیزی که واقعاً روی دیسک
+      // هست. اگه کاربر یه عکس رو دستی (با فایل‌منیجر) با همین قرارداد نام‌گذاری
+      // توی پوشه کپی کرده باشه ولی هنوز لینک نشده باشه، آپلود بعدی از همون
+      // شماره‌ی ۰۱ شروع می‌کرد و بی‌صدا فایل دستیِ کاربر رو overwrite می‌کرد.
+      // الان قبل از آپلود، دیسک واقعاً چک می‌شه و شماره‌ی بعدیِ واقعاً آزاد پیدا می‌شه.
+      let startIdx = (local.images || []).length;
+      try {
+        const existingOnDisk = await autoDetectImagesForCode(codeStr);
+        if (existingOnDisk.length > 0) {
+          const maxSeqOnDisk = existingOnDisk.reduce((max, f) => {
+            const m = f.match(/(\d{2})\.[a-zA-Z0-9]+$/);
+            const idx = m ? parseInt(m[1], 10) : 0;
+            return Math.max(max, idx);
+          }, 0);
+          startIdx = Math.max(startIdx, maxSeqOnDisk);
+        }
+      } catch (_) {
+        // اگه چک دیسک به هر دلیلی خطا داد، همون رفتار قبلی (بر اساس تعداد لینک‌شده) رو نگه می‌داریم
+      }
       const savedFilenames = [];
       for (let i = 0; i < files.length; i++) {
         const compressedDataUrl = await compressImageFile(files[i]);
@@ -1793,7 +1812,17 @@ export function ProductEditor({
         return;
       }
       if (found.length === 0) {
-        if (opts.manual) showToast("عکسی با این کد در پوشه پیدا نشد", "error");
+        if (opts.manual) {
+          const raw = await listRawProductImageFiles().catch(() => null);
+          if (raw === null) {
+            showToast("عکسی با این کد در پوشه پیدا نشد", "error");
+          } else if (raw.length === 0) {
+            showToast(`عکسی با کد ${codeStr} پیدا نشد — پوشه‌ی عکس محصولات کلاً خالیه (هیچ فایلی توش دیده نمی‌شه)`, "error");
+          } else {
+            const sample = raw.slice(0, 5).join("، ");
+            showToast(`عکسی با کد ${codeStr} پیدا نشد. فایل‌هایی که توی پوشه دیده می‌شن: ${sample}${raw.length > 5 ? ` (+${raw.length - 5} تای دیگه)` : ""}`, "error");
+          }
+        }
         return;
       }
       let addedCount = 0;

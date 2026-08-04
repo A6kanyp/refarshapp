@@ -19,7 +19,7 @@ import {
   API_BASE_URL_OVERRIDE_KEY
 } from "../utils/syncManager";
 import { getDefaultData } from "../dataModels";
-import { getImageFolderName, autoDetectImagesForCode, SAVE_QUALITY_SCALE_KEY } from "../utils/imageStorage";
+import { getImageFolderName, autoDetectImagesForCode, listRawProductImageFiles, SAVE_QUALITY_SCALE_KEY } from "../utils/imageStorage";
 import { fmtCode } from "../mathCore";
 import { useAuth } from "../contexts/AuthContext.jsx";
 
@@ -109,9 +109,22 @@ export default function SyncTab({
           products: d.products.map((p) => (updates[p.id] ? { ...p, ...updates[p.id] } : p)),
         }));
       }
-      setBulkImageScanResult({ checked: data.products.length, matched: matchedCount, newImages: newImagesCount });
+      let rawFiles = null;
+      if (matchedCount === 0 && !realError) {
+        rawFiles = await listRawProductImageFiles().catch(() => null);
+      }
+      setBulkImageScanResult({ checked: data.products.length, matched: matchedCount, newImages: newImagesCount, rawFiles });
       if (realError) {
         if (notify) notify(`خطا در خواندن پوشه‌ی عکس: ${realError.message || realError}`);
+      } else if (matchedCount === 0 && rawFiles) {
+        if (notify) {
+          if (rawFiles.length === 0) {
+            notify("پوشه‌ی عکس محصولات کلاً خالیه (هیچ فایلی توش دیده نمی‌شه)");
+          } else {
+            const sample = rawFiles.slice(0, 5).join("، ");
+            notify(`عکس جدیدی برای هیچ کدی پیدا نشد. فایل‌هایی که توی پوشه دیده می‌شن: ${sample}${rawFiles.length > 5 ? ` (+${rawFiles.length - 5} تای دیگه)` : ""}`);
+          }
+        }
       } else if (notify) {
         notify(matchedCount > 0 ? `${newImagesCount} عکس جدید برای ${matchedCount} محصول پیدا و وصل شد` : "عکس جدیدی که قبلاً وصل نبود پیدا نشد");
       }
@@ -590,6 +603,16 @@ export default function SyncTab({
               {bulkImageScanResult.matched > 0
                 ? `از بین ${bulkImageScanResult.checked} محصول، ${bulkImageScanResult.matched} تا عکس جدید پیدا کردن (${bulkImageScanResult.newImages} عکس در کل).`
                 : `از بین ${bulkImageScanResult.checked} محصول، عکس جدیدی که قبلاً وصل نبود پیدا نشد.`}
+              {bulkImageScanResult.matched === 0 && bulkImageScanResult.rawFiles && (
+                bulkImageScanResult.rawFiles.length === 0 ? (
+                  <div style={{ color: "#c26b6b", marginTop: 4 }}>پوشه‌ی عکس محصولات کلاً خالیه — هیچ فایلی توی اون دیده نمی‌شه.</div>
+                ) : (
+                  <div style={{ color: "#c2a26b", marginTop: 4 }}>
+                    فایل‌هایی که اپ توی پوشه می‌بینه ولی با هیچ کد محصولی match نشدن (احتمالاً اسم‌گذاری فرق داره): {bulkImageScanResult.rawFiles.slice(0, 10).join("، ")}
+                    {bulkImageScanResult.rawFiles.length > 10 ? ` (+${bulkImageScanResult.rawFiles.length - 10} تای دیگه)` : ""}
+                  </div>
+                )
+              )}
             </div>
           )}
         </div>
