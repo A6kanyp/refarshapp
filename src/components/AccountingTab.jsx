@@ -872,7 +872,7 @@ function AllInvoicesSection({ invoices, totalCount, onShowAll, onViewInvoice, on
 }
 
 // ── AllInvoicesModal ──
-function AllInvoicesModal({ invoices, onClose, setData, notify, customers, onViewInvoice, onPrintInvoice, productTotals, businessCard, invoiceDrafts }) {
+function AllInvoicesModal({ invoices, onClose, setData, notify, customers, onViewInvoice, onPrintInvoice, productTotals, businessCard, invoiceDrafts, refreshResetTick }) {
   // این مودال هیچ‌وقت توی رجیستری مودال‌های تودرتو ثبت نمی‌شد، پس سوایپ
   // بین تب‌های اصلی از زیرش رد می‌شد و باعث می‌شد کشیدن انگشت روی فیلترها/
   // لیست فاکتورها به‌جای تعامل با خودش، تب رو عوض کنه
@@ -1969,6 +1969,7 @@ export default function AccountingTab({
           productTotals={productTotals}
           businessCard={businessCard}
           invoiceDrafts={invoiceDrafts}
+          refreshResetTick={refreshResetTick}
         />
       )}
 
