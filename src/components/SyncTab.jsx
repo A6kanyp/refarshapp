@@ -582,7 +582,7 @@ export default function SyncTab({
                 Documents/{imageFolderName}/qr  ← QR کارت‌ویزیت خودت<br />
                 Documents/{imageFolderName}/cards  ← عکس کارت‌ویزیت همکاران/تامین‌کننده‌ها<br />
                 Documents/{imageFolderName}/factor/pdf  ← PDF فاکتورها (ذخیره خودکار)<br />
-                Documents/{imageFolderName}/factor/image  ← عکس فاکتورها (ذخیره خودکار)<br />
+                Documents/{imageFolderName}/factor  ← عکس فاکتورها (ذخیره خودکار)<br />
                 Documents/{imageFolderName}/1dnesting  ← خروجی عکس برش ۱D<br />
                 Documents/{imageFolderName}/2dnesting  ← خروجی عکس برش ۲D
               </div>

@@ -62,7 +62,7 @@ function downloadInBrowser(blob, filename) {
 /** زیرپوشه‌های ثابت داخل Documents/refarsh/ */
 export const REFARSH_SAVE_DIRS = {
   BILLS_PDF: "factor/pdf",
-  BILLS_IMAGE: "factor/image",
+  BILLS_IMAGE: "factor", // قبلاً "factor/image" بود؛ چون گالری گوشی هم پوشه‌ی «images» محصولات رو نشون می‌داد هم این «image» رو (دوتا پوشه‌ی هم‌نام گیج‌کننده)، عکس فاکتور مستقیم توی خودِ factor/ ذخیره می‌شه
   NEST_1D: "1dnesting",
   NEST_2D: "2dnesting",
   IMAGES: "images",

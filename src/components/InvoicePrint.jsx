@@ -561,7 +561,7 @@ export default function InvoicePrint({
             {savingAction === "pdf" ? <RefreshCw size={15} className="animate-spin" /> : <FileDown size={15} />}
           </button>
 
-          {/* Save as Image → آبی (ذخیره‌ی خودکار در Documents/refarsh/factor/image) */}
+          {/* Save as Image → آبی (ذخیره‌ی خودکار در Documents/refarsh/factor) */}
           <button 
             onClick={handleSaveAsImage} 
             disabled={savingAction === "image"}
@@ -578,7 +578,7 @@ export default function InvoicePrint({
               cursor: savingAction === "image" ? 'default' : 'pointer', 
               opacity: savingAction === "image" ? 0.7 : 1,
             }}
-            title="ذخیره تصویر در Documents/refarsh/factor/image"
+            title="ذخیره تصویر در Documents/refarsh/factor"
           >
             {savingAction === "image" ? <RefreshCw size={15} className="animate-spin" /> : <Download size={15} />}
           </button>
