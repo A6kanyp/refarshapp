@@ -157,6 +157,7 @@ export default function SyncTab({
   };
 
   const [showPathEditor, setShowPathEditor] = useState(false);
+  const [resolvedFolderUri, setResolvedFolderUri] = useState(null);
   const [showServerEditor, setShowServerEditor] = useState(false);
   const [serverUrlInput, setServerUrlInput] = useState(() => {
     try { return localStorage.getItem(API_BASE_URL_OVERRIDE_KEY) || ""; } catch (_) { return ""; }
@@ -586,6 +587,32 @@ export default function SyncTab({
                 Documents/{imageFolderName}/1dnesting  ← خروجی عکس برش ۱D<br />
                 Documents/{imageFolderName}/2dnesting  ← خروجی عکس برش ۲D
               </div>
+              {/* آیتم جدید: کاربر چندبار گزارش داد که عکس کپی‌شده‌ی دستی هیچ‌وقت
+                  دیده نمی‌شه — یه احتمال جدی اینه که فایل‌منیجر گوشی یه مسیر
+                  عمومی رو نشون می‌ده (که به چشم شبیه همینه) ولی اپ واقعاً به
+                  یه مسیر دیگه (مخصوص خودِ اپ) می‌نویسه. این دکمه مسیر *واقعیِ*
+                  resolve‌شده رو مستقیم از خودِ Capacitor می‌گیره تا کاربر بتونه
+                  دقیقاً همینو با چیزی که فایل‌منیجرش نشون می‌ده مقایسه کنه. */}
+              <button
+                className="text-[9.5px] mt-2 py-2 px-2 w-full rounded-lg cursor-pointer font-inherit"
+                style={{ background: "#161616", border: "1px solid #2a2a2a", color: "#7aa8d8" }}
+                onClick={async () => {
+                  try {
+                    const { Filesystem, Directory } = await import("@capacitor/filesystem");
+                    const { uri } = await Filesystem.getUri({ path: `${imageFolderName}/images`, directory: Directory.Documents });
+                    setResolvedFolderUri(uri);
+                  } catch (err) {
+                    if (notify) notify(`خطا در گرفتن مسیر واقعی: ${err.message || err}`);
+                  }
+                }}
+              >
+                نمایش مسیر دقیق واقعی (برای مقایسه با فایل‌منیجر)
+              </button>
+              {resolvedFolderUri && (
+                <div className="text-[9.5px] mt-2 p-2 rounded-lg leading-loose font-mono break-all" style={{ background: "#0a0a0a", border: "1px solid #2a2a2a", color: "#e0c26b" }} dir="ltr">
+                  {resolvedFolderUri}
+                </div>
+              )}
             </div>
           )}
 
