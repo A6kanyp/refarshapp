@@ -5,6 +5,7 @@ import React, { useState, useMemo, memo, useRef, useEffect } from "react";
 import { Trash2, ChevronDown, ChevronUp, RotateCcw, Plus, Eye, EyeOff, Download, X, Package, Save, Upload, Image as ImageIcon, FileText, Clock, RefreshCw } from "lucide-react";
 import html2canvas from "html2canvas";
 import { saveFile, REFARSH_SAVE_DIRS } from "../utils/nativeSave";
+import { getSaveQualityScale } from "../utils/imageStorage";
 import { toNum, normalizeNumericInput, fmtCode, formatProductDims } from "../mathCore";
 import { getJalaliTimestamp } from "../utils/formatters";
 import { NestingVisualizer } from "./NestingVisualizer";
@@ -562,7 +563,7 @@ export default function WoodCuttingTab({ stickyTop, materials, products, persist
 
     return html2canvas(el, { 
       backgroundColor: "#0a0a0a",
-      scale: 1.5, // قبلاً 2 بود؛ چون این بخش SVG سنگین داره و کندی گزارش‌شده بود، برای سرعت کم شد
+      scale: getSaveQualityScale(1.5), // قابل تنظیم دستی (تب همگام‌سازی) — پیش‌فرض همون ۱.۵ی قبلی
       useCORS: true,
       logging: false,
       width: naturalWidth,

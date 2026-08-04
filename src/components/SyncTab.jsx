@@ -7,7 +7,7 @@ import {
   Cloud, CloudLightning, RefreshCw, CheckCircle2,
   AlertTriangle, FileDown, FileUp, Trash2, Database,
   HelpCircle, Wifi, WifiOff, Clock, HardDrive, Info,
-  FolderOpen, Save, X, Check, ChevronDown, ChevronUp, Plus, Edit3, LayoutGrid
+  FolderOpen, Save, X, Check, ChevronDown, ChevronUp, Plus, Edit3, LayoutGrid, ImagePlus
 } from "lucide-react";
 import {
   performSynchronization,
@@ -19,7 +19,7 @@ import {
   API_BASE_URL_OVERRIDE_KEY
 } from "../utils/syncManager";
 import { getDefaultData } from "../dataModels";
-import { getImageFolderName, autoDetectImagesForCode } from "../utils/imageStorage";
+import { getImageFolderName, autoDetectImagesForCode, SAVE_QUALITY_SCALE_KEY } from "../utils/imageStorage";
 import { fmtCode } from "../mathCore";
 import { useAuth } from "../contexts/AuthContext.jsx";
 
@@ -64,6 +64,9 @@ export default function SyncTab({
   const [auditFilter, setAuditFilter] = useState("all");
   const [bulkImageScanning, setBulkImageScanning] = useState(false);
   const [bulkImageScanResult, setBulkImageScanResult] = useState(null); // { checked, matched, newImages } | null
+  const [saveQualityInput, setSaveQualityInput] = useState(() => {
+    try { return localStorage.getItem(SAVE_QUALITY_SCALE_KEY) || ""; } catch (_) { return ""; }
+  });
 
   // مثل autoScanForImages توی فرم تک‌محصولی (ProductTab.jsx)، ولی یکجا برای همه‌ی
   // محصولات: هر محصول رو با کدش توی پوشه‌ی عکس می‌گرده، هر عکس جدیدی که طبق قرارداد
@@ -670,6 +673,43 @@ export default function SyncTab({
           </div>
         </div>
       )}
+
+      {/* ── کیفیت/سرعت ذخیره‌ی عکس و PDF (فاکتور، برش ۱D/۲D) ── */}
+      <div className="bg-[#121212] border border-[#1f1f1f] rounded-2xl p-5 shadow-lg">
+        <div className="flex items-center gap-2.5 mb-2.5">
+          <ImagePlus size={16} className="text-[#555]" />
+          <h3 className="text-xs font-bold text-[#F5F0EB]">کیفیت/سرعت ذخیره‌ی عکس و PDF</h3>
+        </div>
+        <p className="text-[10px] text-[#666] leading-relaxed mb-3">
+          روی این عدد ذخیره/اشتراک‌گذاری عکس و PDF فاکتور و برش ۱D/۲D همه اثر می‌ذاره — عدد بزرگ‌تر یعنی وضوح بیشتر ولی کندتر، عدد کوچیک‌تر یعنی سریع‌تر ولی کیفیت کمتر. پیش‌فرض فعلی برای فاکتور <span dir="ltr" className="font-mono">2</span> و برای ۱D/۲D <span dir="ltr" className="font-mono">1.5</span>ه. اینجا خالی بذاری همون پیش‌فرض‌ها می‌مونن.
+        </p>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            step="0.1"
+            min="0.5"
+            max="3"
+            dir="ltr"
+            value={saveQualityInput}
+            onChange={(e) => setSaveQualityInput(e.target.value)}
+            placeholder="مثلاً 1.2"
+            className="flex-1 bg-[#141414] border border-[#252525] rounded-lg px-2.5 py-2 text-[10.5px] text-[#ddd] outline-none focus:border-[#3a3a3a]"
+          />
+          <button
+            onClick={() => {
+              try {
+                const v = saveQualityInput.trim();
+                if (v) localStorage.setItem(SAVE_QUALITY_SCALE_KEY, v);
+                else localStorage.removeItem(SAVE_QUALITY_SCALE_KEY);
+              } catch (_) {}
+              notify && notify(saveQualityInput.trim() ? `کیفیت ذخیره روی ${saveQualityInput.trim()} تنظیم شد` : "برگشت به پیش‌فرض هر بخش");
+            }}
+            className="py-2 px-3 bg-[#1a1a1a] border border-[#2a2a2a] hover:border-[#3a3a3a] rounded-lg text-[10px] text-[#ccc] hover:text-white transition-all cursor-pointer whitespace-nowrap"
+          >
+            ذخیره
+          </button>
+        </div>
+      </div>
 
       {/* ── ADVANCED ADMIN DEV ZONE ── */}
       <div className="bg-[#121212] border border-[#1f1f1f] rounded-2xl p-5 shadow-lg">
