@@ -3024,7 +3024,7 @@ export default function App() {
       });
   }, [data.products]);
 
-  const addMaterialPurchase = useCallback((id, amount, date, qty) => {
+  const addMaterialPurchase = useCallback((id, amount, date, qty, label) => {
     const amt = toNum(amount);
     if (amt <= 0) return;
     const purchDate = date || todayISO();
@@ -3044,7 +3044,7 @@ export default function App() {
           remainingQty: prevRemainingQty + q,
           purchaseQty: prevTotalQty + q,
           purchaseDate: purchDate,
-          procurements: [...(m.procurements || []), { id: uid(), date: purchDate, total: amt, unitPrice: q > 0 ? amt / q : amt, qty: q }],
+          procurements: [...(m.procurements || []), { id: uid(), date: purchDate, total: amt, unitPrice: q > 0 ? amt / q : amt, qty: q, label: label || null }],
         };
       });
       return { ...d, materials, products: syncPercentPricedProducts(materials, d.products) };

@@ -1405,6 +1405,7 @@ function MaterialCard({
   const [newPurchaseUnit, setNewPurchaseUnit] = useState("");
   const [newPurchaseQty, setNewPurchaseQty] = useState("1");
   const [newPurchaseDate, setNewPurchaseDate] = useState(todayISO());
+  const [newPurchaseLabel, setNewPurchaseLabel] = useState("");
   const [newBatch, setNewBatch] = useState({ label: "", width: "", height: "", qty: "1", unitPrice: "", totalCost: "", date: todayISO() });
   const [expandedBatchId, setExpandedBatchId] = useState(null);
   const [expandedProcId, setExpandedProcId] = useState(null);
@@ -1725,6 +1726,9 @@ function MaterialCard({
                 >
                   {pr.id ? (isOpen ? <ChevronUp size={12} color="#888" /> : <ChevronDown size={12} color="#888" />) : <span style={{ width: 12 }} />}
                   <span style={{ fontSize: 9.5, color: "#777", flex: "0 0 auto" }}>{pr.date ? fmtDate(pr.date) : "—"}</span>
+                  {pr.label && (
+                    <span style={{ fontSize: 9.5, color: "#aaa", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 120 }}>{pr.label}</span>
+                  )}
                   <span style={{ flex: 1 }} />
                   {showQty && pr.qty > 0 && (
                     <span style={{ fontSize: 9.5, color: "#777" }}>{pr.qty} عدد</span>
@@ -1741,9 +1745,16 @@ function MaterialCard({
                 </div>
                 {isOpen && (
                   <div style={{ marginTop: 7, paddingTop: 7, borderTop: "1px solid #1e1e1e" }}>
+                    <input onFocus={(e) => e.target.select()}
+                      style={{ ...S.input, width: "100%", marginBottom: 5 }}
+                      type="text"
+                      placeholder="عنوان (اختیاری)"
+                      value={pr.label || ""}
+                      onChange={(e) => onUpdateProcurement?.(mat.id, pr.id, { label: e.target.value })}
+                    />
                     <div style={{ display: "flex", gap: 6, marginBottom: 5 }}>
                       <input
-                        style={{ ...S.input, flex: 1, minWidth: 0 }}
+                        style={{ ...S.input, flex: 1, minWidth: 55 }}
                         type="text"
                         placeholder="تعداد"
                         value={pr.qty ?? ""}
@@ -1760,7 +1771,7 @@ function MaterialCard({
                         }}
                       />
                       <input onFocus={(e) => e.target.select()}
-                        style={{ ...S.input, flex: 1, minWidth: 0 }}
+                        style={{ ...S.input, flex: 1.4, minWidth: 80 }}
                         type="text"
                         placeholder="مبلغ واحد"
                         value={
@@ -1777,7 +1788,7 @@ function MaterialCard({
                         }}
                       />
                       <input onFocus={(e) => e.target.select()}
-                        style={{ ...S.input, flex: 1, minWidth: 0 }}
+                        style={{ ...S.input, flex: 1.4, minWidth: 80 }}
                         type="text"
                         placeholder="مبلغ کل"
                         value={pr.total ? formatPriceInput(pr.total) : ""}
@@ -1810,10 +1821,19 @@ function MaterialCard({
           </>
           )}
 
-          {mat.type !== "area" && mat.type !== "fabric" && (
-          <div style={{ display: "flex", gap: 6, marginTop: 6, marginBottom: 8 }}>
+          {(mat.type === "ratio" || mat.type === "fixed") && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 6, marginBottom: 8, background: "#0f0f0f", border: "1px dashed #2a2a2a", borderRadius: 8, padding: 9 }}>
+            <div style={{ fontSize: 9.5, color: "#666" }}>خرید جدید</div>
+            <input onFocus={(e) => e.target.select()}
+              style={{ ...S.input, width: "100%" }}
+              type="text"
+              placeholder="عنوان (اختیاری) — مثلاً: چسب چوب برند X، یا: تیزکردن قیچی"
+              value={newPurchaseLabel}
+              onChange={(e) => setNewPurchaseLabel(e.target.value)}
+            />
+            <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
             <input
-              style={{ ...S.input, flex: 1, minWidth: 0 }}
+              style={{ ...S.input, flex: 1, minWidth: 55 }}
               type="text"
               placeholder="تعداد"
               value={newPurchaseQty}
@@ -1826,7 +1846,7 @@ function MaterialCard({
               }}
             />
             <input onFocus={(e) => e.target.select()}
-              style={{ ...S.input, flex: 1, minWidth: 0 }}
+              style={{ ...S.input, flex: 1.4, minWidth: 80 }}
               type="text"
               placeholder="مبلغ واحد"
               value={newPurchaseUnit ? formatPriceInput(newPurchaseUnit) : ""}
@@ -1838,7 +1858,7 @@ function MaterialCard({
               }}
             />
             <input onFocus={(e) => e.target.select()}
-              style={{ ...S.input, flex: 1, minWidth: 0 }}
+              style={{ ...S.input, flex: 1.4, minWidth: 80 }}
               type="text"
               placeholder="مبلغ کل"
               value={newPurchaseAmt ? formatPriceInput(newPurchaseAmt) : ""}
@@ -1854,8 +1874,10 @@ function MaterialCard({
                 if (q > 0) setNewPurchaseUnit(String(Math.round(total / q)));
               }}
             />
+            </div>
+            <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
             <JalaliDatePicker
-              style={{ width: 110 }}
+              style={{ flex: 1 }}
               value={newPurchaseDate}
               onChange={(val) => setNewPurchaseDate(val)}
             />
@@ -1865,18 +1887,20 @@ function MaterialCard({
                 const amt = toNum(newPurchaseAmt);
                 const q = Math.max(1, toNum(newPurchaseQty) || 1);
                 if (amt > 0) {
-                  onAddPurchase(mat.id, amt, newPurchaseDate, q);
+                  onAddPurchase(mat.id, amt, newPurchaseDate, q, (newPurchaseLabel || "").trim() || null);
                   setNewPurchaseAmt("");
                   setNewPurchaseUnit("");
                   setNewPurchaseQty("1");
+                  setNewPurchaseLabel("");
                   if (mat.hidden) {
                     onToggleHidden(mat.id);
                   }
                 }
               }}
             >
-              +
+              + افزودن
             </button>
+            </div>
           </div>
           )}
 
@@ -1952,7 +1976,7 @@ function MaterialCard({
                           onChange={(e) => onUpdateBatch(mat.id, b.id, { height: toNum(e.target.value) })}
                         />
                         <input
-                          style={{ ...S.input, flex: 1, minWidth: 0 }}
+                          style={{ ...S.input, flex: 1, minWidth: 55 }}
                           type="text"
                           placeholder="تعداد"
                           value={b.qty || 1}
@@ -1968,7 +1992,7 @@ function MaterialCard({
                       </div>
                       <div style={{ display: "flex", gap: 5, marginBottom: 4 }}>
                         <input onFocus={(e) => e.target.select()}
-                          style={{ ...S.input, flex: 1, minWidth: 0 }}
+                          style={{ ...S.input, flex: 1.4, minWidth: 80 }}
                           type="text"
                           placeholder="مبلغ واحد"
                           value={b.unitPrice ? formatPriceInput(b.unitPrice) : (b.totalCost && b.qty ? formatPriceInput(Math.round(toNum(b.totalCost) / Math.max(1, toNum(b.qty)))) : "")}
@@ -1981,7 +2005,7 @@ function MaterialCard({
                           }}
                         />
                         <input onFocus={(e) => e.target.select()}
-                          style={{ ...S.input, flex: 1, minWidth: 0 }}
+                          style={{ ...S.input, flex: 1.4, minWidth: 80 }}
                           type="text"
                           placeholder="مبلغ کل"
                           value={b.totalCost ? formatPriceInput(b.totalCost) : ""}
@@ -2047,7 +2071,7 @@ function MaterialCard({
                     onChange={(e) => setNewBatch({ ...newBatch, height: e.target.value })}
                   />
                   <input
-                    style={{ ...S.input, flex: 1, minWidth: 0 }}
+                    style={{ ...S.input, flex: 1, minWidth: 55 }}
                     type="text"
                     placeholder="تعداد"
                     value={newBatch.qty}
@@ -2065,7 +2089,7 @@ function MaterialCard({
                 </div>
                 <div style={{ display: "flex", gap: 5, marginBottom: 5 }}>
                   <input onFocus={(e) => e.target.select()}
-                    style={{ ...S.input, flex: 1, minWidth: 0 }}
+                    style={{ ...S.input, flex: 1.4, minWidth: 80 }}
                     type="text"
                     placeholder="مبلغ واحد"
                     value={newBatch.unitPrice ? formatPriceInput(newBatch.unitPrice) : ""}
@@ -2080,7 +2104,7 @@ function MaterialCard({
                     }}
                   />
                   <input onFocus={(e) => e.target.select()}
-                    style={{ ...S.input, flex: 1, minWidth: 0 }}
+                    style={{ ...S.input, flex: 1.4, minWidth: 80 }}
                     type="text"
                     placeholder="مبلغ کل"
                     value={newBatch.totalCost ? formatPriceInput(newBatch.totalCost) : ""}
@@ -2185,14 +2209,14 @@ function MaterialCard({
                     </div>
                     <div style={{ display: "flex", gap: 6, marginBottom: 5 }}>
                       <input onFocus={(e) => e.target.select()}
-                        style={{ ...S.input, flex: 1, minWidth: 0 }}
+                        style={{ ...S.input, flex: 1, minWidth: 55 }}
                         type="text"
                         placeholder="طول (سانت)"
                         value={s.length || ""}
                         onChange={(e) => onUpdateStick(mat.id, s.id, { length: toNum(e.target.value) })}
                       />
                       <input onFocus={(e) => e.target.select()}
-                        style={{ ...S.input, flex: 1, minWidth: 0 }}
+                        style={{ ...S.input, flex: 1, minWidth: 55 }}
                         type="text"
                         placeholder="تعداد"
                         value={s.qty || ""}
@@ -2207,7 +2231,7 @@ function MaterialCard({
                     </div>
                     <div style={{ display: "flex", gap: 6, marginBottom: 5 }}>
                       <input onFocus={(e) => e.target.select()}
-                        style={{ ...S.input, flex: 1, minWidth: 0 }}
+                        style={{ ...S.input, flex: 1.4, minWidth: 80 }}
                         type="text"
                         placeholder="مبلغ واحد"
                         value={s.unitPrice ? formatPriceInput(s.unitPrice) : (s.totalCost && s.qty ? formatPriceInput(Math.round(toNum(s.totalCost) / Math.max(1, toNum(s.qty)))) : "")}
@@ -2220,7 +2244,7 @@ function MaterialCard({
                         }}
                       />
                       <input onFocus={(e) => e.target.select()}
-                        style={{ ...S.input, flex: 1, minWidth: 0 }}
+                        style={{ ...S.input, flex: 1.4, minWidth: 80 }}
                         type="text"
                         placeholder="مبلغ کل"
                         value={s.totalCost ? formatPriceInput(s.totalCost) : ""}
@@ -2254,14 +2278,14 @@ function MaterialCard({
                 <div style={{ fontSize: 9.5, color: "#666", marginBottom: 6 }}>چوب / بچ جدید</div>
                 <div style={{ display: "flex", gap: 5, marginBottom: 5, alignItems: "center" }}>
                   <input onFocus={(e) => e.target.select()}
-                    style={{ ...S.input, flex: 1, minWidth: 0 }}
+                    style={{ ...S.input, flex: 1, minWidth: 55 }}
                     type="text"
                     placeholder="طول (سانت)"
                     value={newStick.length}
                     onChange={(e) => setNewStick({ ...newStick, length: e.target.value })}
                   />
                   <input
-                    style={{ ...S.input, flex: 1, minWidth: 0 }}
+                    style={{ ...S.input, flex: 1, minWidth: 55 }}
                     type="text"
                     placeholder="تعداد"
                     value={newStick.qty}
@@ -2284,7 +2308,7 @@ function MaterialCard({
                 </div>
                 <div style={{ display: "flex", gap: 5, marginBottom: 5 }}>
                   <input onFocus={(e) => e.target.select()}
-                    style={{ ...S.input, flex: 1, minWidth: 0 }}
+                    style={{ ...S.input, flex: 1.4, minWidth: 80 }}
                     type="text"
                     placeholder="مبلغ واحد"
                     value={newStick.unitPrice ? formatPriceInput(newStick.unitPrice) : ""}
@@ -2299,7 +2323,7 @@ function MaterialCard({
                     }}
                   />
                   <input onFocus={(e) => e.target.select()}
-                    style={{ ...S.input, flex: 1, minWidth: 0 }}
+                    style={{ ...S.input, flex: 1.4, minWidth: 80 }}
                     type="text"
                     placeholder="مبلغ کل"
                     value={newStick.totalCost ? formatPriceInput(newStick.totalCost) : ""}
