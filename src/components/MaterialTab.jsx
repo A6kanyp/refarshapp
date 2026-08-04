@@ -1605,7 +1605,7 @@ function MaterialCard({
           </div>
         </div>
         <button
-          style={{ ...S.iconBtn, width: 22, height: 22, justifyContent: "center" }}
+          style={{ ...S.iconBtn, width: 32, height: 32, justifyContent: "center" }}
           onClick={(e) => {
             e.stopPropagation();
             onToggleHidden(mat.id);

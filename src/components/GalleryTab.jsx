@@ -925,7 +925,7 @@ function CustomerCard({
             </div>
           </div>
           <button
-            style={{ ...T.iconBtn, width: 22, height: 22, justifyContent: "center" }}
+            style={{ ...T.iconBtn, width: 32, height: 32, justifyContent: "center" }}
             title={stat.hidden ? "نمایش دادن (از حالت مخفی خارج کن)" : "مخفی کن (از لیست‌های انتخاب/ارجاع حذف می‌شه)"}
             onClick={(e) => {
               e.stopPropagation();
@@ -940,13 +940,13 @@ function CustomerCard({
             {stat.hidden ? <EyeOff size={12} color="#555" /> : <Eye size={12} color="#555" />}
           </button>
           <button
-            style={{ ...T.iconBtn, width: 22, height: 22, justifyContent: "center" }}
+            style={{ ...T.iconBtn, width: 32, height: 32, justifyContent: "center" }}
             onClick={(e) => { e.stopPropagation(); onEdit(stat); }}
           >
             <Edit3 size={12} color="#555" />
           </button>
           <button
-            style={{ ...T.iconBtn, width: 22, height: 22, justifyContent: "center" }}
+            style={{ ...T.iconBtn, width: 32, height: 32, justifyContent: "center" }}
             onClick={(e) => { e.stopPropagation(); onRequestDelete(stat.id); }}
           >
             <Trash2 size={12} color="#e08a8a" />
