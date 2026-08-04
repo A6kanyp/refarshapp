@@ -5,6 +5,7 @@ import React, { useState, useMemo, memo, useRef, useEffect } from "react";
 import { Trash2, ChevronDown, ChevronUp, RotateCcw, Plus, Eye, EyeOff, Download, X, Package, Save, Upload, Image as ImageIcon, FileText, Clock, RefreshCw } from "lucide-react";
 import html2canvas from "html2canvas";
 import { saveFile, REFARSH_SAVE_DIRS } from "../utils/nativeSave";
+import { getSaveQualityScale } from "../utils/imageStorage";
 import { toNum, normalizeNumericInput, fmtCode, formatProductDims } from "../mathCore";
 import { getJalaliTimestamp } from "../utils/formatters";
 import { NestingVisualizer } from "./NestingVisualizer";
@@ -188,14 +189,37 @@ function computePlankRowLayout(cuts, wasteLength, kerfVal, stockLength, targetWi
     jointGapPx.reduce((s, g) => s + g, 0) +
     (wasteLength > 0 ? wasteGapPx + wastePx : 0);
 
+  // فیکس مهم (دامپ کاربر): قبلاً همیشه ردیف رو دقیقاً به اندازه‌ی targetWidthPx
+  // فیت می‌کرد (چه بزرگ‌تر بود چه کوچیک‌تر) — یعنی اگه قطعه‌ای خیلی کوچیک بود،
+  // موقع جمع‌شدن به عرض کادر، پیکسلش از عرض لیبل عددش کمتر می‌شد و عدد کلاً
+  // نامرئی می‌شد (showLabel پایین‌تر همچین شرطی داره). الان: اگه بعد از فیت‌شدن
+  // به عرض کادر، حداقل یه قطعه از عرض لیبل خودش کوچیک‌تر بشه، به‌جای جمع‌کردن،
+  // کل ردیف فقط به همون اندازه‌ی لازم (نه بیشتر) بزرگ می‌شه که همون قطعه دقیقاً
+  // اندازه‌ی لیبلش بشه — PlankRow با needsScroll این عرض اضافه رو قابل‌اسکرول
+  // می‌کنه، پس چیزی خیلی عریض نمی‌شه، فقط دقیقاً به اندازه‌ی لازم
   if (rowWidthPx > 0.5 && Math.abs(rowWidthPx - targetWidthPx) > 0.5) {
-    const scale = targetWidthPx / rowWidthPx;
+    let scale = targetWidthPx / rowWidthPx;
+    if (scale < 1) {
+      // داریم جمع می‌کنیم (ردیف طبیعتاً از کادر بزرگ‌تره) — قبل از فیت‌کردن،
+      // ببینیم بعد از این جمع‌شدن کدوم قطعه از لیبلش کوچیک‌تر می‌شه، و اگه بود
+      // scale رو کمتر جمع کن (بزرگ‌تر از حالت عادی، ولی نه بیشتر از لازم)
+      let minRequiredScale = scale;
+      cuts.forEach((c, i) => {
+        const neededPx = estimatePlankLabelWidthPx(c.length, 10) * 0.9;
+        if (pieceWidths[i] > 0 && neededPx > 0) {
+          const scaleNeededForThisPiece = neededPx / pieceWidths[i];
+          if (scaleNeededForThisPiece > minRequiredScale) minRequiredScale = scaleNeededForThisPiece;
+        }
+      });
+      scale = Math.min(minRequiredScale * 1.02, 1); // یه‌خرده حاشیه‌ی امن برای گردکردن اعشاری
+    }
+    const finalRowWidth = rowWidthPx * scale;
     return {
       jointGapPx: jointGapPx.map((g) => g * scale),
       pieceWidths: pieceWidths.map((w) => w * scale),
       wastePx: wastePx * scale,
       wasteGapPx: wasteGapPx * scale,
-      rowWidthPx: targetWidthPx,
+      rowWidthPx: Math.max(finalRowWidth, targetWidthPx),
       pxPerCm: pxPerCm * scale,
     };
   }
@@ -562,7 +586,7 @@ export default function WoodCuttingTab({ stickyTop, materials, products, persist
 
     return html2canvas(el, { 
       backgroundColor: "#0a0a0a",
-      scale: 1.5, // قبلاً 2 بود؛ چون این بخش SVG سنگین داره و کندی گزارش‌شده بود، برای سرعت کم شد
+      scale: getSaveQualityScale(1.5), // قابل تنظیم دستی (تب همگام‌سازی) — پیش‌فرض همون ۱.۵ی قبلی
       useCORS: true,
       logging: false,
       width: naturalWidth,

@@ -15,7 +15,7 @@ import { toNum, fmt, fmtCode, fmtDate, todayISO, parseDims, dimsArea, getProduct
 import { SCRATCH_KEYS, saveScratch, loadScratch, clearScratch } from "../scratchpad";
 import { saveFile, shareText } from "../utils/nativeSave";
 import { compressImageFile } from "../utils/imageCompress";
-import { saveImageToFolder, IMAGE_CATEGORIES, useResolvedImageSrc, autoDetectImagesForCode, deleteImageFile } from "../utils/imageStorage";
+import { saveImageToFolder, IMAGE_CATEGORIES, useResolvedImageSrc, autoDetectImagesForCode, deleteImageFile, listRawProductImageFiles } from "../utils/imageStorage";
 import { handleEnterNavigate } from "../utils/formNav";
 import { pushBackHandler } from "../utils/backButton";
 import {
@@ -840,17 +840,17 @@ export function ImageLightbox({ products, currentId, onNavigate, onClose, onAddT
         )}
       </div>
 
-      {prodIdx > 0 && (
-        <button onPointerDown={(e) => e.stopPropagation()} onClick={() => onNavigate(products[prodIdx - 1].id)}
+      {prodIdx < products.length - 1 && (
+        <button onPointerDown={(e) => e.stopPropagation()} onClick={() => onNavigate(products[prodIdx + 1].id)}
           style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", background: "rgba(0,0,0,0.55)", border: "none", borderRadius: "50%", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 6 }}
-          title="محصول قبلی">
+          title="محصول بعدی">
           <ChevronLeft size={18} color="#ddd" />
         </button>
       )}
-      {prodIdx < products.length - 1 && (
-        <button onPointerDown={(e) => e.stopPropagation()} onClick={() => onNavigate(products[prodIdx + 1].id)}
+      {prodIdx > 0 && (
+        <button onPointerDown={(e) => e.stopPropagation()} onClick={() => onNavigate(products[prodIdx - 1].id)}
           style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "rgba(0,0,0,0.55)", border: "none", borderRadius: "50%", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 6 }}
-          title="محصول بعدی">
+          title="محصول قبلی">
           <ChevronRight size={18} color="#ddd" />
         </button>
       )}
@@ -1754,7 +1754,26 @@ export function ProductEditor({
       // که هم همیشه لاتین/عددیه، هم چون کد یکتاست تضمین می‌کنه اسم فایل با
       // هیچ محصول دیگه‌ای تداخل نداره. همچنین حالا چندانتخابی هم پشتیبانی می‌شه.
       const codeStr = fmtCode(local.code != null ? local.code : nextCode);
-      const startIdx = (local.images || []).length;
+      // فیکس تداخل نام‌گذاری: قبلاً شماره‌ی بعدی فقط بر اساس تعداد عکس‌های
+      // «لینک‌شده» به رکورد محصول محاسبه می‌شد، نه چیزی که واقعاً روی دیسک
+      // هست. اگه کاربر یه عکس رو دستی (با فایل‌منیجر) با همین قرارداد نام‌گذاری
+      // توی پوشه کپی کرده باشه ولی هنوز لینک نشده باشه، آپلود بعدی از همون
+      // شماره‌ی ۰۱ شروع می‌کرد و بی‌صدا فایل دستیِ کاربر رو overwrite می‌کرد.
+      // الان قبل از آپلود، دیسک واقعاً چک می‌شه و شماره‌ی بعدیِ واقعاً آزاد پیدا می‌شه.
+      let startIdx = (local.images || []).length;
+      try {
+        const existingOnDisk = await autoDetectImagesForCode(codeStr);
+        if (existingOnDisk.length > 0) {
+          const maxSeqOnDisk = existingOnDisk.reduce((max, f) => {
+            const m = f.match(/(\d{2})\.[a-zA-Z0-9]+$/);
+            const idx = m ? parseInt(m[1], 10) : 0;
+            return Math.max(max, idx);
+          }, 0);
+          startIdx = Math.max(startIdx, maxSeqOnDisk);
+        }
+      } catch (_) {
+        // اگه چک دیسک به هر دلیلی خطا داد، همون رفتار قبلی (بر اساس تعداد لینک‌شده) رو نگه می‌داریم
+      }
       const savedFilenames = [];
       for (let i = 0; i < files.length; i++) {
         const compressedDataUrl = await compressImageFile(files[i]);
@@ -1793,7 +1812,17 @@ export function ProductEditor({
         return;
       }
       if (found.length === 0) {
-        if (opts.manual) showToast("عکسی با این کد در پوشه پیدا نشد", "error");
+        if (opts.manual) {
+          const raw = await listRawProductImageFiles().catch(() => null);
+          if (raw === null) {
+            showToast("عکسی با این کد در پوشه پیدا نشد", "error");
+          } else if (raw.length === 0) {
+            showToast(`عکسی با کد ${codeStr} پیدا نشد — پوشه‌ی عکس محصولات کلاً خالیه (هیچ فایلی توش دیده نمی‌شه)`, "error");
+          } else {
+            const sample = raw.slice(0, 5).join("، ");
+            showToast(`عکسی با کد ${codeStr} پیدا نشد. فایل‌هایی که توی پوشه دیده می‌شن: ${sample}${raw.length > 5 ? ` (+${raw.length - 5} تای دیگه)` : ""}`, "error");
+          }
+        }
         return;
       }
       let addedCount = 0;
@@ -3123,7 +3152,7 @@ export function CatalogTab({
         }}
       >
         <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
-          <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", background: "#161616", border: "1px solid #232323", borderRadius: 8, padding: "6px 10px", gap: 6 }}>
+          <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", background: "#161616", border: "1px solid #232323", borderRadius: 8, padding: "0 10px", gap: 6, height: 22, minHeight: 22, boxSizing: "border-box" }}>
             <Search size={13} color="#555" style={{ flexShrink: 0 }} />
             <input onFocus={(e) => e.target.select()}
               style={{ background: "transparent", border: "none", outline: "none", color: "#ddd", fontSize: 11, flex: 1, minWidth: 0, fontFamily: "inherit" }}
@@ -3841,7 +3870,7 @@ export default function ProductTab({
         }}
       >
         <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
-          <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", background: "#161616", border: "1px solid #232323", borderRadius: 8, padding: "6px 10px", gap: 6 }}>
+          <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", background: "#161616", border: "1px solid #232323", borderRadius: 8, padding: "0 10px", gap: 6, height: 22, minHeight: 22, boxSizing: "border-box" }}>
             <Search size={13} color="#555" style={{ flexShrink: 0 }} />
             <input onFocus={(e) => e.target.select()}
               style={{ background: "transparent", border: "none", outline: "none", color: "#ddd", fontSize: 11, flex: 1, minWidth: 0, fontFamily: "inherit" }}

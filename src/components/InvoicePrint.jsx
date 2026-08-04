@@ -6,6 +6,7 @@ import html2canvas from "html2canvas";
 import InvoiceTemplate from "./InvoiceTemplate";
 import { fmt, toNum } from "../mathCore";
 import { saveFile, shareFile, shareText, REFARSH_SAVE_DIRS } from "../utils/nativeSave";
+import { getSaveQualityScale } from "../utils/imageStorage";
 import { useToast } from "../contexts/ToastContext";
 
 // بخش «بک‌گراند فاکتور بعضی‌وقتا نمیاد» (این تصادفی نبود، یه race condition واقعی بود):
@@ -107,7 +108,7 @@ export default function InvoicePrint({
     // Let clone render (و مهم‌تر: صبر کن img های کپی‌شده واقعاً لود بشن)
     waitForImagesToLoad(clonedPaper).then(() => {
       html2canvas(clonedPaper, {
-        scale: 2, // 2x scale is perfect for PDF resolution
+        scale: getSaveQualityScale(2), // 2x scale is perfect for PDF resolution — قابل تنظیم دستی (تب همگام‌سازی)
         useCORS: true,
         backgroundColor: "#ffffff",
         logging: false,
@@ -237,7 +238,7 @@ export default function InvoicePrint({
     // صبر کن img های کپی‌شده واقعاً لود بشن (نه صرفاً یه timeout ثابت)
     waitForImagesToLoad(clonedPaper).then(() => {
       html2canvas(clonedPaper, {
-        scale: 2, // کاهش از 3 به 2 برای سرعت (کاربر: خیلی زمان‌بر بود) — همون کیفیتی که PDF ازش استفاده می‌کنه، مساحت پیکسل تقریباً نصف می‌شه
+        scale: getSaveQualityScale(2), // قابل تنظیم دستی (تب همگام‌سازی) — پیش‌فرض همون ۲ی قبلی
         useCORS: true,
         backgroundColor: "#ffffff",
         logging: false,
@@ -285,7 +286,7 @@ export default function InvoicePrint({
     await waitForImagesToLoad(clonedPaper);
     try {
       const canvas = await html2canvas(clonedPaper, {
-        scale: 2, useCORS: true, backgroundColor: "#ffffff", logging: false, width: 794, allowTaint: true, // کاهش از 3 به 2 برای سرعت
+        scale: getSaveQualityScale(2), useCORS: true, backgroundColor: "#ffffff", logging: false, width: 794, allowTaint: true, // قابل تنظیم دستی (تب همگام‌سازی)
       });
       return { canvas, cleanup: () => { if (cloneContainer.parentNode) document.body.removeChild(cloneContainer); } };
     } catch (e) {

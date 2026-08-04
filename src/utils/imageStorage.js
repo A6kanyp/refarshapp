@@ -219,6 +219,24 @@ async function listFilesInCategory(category) {
  * @param {string} code - کد محصول (مثلاً "0004"، از قبل ۴رقمی/padded)
  * @returns {Promise<string[]>} اسم فایل‌های پیدا‌شده، به ترتیب شماره
  */
+export const SAVE_QUALITY_SCALE_KEY = "refarsh_save_quality_scale";
+
+/**
+ * کیفیت/سرعت ذخیره‌ی عکس و PDF (فاکتور، برش ۱D/۲D) — درخواست کاربر: بشه
+ * خودش دستی این عدد رو کم‌وزیاد کنه تا رو گوشی واقعی خودش تعادل کیفیت/سرعت
+ * رو تست کنه، بدون نیاز به build دوباره. اگه چیزی توی تنظیمات (تب همگام‌سازی)
+ * ذخیره نشده باشه، همون مقدار پیش‌فرضی که خودِ همون بخش کد داشت استفاده می‌شه.
+ * @param {number} fallback مقدار پیش‌فرض همون بخش (مثلاً ۲ برای فاکتور، ۱.۵ برای برش)
+ */
+export function getSaveQualityScale(fallback) {
+  try {
+    const raw = localStorage.getItem(SAVE_QUALITY_SCALE_KEY);
+    const n = parseFloat(raw);
+    if (raw && !isNaN(n) && n > 0) return n;
+  } catch (_) {}
+  return fallback;
+}
+
 export async function autoDetectImagesForCode(code) {
   const codeStr = String(code || "").trim();
   if (!codeStr) return [];
@@ -244,6 +262,21 @@ export async function autoDetectImagesForCode(code) {
   }
   matches.sort((a, b) => a.idx - b.idx);
   return matches.map((m) => m.file);
+}
+
+/**
+ * تشخیصیِ محض — برای فهمیدن این‌که اگه «بررسی پوشه» چیزی پیدا نکرد، دلیلش
+ * پوشه‌ی خالیه یا فایل‌هایی هستن که فقط با قرارداد نام‌گذاری match نمی‌شن.
+ * (آیتم کاربر: «بررسی پوشه کار نمی‌کنه» — بدون این، نمی‌شد فهمید کدوم حالته)
+ */
+export async function listRawProductImageFiles() {
+  try {
+    return await listFilesInCategory(IMAGE_CATEGORIES.PRODUCT);
+  } catch (err) {
+    const msg = String(err?.message || err || "").toLowerCase();
+    if (msg.includes("not exist") || msg.includes("not found") || msg.includes("enoent")) return [];
+    throw err;
+  }
 }
 
 /**
