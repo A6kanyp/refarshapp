@@ -3,7 +3,7 @@
 // ============================================================
 import React, { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from "react";
 import * as XLSX from "xlsx";
-import { LogOut, Users, RotateCcw, Fingerprint, Lock, Unlock, Undo2 } from "lucide-react";
+import { LogOut, Users, RotateCcw, Fingerprint, Lock, Unlock, Undo2, X } from "lucide-react";
 
 import { toNum, fmt, fmtCode, fmtDate, todayISO, getProductArea, getProductPerimeter, safeDivide, gregorianToJalali, toPersianDigits, calcPriceFromProfit, resolveProductGroupName, formatFabricGroupLabel } from "./mathCore";
 import { BiometricAuth, BiometryErrorType } from "@aparajita/capacitor-biometric-auth";

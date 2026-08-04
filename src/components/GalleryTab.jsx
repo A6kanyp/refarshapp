@@ -1909,10 +1909,10 @@ export default function GalleryTab({
           marginBottom: 12,
           display: "flex",
           gap: 6,
-          alignItems: "flex-start",
+          alignItems: "center",
         }}
       >
-        <div style={{ flex: 1, display: "flex", alignItems: "center", background: "#161616", border: "1px solid #232323", borderRadius: 8, padding: "0 10px", gap: 6, height: 22, minHeight: 22, boxSizing: "border-box" }}>
+        <div style={{ flex: 1, display: "flex", alignItems: "center", background: "#161616", border: "1px solid #232323", borderRadius: 8, padding: "0 10px", gap: 6, height: 32, minHeight: 32, boxSizing: "border-box" }}>
           <Search size={13} color="#555" />
           <input onFocus={(e) => e.target.select()}
             style={{ background: "transparent", border: "none", outline: "none", color: "#ddd", fontSize: 11, flex: 1, fontFamily: "inherit" }}

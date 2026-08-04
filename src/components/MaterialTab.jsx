@@ -3454,8 +3454,8 @@ export default function MaterialTab({
           marginBottom: 12,
         }}
       >
-        <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
-          <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", background: "#161616", border: "1px solid #232323", borderRadius: 8, padding: "0 10px", gap: 6, height: 22, minHeight: 22, boxSizing: "border-box" }}>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", background: "#161616", border: "1px solid #232323", borderRadius: 8, padding: "0 10px", gap: 6, height: 32, minHeight: 32, boxSizing: "border-box" }}>
             <Search size={13} color="#555" style={{ flexShrink: 0 }} />
             <input onFocus={(e) => e.target.select()}
               style={{ background: "transparent", border: "none", outline: "none", color: "#ddd", fontSize: 11, flex: 1, minWidth: 0, fontFamily: "inherit" }}
