@@ -221,7 +221,7 @@ function RefreshLockButton({ onQuickRefresh, onHoldRefresh, onUndoRefresh, onRes
 
   return (
     <>
-      <style>{`@keyframes ashRefreshSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}@keyframes ashRefreshSpinFast{from{transform:rotate(0deg)}to{transform:rotate(1800deg)}}`}</style>
+      <style>{`@keyframes ashRefreshSpin{from{transform:rotate(0deg)}to{transform:rotate(-360deg)}}@keyframes ashRefreshSpinFast{from{transform:rotate(0deg)}to{transform:rotate(-1800deg)}}`}</style>
       <button onPointerDown={onPtrDown} onPointerUp={onPtrUp} onPointerCancel={onPtrCancel}
         style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: "50%", background: hasPending ? "#3a1212" : "#1c1c1c", border: "1px solid " + (hasPending ? "#8B1A1A" : "#2a2a2a"), color: hasPending ? "#e08a8a" : "#888", cursor: "pointer", flexShrink: 0 }}
         title="ضربه = رفرش نمایش | دو ضربه = ریست فیلترها | نگه‌دار = باز شدن منوی قفل/آزادسازی">
