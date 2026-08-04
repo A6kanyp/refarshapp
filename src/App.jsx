@@ -1504,6 +1504,11 @@ export default function App() {
   const [showManagementPanel, setShowManagementPanel] = useState(false);
   const [sortMode, setSortMode] = useState("code");
   const [sortOrder, setSortOrder] = useState("code");
+  // آیتم جدید: پیش‌فرض سورت خودِ تب کاتالوگ (نمای عمومی) روی «وضعیت موجودی» باشه
+  // (موجود اول، فروش‌رفته بعدش) — جدا از sortOrder بالا نگه داشته شد چون اون یکی
+  // بین تب کاتالوگ و تب «محصولات» پنل مدیریت مشترکه و نباید پیش‌فرض اون‌یکی رو
+  // هم عوض کنه
+  const [sortOrderCatalog, setSortOrderCatalog] = useState("stock");
   const [sortOrderMaterials, setSortOrderMaterials] = useState("code");
   const [sortOrderGallery, setSortOrderGallery] = useState("count");
   const [confirmDeleteProduct, setConfirmDeleteProduct] = useState(null);
@@ -5210,8 +5215,8 @@ export default function App() {
           materials={materialsWithRemaining || data.materials || []}
           setData={setData}
           notify={notify}
-          sortOrder={sortOrder}
-          setSortOrder={setSortOrder}
+          sortOrder={sortOrderCatalog}
+          setSortOrder={setSortOrderCatalog}
           basket={basket}
           setBasket={setBasket}
           showBasket={showBasket}
