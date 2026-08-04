@@ -1361,16 +1361,24 @@ export function BasketPanel({ basket, onRemove, onConfirm, onClose, customers, o
           </div>
 
           {showPrint && (() => {
+            // باگ واقعی (گزارش کاربر): قبلاً اینجا همیشه finalPrice=originalPrice و
+            // discountPct=0 هاردکد بود — یعنی توی پیش‌نمایش/ذخیره‌ی عکس/PDF، تخفیفی
+            // که بالای سبد خرید وارد شده بود اصلاً روی تک‌تک قلم‌ها اعمال نمی‌شد
+            // (فقط جمع کل درست بود، نه ردیف‌ها). الان دقیقاً همون توزیع نسبی‌ای که
+            // handleConfirmAction برای enrichedBasket استفاده می‌کنه، اینجا هم اعمال شد.
             const mappedItems = basket.map(p => {
               const orig = toNum(p.salePrice);
+              const share = discountAmount > 0 && baseTotal > 0 ? orig / baseTotal : 0;
+              const itemDisc = discountAmount > 0 ? Math.round(discountAmount * share) : 0;
+              const finalP = Math.max(0, orig - itemDisc);
               return {
                 name: p.name,
                 code: fmtCode(p.code),
                 image: p.image,
                 dims: formatProductDims(p) + qtySuffix(p),
                 originalPrice: orig,
-                finalPrice: orig,
-                discountPct: 0,
+                finalPrice: finalP,
+                discountPct: orig > 0 ? Math.round((itemDisc / orig) * 100) : 0,
                 isSettled: isSettled,
                 isAvailableInGallery: mode === "transfer"
               };
@@ -3029,6 +3037,14 @@ export function CatalogTab({
           saleDate: p.saleDate || todayISO(),
           settled: !!settled,
           settleDate: settled ? todayISO() : null,
+          // باگ واقعی (گزارش کاربر): قبلاً این فیلدها اصلاً اینجا کپی نمی‌شدن —
+          // یعنی تخفیفی که بالای سبد خرید وارد شده بود، لحظه‌ی ثبت نهایی فروش
+          // بی‌صدا گم می‌شد (محصول با قیمت کامل sold ثبت می‌شد)
+          ...(inBasket.discountedPrice != null ? {
+            discountPercent: inBasket.discountPercent,
+            discountAmount: inBasket.discountAmount,
+            discountedPrice: inBasket.discountedPrice,
+          } : {}),
         };
       });
       return { ...d, products: newProducts, customers: customersList };
@@ -3658,9 +3674,20 @@ export default function ProductTab({
       }
       const finalSaleDate = saleDate || todayISO();
       const ids = new Set(items.map((p) => p.id));
-      const updatedProducts = d.products.map((p) =>
-        ids.has(p.id) ? { ...p, status: "sold", saleDate: finalSaleDate, buyerName: customerName, buyerCustomerId: custId, location: custId || p.location, settled } : p
-      );
+      const itemById = new Map(items.map((p) => [p.id, p]));
+      const updatedProducts = d.products.map((p) => {
+        if (!ids.has(p.id)) return p;
+        const src = itemById.get(p.id);
+        return {
+          ...p, status: "sold", saleDate: finalSaleDate, buyerName: customerName, buyerCustomerId: custId, location: custId || p.location, settled,
+          // باگ واقعی: تخفیف وارد‌شده توی سبد خرید هیچ‌وقت روی محصول ثبت‌شده نمی‌نشست
+          ...(src && src.discountedPrice != null ? {
+            discountPercent: src.discountPercent,
+            discountAmount: src.discountAmount,
+            discountedPrice: src.discountedPrice,
+          } : {}),
+        };
+      });
       return { ...d, products: updatedProducts, customers: customersList };
     });
     setBasket([]);

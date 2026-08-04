@@ -381,34 +381,34 @@ export default function GlobalHeader({
                       </div>
                       <div style={{ display: "flex", gap: 6 }}>
                         <button
-                          style={{ ...HS.holdRowBtn, background: "#1c1c1c", color: "#888" }}
+                          style={{ ...HS.holdRowBtn, background: "#1c1c1c", color: "#5fd180" }}
                           onClick={() => { setShowHoldPopup(false); onUndoRefresh && onUndoRefresh("lock"); }}
                         >
-                          <Undo2 size={15} />
-                          Undo قفل
+                          <Lock size={15} />
+                          Undo
                         </button>
                         <button
-                          style={{ ...HS.holdRowBtn, background: "#1c1c1c", color: "#888" }}
+                          style={{ ...HS.holdRowBtn, background: "#1c1c1c", color: "#e0a35a" }}
                           onClick={() => { setShowHoldPopup(false); onUndoRefresh && onUndoRefresh("unlock"); }}
                         >
-                          <Undo2 size={15} />
-                          Undo آزاد
+                          <Unlock size={15} />
+                          Undo
                         </button>
                       </div>
                       <div style={{ display: "flex", gap: 6 }}>
                         <button
-                          style={{ ...HS.holdRowBtn, background: "#1c1c1c", color: "#d0b878" }}
+                          style={{ ...HS.holdRowBtn, background: "#1c1c1c", color: "#5fd180" }}
                           onClick={() => { setShowHoldPopup(false); onCancelPendingLocks && onCancelPendingLocks(); }}
                         >
-                          <X size={15} />
-                          لغو معلق‌ها
+                          <Lock size={15} />
+                          لغو
                         </button>
                         <button
-                          style={{ ...HS.holdRowBtn, background: "#1c1c1c", color: "#d0b878" }}
+                          style={{ ...HS.holdRowBtn, background: "#1c1c1c", color: "#e0a35a" }}
                           onClick={() => { setShowHoldPopup(false); onCancelPendingUnlocks && onCancelPendingUnlocks(); }}
                         >
-                          <X size={15} />
-                          لغو منتظرآزادها
+                          <Unlock size={15} />
+                          لغو
                         </button>
                       </div>
                       <button

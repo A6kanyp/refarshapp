@@ -250,38 +250,41 @@ function RefreshLockButton({ onQuickRefresh, onHoldRefresh, onUndoRefresh, onRes
                 آزاد
               </button>
             </div>
-            {/* ردیف ۲: Undo قفل / Undo آزاد */}
+            {/* ردیف ۲: Undo قفل / Undo آزاد — طبق دستور کاربر: پس‌زمینه‌ی دکمه عوض
+                نشه (همون خاکستری خنثی می‌مونه)، فقط آیکون و رنگش با ردیف ۱ (قفل=سبز،
+                آزاد=نارنجی) یکی بشه؛ متن هم ساده «Undo» برای هردو (نه Undo قفل/Undo آزاد) */}
             <div style={{ display: "flex", gap: 6 }}>
               <button
-                style={{ ...rowBtnStyle, background: "#1c1c1c", color: "#888" }}
+                style={{ ...rowBtnStyle, background: "#1c1c1c", color: "#5fd180" }}
                 onClick={() => { setShowHoldPopup(false); onUndoRefresh?.("lock"); }}
               >
-                <Undo2 size={15} />
-                Undo قفل
+                <Lock size={15} />
+                Undo
               </button>
               <button
-                style={{ ...rowBtnStyle, background: "#1c1c1c", color: "#888" }}
+                style={{ ...rowBtnStyle, background: "#1c1c1c", color: "#e0a35a" }}
                 onClick={() => { setShowHoldPopup(false); onUndoRefresh?.("unlock"); }}
               >
-                <Undo2 size={15} />
-                Undo آزاد
+                <Unlock size={15} />
+                Undo
               </button>
             </div>
-            {/* ردیف ۳: لغو معلق‌ها / لغو منتظرآزادها */}
+            {/* ردیف ۳: لغو معلق‌ها / لغو منتظرآزادها — همون منطق: پس‌زمینه ثابت،
+                آیکون/رنگ مثل قفل=سبز و آزاد=نارنجی، متن ساده «لغو» برای هردو */}
             <div style={{ display: "flex", gap: 6 }}>
               <button
-                style={{ ...rowBtnStyle, background: "#1c1c1c", color: "#d0b878" }}
+                style={{ ...rowBtnStyle, background: "#1c1c1c", color: "#5fd180" }}
                 onClick={() => { setShowHoldPopup(false); onCancelPendingLocks?.(); }}
               >
-                <X size={15} />
-                لغو معلق‌ها
+                <Lock size={15} />
+                لغو
               </button>
               <button
-                style={{ ...rowBtnStyle, background: "#1c1c1c", color: "#d0b878" }}
+                style={{ ...rowBtnStyle, background: "#1c1c1c", color: "#e0a35a" }}
                 onClick={() => { setShowHoldPopup(false); onCancelPendingUnlocks?.(); }}
               >
-                <X size={15} />
-                لغو منتظرآزادها
+                <Unlock size={15} />
+                لغو
               </button>
             </div>
             {/* ردیف ۴: Refresh — تمام‌عرض */}
