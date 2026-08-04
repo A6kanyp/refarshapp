@@ -840,17 +840,17 @@ export function ImageLightbox({ products, currentId, onNavigate, onClose, onAddT
         )}
       </div>
 
-      {prodIdx > 0 && (
-        <button onPointerDown={(e) => e.stopPropagation()} onClick={() => onNavigate(products[prodIdx - 1].id)}
+      {prodIdx < products.length - 1 && (
+        <button onPointerDown={(e) => e.stopPropagation()} onClick={() => onNavigate(products[prodIdx + 1].id)}
           style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", background: "rgba(0,0,0,0.55)", border: "none", borderRadius: "50%", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 6 }}
-          title="محصول قبلی">
+          title="محصول بعدی">
           <ChevronLeft size={18} color="#ddd" />
         </button>
       )}
-      {prodIdx < products.length - 1 && (
-        <button onPointerDown={(e) => e.stopPropagation()} onClick={() => onNavigate(products[prodIdx + 1].id)}
+      {prodIdx > 0 && (
+        <button onPointerDown={(e) => e.stopPropagation()} onClick={() => onNavigate(products[prodIdx - 1].id)}
           style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "rgba(0,0,0,0.55)", border: "none", borderRadius: "50%", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 6 }}
-          title="محصول بعدی">
+          title="محصول قبلی">
           <ChevronRight size={18} color="#ddd" />
         </button>
       )}
@@ -3123,7 +3123,7 @@ export function CatalogTab({
         }}
       >
         <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
-          <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", background: "#161616", border: "1px solid #232323", borderRadius: 8, padding: "6px 10px", gap: 6 }}>
+          <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", background: "#161616", border: "1px solid #232323", borderRadius: 8, padding: "0 10px", gap: 6, height: 22, minHeight: 22, boxSizing: "border-box" }}>
             <Search size={13} color="#555" style={{ flexShrink: 0 }} />
             <input onFocus={(e) => e.target.select()}
               style={{ background: "transparent", border: "none", outline: "none", color: "#ddd", fontSize: 11, flex: 1, minWidth: 0, fontFamily: "inherit" }}
@@ -3841,7 +3841,7 @@ export default function ProductTab({
         }}
       >
         <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
-          <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", background: "#161616", border: "1px solid #232323", borderRadius: 8, padding: "6px 10px", gap: 6 }}>
+          <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", background: "#161616", border: "1px solid #232323", borderRadius: 8, padding: "0 10px", gap: 6, height: 22, minHeight: 22, boxSizing: "border-box" }}>
             <Search size={13} color="#555" style={{ flexShrink: 0 }} />
             <input onFocus={(e) => e.target.select()}
               style={{ background: "transparent", border: "none", outline: "none", color: "#ddd", fontSize: 11, flex: 1, minWidth: 0, fontFamily: "inherit" }}
