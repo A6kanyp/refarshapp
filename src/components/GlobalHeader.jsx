@@ -262,6 +262,16 @@ export default function GlobalHeader({
       document.documentElement.style.setProperty("--global-header-height", `${h}px`);
     };
     updateHeight();
+    // فیکس: هدر تب کاتالوگ اولش خیلی پایین‌تر از جای واقعی‌ش می‌نشست و فقط با
+    // اسکرول (که یه reflow اجباری ایجاد می‌کنه) درست می‌شد. این یه کوئرک
+    // شناخته‌شده‌ی WebView هست — عوض‌کردن CSS variable با setProperty همیشه
+    // بلافاصله باعث محاسبه‌ی مجدد position:sticky نمی‌شه. دو‌بار درخواست
+    // requestAnimationFrame (الگوی رایج برای اجبار به reflow) دقیقاً همون
+    // اتفاقی که اسکرول می‌افتاد رو بدون نیاز به دخالت کاربر شبیه‌سازی می‌کنه.
+    requestAnimationFrame(() => {
+      updateHeight();
+      requestAnimationFrame(updateHeight);
+    });
     const observer = new ResizeObserver(updateHeight);
     observer.observe(headerRef.current);
     return () => observer.disconnect();

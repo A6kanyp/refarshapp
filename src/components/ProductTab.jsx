@@ -633,6 +633,18 @@ export function ImageLightbox({ products, currentId, onNavigate, onClose, onAddT
   const allImages = product ? [product.image, ...(product.images || []).filter(img => img !== product.image)].filter(Boolean) : [];
   const currentImg = allImages[imgIdx] || null;
   const prodIdx = products.findIndex((p) => p.id === currentId);
+  // آیتم جدید کاربر: کلیک مستقیم روی تایل بدون‌عکس باید باز بشه (نشون بده
+  // «بدون عکس» + توضیحات)، ولی موقع سوایپ/فلش بین محصولات، محصولات بدون عکس
+  // اصلاً نباید توی مسیر سوایپ بیان — این تابع نزدیک‌ترین محصولِ *عکس‌دار* رو
+  // توی یه جهت پیدا می‌کنه (یا null اگه هیچی نمونده)
+  const findNextWithImage = (fromIdx, dir) => {
+    for (let i = fromIdx + dir; i >= 0 && i < products.length; i += dir) {
+      if (products[i].image) return products[i];
+    }
+    return null;
+  };
+  const nextImgProduct = findNextWithImage(prodIdx, 1);
+  const prevImgProduct = findNextWithImage(prodIdx, -1);
   const isStarred = localStarred;
 
   const handleStarToggle = () => {
@@ -789,16 +801,16 @@ export function ImageLightbox({ products, currentId, onNavigate, onClose, onAddT
             if (imgIdx < allImages.length - 1) {
               setImgIdx((i) => i + 1);
               applyTransform(1, 0, 0);
-            } else if (prodIdx < products.length - 1) {
-              onNavigate(products[prodIdx + 1].id);
+            } else if (nextImgProduct) {
+              onNavigate(nextImgProduct.id);
             }
           } else {
             // انگشت به چپ → عکس قبلی همین محصول، وگرنه محصول قبلی
             if (imgIdx > 0) {
               setImgIdx((i) => i - 1);
               applyTransform(1, 0, 0);
-            } else if (prodIdx > 0) {
-              onNavigate(products[prodIdx - 1].id);
+            } else if (prevImgProduct) {
+              onNavigate(prevImgProduct.id);
             }
           }
         }
@@ -840,15 +852,15 @@ export function ImageLightbox({ products, currentId, onNavigate, onClose, onAddT
         )}
       </div>
 
-      {prodIdx < products.length - 1 && (
-        <button onPointerDown={(e) => e.stopPropagation()} onClick={() => onNavigate(products[prodIdx + 1].id)}
+      {nextImgProduct && (
+        <button onPointerDown={(e) => e.stopPropagation()} onClick={() => onNavigate(nextImgProduct.id)}
           style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", background: "rgba(0,0,0,0.55)", border: "none", borderRadius: "50%", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 6 }}
           title="محصول بعدی">
           <ChevronLeft size={18} color="#ddd" />
         </button>
       )}
-      {prodIdx > 0 && (
-        <button onPointerDown={(e) => e.stopPropagation()} onClick={() => onNavigate(products[prodIdx - 1].id)}
+      {prevImgProduct && (
+        <button onPointerDown={(e) => e.stopPropagation()} onClick={() => onNavigate(prevImgProduct.id)}
           style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "rgba(0,0,0,0.55)", border: "none", borderRadius: "50%", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 6 }}
           title="محصول قبلی">
           <ChevronRight size={18} color="#ddd" />
@@ -1259,7 +1271,7 @@ export function BasketPanel({ basket, onRemove, onConfirm, onClose, customers, o
                               const gal = p.status === "available" && p.location
                                 ? customers.find((c) => c.id === p.location && c.kind === "gallery")
                                 : null;
-                              return gal ? <span style={{ color: "#a89bd4" }}> — پیش {gal.name}</span> : null;
+                              return gal ? <span style={{ color: gal.color || "#a89bd4" }}> — پیش {gal.name}</span> : null;
                             })()}
                           </div>
                         </div>
