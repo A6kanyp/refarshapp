@@ -1647,3 +1647,6 @@ Ref وسط این کار سشنش قطع شد و چون هر نشست توی san
 - فایل‌های عوض‌شده: `nativeSave.js` (`REFARSH_SAVE_DIRS.BILLS_IMAGE: "factor/image"` → `"factor"`)، `InvoicePrint.jsx` (تولتیپ دکمه)، `SyncTab.jsx` (متن راهنمای مسیر پوشه‌ها)
 - چون فقط یه ثابت رشته‌ای عوض شد و همه‌ی کدهای دیگه از رو همون `REFARSH_SAVE_DIRS.BILLS_IMAGE` می‌خوندن، جای دیگه‌ای نیاز به تغییر نداشت
 🔴 تست: یه فاکتور Save Image بزن، ببین توی `Documents/refarsh/factor/` مستقیم عکسش میاد (نه توی یه زیرپوشه‌ی جدا)، و PDF جدا هنوز توی `factor/pdf/` درسته.
+
+## 🆕 پوشه‌ی پیش‌فرض اکسپورت‌ها تغییر کرد به `refarsh/backup` (Logy 🟠)
+- [x] `nativeSave.js`: وقتی `saveFile` بدون `subdir` صدا زده بشه، به‌جای `refarsh/exports` حالا میره توی `refarsh/backup`. این پوشه‌ی پیش‌فرضه که فایل‌های زیر توش ذخیره می‌شن (چون هیچ‌کدوم subdir مشخص نمی‌دن): بکاپ اکسل (`refarsh-backup-*.xlsx`)، بکاپ JSON (`refarsh-backup-*.json`)، پیش‌نمایش اکسل (`Refarsh_Preview_*.xlsx`)، و عکس سریع فاکتور از تب محصولات (`exportFactorPhoto`، `Factor_*.jpg`).
