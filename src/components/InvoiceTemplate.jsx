@@ -127,6 +127,19 @@ else {
   const galleryStockValue = sumFinal(availableItems);
   // تخفیف واقعی فقط روی آیتم‌های غیرِ هدیه حساب می‌شه؛ هدیه‌ها جدا (به‌عنوان «هدیه»، نه تخفیف) گزارش می‌شن
   const totalDiscount = sumOriginal(nonGiftSoldItems) - sumFinal(nonGiftSoldItems);
+  const totalDiscountBase = sumOriginal(nonGiftSoldItems);
+  // درصد تخفیف کلی (برای نمایش توی جمع، به‌جای تکرار درصد زیر تک‌تک محصولات)
+  const totalDiscountPct = totalDiscountBase > 0 ? Math.round((totalDiscount / totalDiscountBase) * 100) : 0;
+  // اگه همه‌ی محصولاتِ فروخته‌شده‌ی غیرِهدیه دقیقاً یه درصد تخفیف یکسان دارن، یعنی
+  // این از یه تخفیفِ کلیِ سبد خرید اومده (نه تخفیف دستیِ جداگونه‌ی هر محصول) — پس
+  // به‌جای تکرارِ همون درصد زیر تک‌تک ردیف‌ها، فقط توی جمع کلی نشون داده می‌شه
+  const uniformDiscountPct = (() => {
+    const withDiscount = nonGiftSoldItems.filter((i) => toNum(i.discountPct) > 0);
+    if (withDiscount.length === 0) return null;
+    if (withDiscount.length !== nonGiftSoldItems.length) return null;
+    const first = toNum(withDiscount[0].discountPct);
+    return withDiscount.every((i) => toNum(i.discountPct) === first) ? first : null;
+  })();
   const totalGiftValue = sumOriginal(giftSoldItems);
   const finalPayable = Math.max(0, sumFinal(soldUnsettledItems) - toNum(rawDepositAmount));
   const depositAmount = toNum(rawDepositAmount);
@@ -375,7 +388,7 @@ else {
               <td style={{ textAlign: "left", fontWeight: "700", color: "#111", verticalAlign: "middle" }}>
                 {item.discountPct >= 100 ? (
                   <span style={{ textDecoration: "line-through", color: "#999", fontSize: "11px" }}>{fmt(item.originalPrice)} ت</span>
-                ) : item.discountPct > 0 ? (
+                ) : item.discountPct > 0 && uniformDiscountPct == null ? (
                   <div style={{ textAlign: "left" }}>
                     <div style={{ textDecoration: "line-through", color: "#999", fontSize: "10px", fontWeight: "normal", lineHeight: 1.6 }}>{fmt(item.originalPrice)}</div>
                     <div>
@@ -454,7 +467,7 @@ else {
               )}
               {totalDiscount > 0 && (
                 <div className="invoice-summary-row" style={{ color: "#d32f2f" }}>
-                  <span>مجموع تخفیف‌ها:</span>
+                  <span>مجموع تخفیف‌ها{totalDiscountPct > 0 ? ` (٪${totalDiscountPct})` : ""}:</span>
                   <strong>{fmt(totalDiscount)} تومان</strong>
                 </div>
               )}
@@ -495,7 +508,7 @@ else {
               )}
               {totalDiscount > 0 && (
                 <div className="invoice-summary-row" style={{ color: "#d32f2f" }}>
-                  <span>مجموع تخفیف‌ها:</span>
+                  <span>مجموع تخفیف‌ها{totalDiscountPct > 0 ? ` (٪${totalDiscountPct})` : ""}:</span>
                   <strong>{fmt(totalDiscount)} تومان</strong>
                 </div>
               )}
