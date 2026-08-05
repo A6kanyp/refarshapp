@@ -1033,13 +1033,19 @@ export function BasketPanel({ basket, onRemove, onConfirm, onClose, customers, o
   const [saleDate, setSaleDate] = useState(() => todayISO());
   const [showPrint, setShowPrint] = useState(false);
 
+  // باگ واقعی: همه‌جای این کامپوننت مستقیم salePrice خام رو حساب می‌کرد و
+  // تخفیف تک‌تکِ محصولی که از قبل روش ست شده بود (discountedPrice) رو کاملاً
+  // نادیده می‌گرفت — هم توی جمع کل سبد، هم توی پیش‌نمایش فاکتور (originalPrice/
+  // finalPrice/discountPct همیشه یکی بودن، discountPct هاردکد 0 بود)
+  const effectivePrice = (p) => (p.discountedPrice != null && p.discountedPrice !== "" ? toNum(p.discountedPrice) : toNum(p.salePrice));
+
   const availableToAdd = allProducts.filter(p => 
     p.status !== "sold" && 
     !basket.some(b => b.id === p.id) &&
     (prodSearch.trim() === "" || p.name.includes(prodSearch) || String(p.code).includes(prodSearch))
   );
 
-  const baseTotal = basket.reduce((s, p) => s + toNum(p.salePrice), 0);
+  const baseTotal = basket.reduce((s, p) => s + effectivePrice(p), 0);
   const total = baseTotal - discountAmount;
 
   const handleDiscountPercentChange = (e) => {
@@ -1072,7 +1078,7 @@ export function BasketPanel({ basket, onRemove, onConfirm, onClose, customers, o
   const basketRef = useRef(null);
 
   const getFactorText = () => {
-    const lines = basket.map((p) => `#${fmtCode(p.code)} ${p.name} ${formatProductDims(p)}${qtySuffix(p)} — ${fmt(toNum(p.salePrice))} تومان`);
+    const lines = basket.map((p) => `#${fmtCode(p.code)} ${p.name} ${formatProductDims(p)}${qtySuffix(p)} — ${fmt(effectivePrice(p))} تومان`);
     if (discountAmount > 0) lines.push(`تخفیف: ${fmt(discountAmount)} تومان`);
     lines.push(`جمع: ${fmt(total)} تومان`);
     return lines.join("\n");
@@ -1139,13 +1145,15 @@ export function BasketPanel({ basket, onRemove, onConfirm, onClose, customers, o
       setLoading(true);
       const enrichedBasket = discountAmount > 0
         ? basket.map((p) => {
-            const share = toNum(p.salePrice) / baseTotal;
+            const share = effectivePrice(p) / baseTotal;
             const disc = Math.round(discountAmount * share);
+            const newFinal = Math.max(0, effectivePrice(p) - disc);
+            const orig = toNum(p.salePrice);
             return {
               ...p,
-              discountPercent: discountPercent,
+              discountPercent: orig > 0 ? Math.round((1 - newFinal / orig) * 100) : discountPercent,
               discountAmount: disc,
-              discountedPrice: toNum(p.salePrice) - disc,
+              discountedPrice: newFinal,
             };
           })
         : basket;
@@ -1275,7 +1283,7 @@ export function BasketPanel({ basket, onRemove, onConfirm, onClose, customers, o
                             })()}
                           </div>
                         </div>
-                        <div style={{ fontSize: 10, color: "#F5F0EB" }}>{fmt(toNum(p.salePrice))}</div>
+                        <div style={{ fontSize: 10, color: "#F5F0EB" }}>{fmt(effectivePrice(p))}</div>
                       </div>
                     ))
                   )}
@@ -1292,7 +1300,7 @@ export function BasketPanel({ basket, onRemove, onConfirm, onClose, customers, o
                   <div style={{ fontSize: 11.5, color: "#ddd" }}>#{fmtCode(p.code)} {p.name}</div>
                   <div style={{ fontSize: 10, color: "#666" }}>{formatProductDims(p)}{qtySuffix(p)}</div>
                 </div>
-                <span style={{ fontSize: 12, color: "#F5F0EB" }}>{fmt(toNum(p.salePrice))} ت</span>
+                <span style={{ fontSize: 12, color: "#F5F0EB" }}>{fmt(effectivePrice(p))} ت</span>
                 <button style={S.iconBtn} onClick={() => onRemove(p.id)}><X size={12} color="#e08a8a" /></button>
               </div>
             ))}
@@ -1375,14 +1383,18 @@ export function BasketPanel({ basket, onRemove, onConfirm, onClose, customers, o
           {showPrint && (() => {
             const mappedItems = basket.map(p => {
               const orig = toNum(p.salePrice);
+              const final = effectivePrice(p);
+              const pct = p.discountPercent != null && toNum(p.discountPercent) > 0
+                ? toNum(p.discountPercent)
+                : (orig > 0 && final < orig ? Math.round((1 - final / orig) * 100) : 0);
               return {
                 name: p.name,
                 code: fmtCode(p.code),
                 image: p.image,
                 dims: formatProductDims(p) + qtySuffix(p),
                 originalPrice: orig,
-                finalPrice: orig,
-                discountPct: 0,
+                finalPrice: final,
+                discountPct: pct,
                 isSettled: isSettled,
                 isAvailableInGallery: mode === "transfer"
               };
