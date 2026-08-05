@@ -36,7 +36,12 @@ function InvoiceItemImage({ filename }) {
   }
   return (
     <div style={{ width: "42px", height: "42px", margin: "0 auto", borderRadius: "6px", overflow: "hidden", border: "1px solid #ddd", background: "#f0f0f0" }}>
-      <img src={src} style={{ width: "100%", height: "100%", objectFit: "cover" }} referrerPolicy="no-referrer" alt="" />
+      {/* html2canvas پشتیبانی قابل‌اعتمادی از object-fit روی <img> نداره (یه
+          محدودیت شناخته‌شده‌ش — معمولاً به‌جای crop، عکس رو stretch می‌کنه)،
+          ولی background-size:cover رو درست رعایت می‌کنه. برای همین به‌جای
+          <img>، از یه div با background-image استفاده شد تا خروجی ذخیره‌شده
+          دقیقاً مثل پیش‌نمایش (کراپ‌شده، بدون کش‌آمدن) باشه. */}
+      <div style={{ width: "100%", height: "100%", backgroundImage: `url("${src}")`, backgroundSize: "cover", backgroundPosition: "center", backgroundRepeat: "no-repeat" }} />
     </div>
   );
 }

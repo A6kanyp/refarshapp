@@ -17,7 +17,16 @@ import { useToast } from "../contexts/ToastContext";
 // img های داخل کلون finish بشن (یا حداکثر ۲ ثانیه، که گیر نکنه اگه عکسی offline/خراب بود)
 function waitForImagesToLoad(container, maxWaitMs = 2000) {
   const imgs = Array.from(container.querySelectorAll("img"));
-  if (imgs.length === 0) return Promise.resolve();
+  // آیتم جدید: تصاویر آیتم فاکتور از <img>+object-fit به یه div با
+  // background-image تغییر کردن (چون html2canvas پشتیبانی قابل‌اعتمادی از
+  // object-fit نداره) — ولی این یعنی دیگه توسط querySelectorAll("img") بالا
+  // پیدا نمی‌شن و صبر نمی‌کردیم تا واقعاً دیکود بشن، پس ممکن بود عکس اول یه
+  // جعبه‌ی خالی بیفته توی عکس/PDF ذخیره‌شده. الان این‌ها رو هم جدا پیدا و باهاشون صبر می‌کنیم.
+  const bgEls = Array.from(container.querySelectorAll("*")).filter((el) => {
+    const bg = el.style?.backgroundImage;
+    return bg && bg.startsWith('url("');
+  });
+  if (imgs.length === 0 && bgEls.length === 0) return Promise.resolve();
   const imgPromises = imgs.map((img) => {
     if (img.complete && img.naturalWidth > 0) return Promise.resolve();
     return new Promise((resolve) => {
@@ -25,8 +34,19 @@ function waitForImagesToLoad(container, maxWaitMs = 2000) {
       img.addEventListener("error", resolve, { once: true });
     });
   });
+  const bgPromises = bgEls.map((el) => {
+    const match = el.style.backgroundImage.match(/^url\("(.+)"\)$/);
+    const url = match ? match[1] : null;
+    if (!url) return Promise.resolve();
+    return new Promise((resolve) => {
+      const probe = new Image();
+      probe.onload = resolve;
+      probe.onerror = resolve;
+      probe.src = url;
+    });
+  });
   const timeoutPromise = new Promise((resolve) => setTimeout(resolve, maxWaitMs));
-  return Promise.race([Promise.all(imgPromises), timeoutPromise]);
+  return Promise.race([Promise.all([...imgPromises, ...bgPromises]), timeoutPromise]);
 }
 
 // باگ واقعی: عکس محصولات توی فاکتور از یه هوک async (useResolvedImageSrc در
