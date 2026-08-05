@@ -859,7 +859,7 @@ function resolveLineCostPure(materials, areaBatchMap, ratioMap, p, li) {
       const productArea = getProductArea(p);
       const coverage = toNum(p.fabricCoveragePct ?? 100) / 100;
       const fabricArea = toNum(mat.dimW) * toNum(mat.dimH);
-      const pct = (fabricArea > 0 && productArea > 0) ? ((productArea * coverage) / fabricArea) * 100 : 100;
+      const pct = Math.min(100, (fabricArea > 0 && productArea > 0) ? ((productArea * coverage) / fabricArea) * 100 : 100); // سقف 100% — قبلاً بدون سقف بود و باعث می‌شد وقتی مساحت فرش کوچیک‌تر از محصول بود، درصد مصرف چندصددرصدی محاسبه بشه و هزینه/قفل‌شده بیشتر از کل مقدار متریال بشه
       const base = mat.remainingCost != null ? toNum(mat.remainingCost) : toNum(mat.totalCost);
       if (pct > 0) return (pct / 100) * base;
     }
@@ -1036,7 +1036,7 @@ function runLockUnlockPass(srcMaterials, srcProducts, pendingBulkChangesList, mo
         const productArea = getProductArea(p);
         const coverage = toNum(p.fabricCoveragePct ?? 100) / 100;
         const fabricArea = toNum(mat.dimW) * toNum(mat.dimH);
-        const pct = (fabricArea > 0 && productArea > 0) ? ((productArea * coverage) / fabricArea) * 100 : 100;
+        const pct = Math.min(100, (fabricArea > 0 && productArea > 0) ? ((productArea * coverage) / fabricArea) * 100 : 100); // سقف 100% — قبلاً بدون سقف بود و باعث می‌شد وقتی مساحت فرش کوچیک‌تر از محصول بود، درصد مصرف چندصددرصدی محاسبه بشه و هزینه/قفل‌شده بیشتر از کل مقدار متریال بشه
         if (pct > 0) (byMaterial[mat.id] = byMaterial[mat.id] || []).push({ p, li, pct });
         return;
       }
@@ -2051,7 +2051,7 @@ export default function App() {
         const productArea = getProductArea(p);
         const coverage = toNum(p.fabricCoveragePct ?? 100) / 100;
         const fabricArea = toNum(mat.dimW) * toNum(mat.dimH);
-        const pct = (fabricArea > 0 && productArea > 0) ? ((productArea * coverage) / fabricArea) * 100 : 100;
+        const pct = Math.min(100, (fabricArea > 0 && productArea > 0) ? ((productArea * coverage) / fabricArea) * 100 : 100); // سقف 100% — قبلاً بدون سقف بود و باعث می‌شد وقتی مساحت فرش کوچیک‌تر از محصول بود، درصد مصرف چندصددرصدی محاسبه بشه و هزینه/قفل‌شده بیشتر از کل مقدار متریال بشه
         const base = mat.remainingCost != null ? toNum(mat.remainingCost) : toNum(mat.totalCost);
         if (pct > 0) return (pct / 100) * base;
       }
