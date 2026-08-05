@@ -722,7 +722,7 @@ export default function InvoicesTab({
               هیچ فاکتوری با شرایط فیلتر شده یافت نشد.
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 480, overflowY: "auto", paddingLeft: 2 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingLeft: 2 }}>
               {filteredInvoices.map((inv) => {
                 const isExpanded = expandedInvoiceId === inv.id;
                 return (
