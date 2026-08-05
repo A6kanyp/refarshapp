@@ -239,7 +239,7 @@ export default function GlobalHeader({
     startDeceleratingSpin();
     if (!didHold) {
       const now = Date.now();
-      if (now - lastRefreshTapRef.current < 350) {
+      if (now - lastRefreshTapRef.current < 450) {
         // دابل‌کلیک → ریست فیلترها/سورت‌ها (بجز تب برش)
         lastRefreshTapRef.current = 0;
         onResetFilters && onResetFilters();

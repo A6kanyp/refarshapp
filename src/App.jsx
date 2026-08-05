@@ -159,6 +159,7 @@ function PinScreen({ onUnlock, onCancel }) {
 function RefreshLockButton({ onQuickRefresh, onHoldRefresh, onUndoRefresh, onResetFilters, onCancelPendingLocks, onCancelPendingUnlocks, hasPending }) {
   const holdTimer = useRef(null);
   const didHold = useRef(false);
+  const lastTapRef = useRef(0);
   const [showHoldPopup, setShowHoldPopup] = useState(false);
   // آیتم جدید: با یه ضربه‌ی ساده (نه نگه‌داشتن)، آیکون رفرش ۳ ثانیه دایره‌ای
   // بچرخه — فقط یه فیدبک بصری که «کاری انجام شد»، مستقل از منطق واقعیِ
@@ -188,14 +189,19 @@ function RefreshLockButton({ onQuickRefresh, onHoldRefresh, onUndoRefresh, onRes
     // دسترسه. قبلاً اینجا ضربه‌ی دوم (اگه به‌اندازه‌ی کافی سریع بود)
     // onUndoRefresh رو صدا می‌زد که با اون رفتار ناهماهنگ بود
     // دابل‌کلیک → ریست فیلتر
+    // فیکس (تست فیزیکی کاربر: دابل‌کلیک کار نمی‌کرد): قبلاً این تایمر روی یه
+    // property استاتیک روی خودِ تابع کامپوننت ذخیره می‌شد (نه useRef)، که با
+    // چندین نمونه/رندر مختلف از این کامپوننت (پنل مدیریت این دکمه رو چندجا
+    // جدا رندر می‌کنه) رفتار غیرقابل‌اعتماد داشت. الان یه useRef واقعی
+    // (per-instance) استفاده می‌شه، و پنجره‌ی زمانی هم از ۳۵۰ به ۴۵۰
+    // میلی‌ثانیه باز شد چون ۳۵۰ برای دابل‌تپ واقعی روی گوشی (نه شبیه‌سازی) تنگ بود
     const now = Date.now();
-    if (!RefreshLockButton._lastTap) RefreshLockButton._lastTap = 0;
-    if (now - RefreshLockButton._lastTap < 350) {
-      RefreshLockButton._lastTap = 0;
+    if (now - lastTapRef.current < 450) {
+      lastTapRef.current = 0;
       onResetFilters?.();
       triggerSpin("doubleTap", 4000);
     } else {
-      RefreshLockButton._lastTap = now;
+      lastTapRef.current = now;
       onQuickRefresh?.();
       triggerSpin("tap", 3000);
     }
