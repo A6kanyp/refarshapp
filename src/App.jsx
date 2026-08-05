@@ -5,7 +5,7 @@ import React, { useState, useEffect, useLayoutEffect, useMemo, useCallback, useR
 import * as XLSX from "xlsx";
 import { LogOut, Users, RotateCcw, Fingerprint, Lock, Unlock, Undo2, X } from "lucide-react";
 
-import { toNum, fmt, fmtCode, fmtDate, todayISO, getProductArea, getProductPerimeter, safeDivide, gregorianToJalali, toPersianDigits, calcPriceFromProfit, resolveProductGroupName, formatFabricGroupLabel } from "./mathCore";
+import { toNum, fmt, fmtCode, fmtDate, todayISO, getProductArea, getProductPerimeter, safeDivide, gregorianToJalali, toPersianDigits, calcPriceFromProfit, resolveProductGroupName, resolveProductFabricId, formatFabricGroupLabel } from "./mathCore";
 import { BiometricAuth, BiometryErrorType } from "@aparajita/capacitor-biometric-auth";
 import {
   loadData, saveData, mergeById, refundVanishedDeductions,
@@ -1504,6 +1504,16 @@ export default function App() {
               p.dimH = w;
               p.dims = `${h}×${w}`;
             }
+          }
+          // مهاجرت: قبل از این‌که resolveProductGroupName چک «آیا این محصول واقعاً
+          // فرش داره یا نه» رو داشته باشه، یه نسخه‌ی قدیمی‌تر ممکنه «فرش » رو
+          // بی‌قید و شرط جلوی هر group ذخیره کرده باشه — نتیجه‌ش محصولاتی مثل
+          // «آینه» که هیچ ربطی به فرش ندارن ولی توی کاتالوگ زیر «آینه فرش» جمع
+          // شدن (گزارش کاربر با اسکرین‌شات). این‌جا یه‌بار برای همیشه پاکش می‌کنیم:
+          // اگه group با «فرش » شروع شده ولی محصول واقعاً هیچ متریال فرشی وصل نداره،
+          // پیشوند غلط رو برمی‌داریم.
+          if (p.group && String(p.group).startsWith("فرش ") && !resolveProductFabricId(p, loaded.materials || [])) {
+            p.group = String(p.group).slice(4).trim();
           }
           return p;
         });

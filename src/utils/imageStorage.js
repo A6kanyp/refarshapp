@@ -271,7 +271,12 @@ export async function autoDetectImagesForCode(code) {
   }
   const re = new RegExp(`^${codeStr}(\\d{2})\\.[a-zA-Z0-9]+$`);
   const matches = [];
-  for (const f of files) {
+  for (const raw of files) {
+    // دفاعی: بعضی نسخه‌های پلاگین Filesystem ممکنه اسم فایل رو با مسیر کامل
+    // (مثلاً "images/000301.jpg") یا با فاصله‌ی اضافه برگردونن — که باعث می‌شد
+    // انکر ^ رجکس هیچ‌وقت match نکنه حتی وقتی فایل دقیقاً با قرارداد درست بود.
+    // اینجا فقط اسم خالص فایل (بعد از آخرین /) رو با trim شده مقایسه می‌کنیم.
+    const f = String(raw || "").trim().split(/[\\/]/).pop();
     const m = f.match(re);
     if (m) matches.push({ file: f, idx: parseInt(m[1], 10) });
   }

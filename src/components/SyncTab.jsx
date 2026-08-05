@@ -81,6 +81,7 @@ export default function SyncTab({
       let newImagesCount = 0;
       let realError = null;
       const updates = {};
+      const allMatchedFilenames = new Set();
       for (const p of data.products) {
         if (p.code == null) continue;
         const codeStr = fmtCode(p.code);
@@ -94,6 +95,7 @@ export default function SyncTab({
           continue;
         }
         if (found.length === 0) continue;
+        found.forEach((f) => allMatchedFilenames.add(f));
         const current = p.images || (p.image ? [p.image] : []);
         const currentSet = new Set(current);
         const newOnes = found.filter((f) => !currentSet.has(f));
@@ -110,19 +112,27 @@ export default function SyncTab({
         }));
       }
       let rawFiles = null;
+      let folderTotalCount = null;
       if (matchedCount === 0 && !realError) {
-        rawFiles = await listRawProductImageFiles().catch(() => null);
+        const allRaw = await listRawProductImageFiles().catch(() => null);
+        folderTotalCount = allRaw === null ? null : allRaw.length;
+        // فقط اونایی که واقعاً با هیچ کد محصولی match نشدن رو نشون بده — نه
+        // فایل‌هایی که match شدن ولی از قبل لینک بودن (اون‌ها باگ نیستن،
+        // درسته که «جدید» حساب نشن)
+        rawFiles = allRaw === null ? null : allRaw.filter((f) => !allMatchedFilenames.has(f));
       }
-      setBulkImageScanResult({ checked: data.products.length, matched: matchedCount, newImages: newImagesCount, rawFiles });
+      setBulkImageScanResult({ checked: data.products.length, matched: matchedCount, newImages: newImagesCount, rawFiles, folderTotalCount });
       if (realError) {
         if (notify) notify(`خطا در خواندن پوشه‌ی عکس: ${realError.message || realError}`);
       } else if (matchedCount === 0 && rawFiles) {
         if (notify) {
-          if (rawFiles.length === 0) {
+          if (folderTotalCount === 0) {
             notify("پوشه‌ی عکس محصولات کلاً خالیه (هیچ فایلی توش دیده نمی‌شه)");
+          } else if (rawFiles.length === 0) {
+            notify(`پوشه ${folderTotalCount} فایل داره و همه‌شون از قبل به محصولاتشون وصل بودن — عکس جدیدی نبود`);
           } else {
             const sample = rawFiles.slice(0, 5).join("، ");
-            notify(`عکس جدیدی برای هیچ کدی پیدا نشد. فایل‌هایی که توی پوشه دیده می‌شن: ${sample}${rawFiles.length > 5 ? ` (+${rawFiles.length - 5} تای دیگه)` : ""}`);
+            notify(`عکس جدیدی برای هیچ کدی پیدا نشد. این فایل‌ها با هیچ کد محصولی match نشدن: ${sample}${rawFiles.length > 5 ? ` (+${rawFiles.length - 5} تای دیگه)` : ""}`);
           }
         }
       } else if (notify) {
@@ -631,11 +641,13 @@ export default function SyncTab({
                 ? `از بین ${bulkImageScanResult.checked} محصول، ${bulkImageScanResult.matched} تا عکس جدید پیدا کردن (${bulkImageScanResult.newImages} عکس در کل).`
                 : `از بین ${bulkImageScanResult.checked} محصول، عکس جدیدی که قبلاً وصل نبود پیدا نشد.`}
               {bulkImageScanResult.matched === 0 && bulkImageScanResult.rawFiles && (
-                bulkImageScanResult.rawFiles.length === 0 ? (
+                bulkImageScanResult.folderTotalCount === 0 ? (
                   <div style={{ color: "#c26b6b", marginTop: 4 }}>پوشه‌ی عکس محصولات کلاً خالیه — هیچ فایلی توی اون دیده نمی‌شه.</div>
+                ) : bulkImageScanResult.rawFiles.length === 0 ? (
+                  <div style={{ color: "#6bc27a", marginTop: 4 }}>پوشه {bulkImageScanResult.folderTotalCount} فایل داره و همه‌شون از قبل به محصولاتشون وصل بودن.</div>
                 ) : (
                   <div style={{ color: "#c2a26b", marginTop: 4 }}>
-                    فایل‌هایی که اپ توی پوشه می‌بینه ولی با هیچ کد محصولی match نشدن (احتمالاً اسم‌گذاری فرق داره): {bulkImageScanResult.rawFiles.slice(0, 10).join("، ")}
+                    این فایل‌ها با هیچ کد محصولی match نشدن (احتمالاً اسم‌گذاری فرق داره): {bulkImageScanResult.rawFiles.slice(0, 10).join("، ")}
                     {bulkImageScanResult.rawFiles.length > 10 ? ` (+${bulkImageScanResult.rawFiles.length - 10} تای دیگه)` : ""}
                   </div>
                 )
