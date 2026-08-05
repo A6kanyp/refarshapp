@@ -1100,7 +1100,7 @@ function AllInvoicesModal({ invoices, onClose, setData, notify, customers, onVie
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 310, display: "flex", flexDirection: "column" }} dir="rtl">
-      <div style={{ width: "100%", maxWidth: 520, margin: "0 auto", background: "#141414", borderRadius: "16px 16px 0 0", flex: 1, display: "flex", flexDirection: "column", overflowY: "auto", marginTop: "auto" }}>
+      <div style={{ width: "100%", maxWidth: 520, margin: "0 auto", background: "#141414", borderRadius: "16px 16px 0 0", flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflowY: "auto", marginTop: "auto" }}>
         
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 14px 10px", borderBottom: "1px solid #232323", position: "sticky", top: 0, background: "#141414", zIndex: 10 }}>
