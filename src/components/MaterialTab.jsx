@@ -1737,7 +1737,13 @@ function MaterialCard({
                   {pr.id && (
                     <button
                       style={S.iconBtn}
-                      onClick={(e) => { e.stopPropagation(); onDeleteProcurement?.(mat.id, pr.id); if (isOpen) setExpandedProcId(null); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (window.confirm(`این خرید (${pr.label || fmt(toNum(pr.total)) + " ت"}) حذف بشه؟ این کار قابل بازگشت نیست.`)) {
+                          onDeleteProcurement?.(mat.id, pr.id);
+                          if (isOpen) setExpandedProcId(null);
+                        }
+                      }}
                     >
                       <Trash2 size={12} color="#e08a8a" />
                     </button>
@@ -1945,7 +1951,12 @@ function MaterialCard({
                       <div style={{ position: 'absolute', top: 0, right: 0, width: 6, height: 6, backgroundColor: 'red', borderRadius: '50%' }} />
                     )}
                     </div>
-                    <button style={S.iconBtn} onClick={(e) => { e.stopPropagation(); onDeleteBatch(mat.id, b.id); }}>
+                    <button style={S.iconBtn} onClick={(e) => {
+                      e.stopPropagation();
+                      if (window.confirm(`این بچ (${b.label || `${b.width}×${b.height}`}) حذف بشه؟ این کار قابل بازگشت نیست.`)) {
+                        onDeleteBatch(mat.id, b.id);
+                      }
+                    }}>
                       <Trash2 size={12} color="#e08a8a" />
                     </button>
                   </div>
@@ -2203,7 +2214,11 @@ function MaterialCard({
                         {s.length} سانت × {s.qty} عدد = {totalLength} سانت
                         {s.date && <span style={{ color: "#555" }}> · {fmtDate(s.date)}</span>}
                       </span>
-                      <button style={S.iconBtn} onClick={() => onDeleteStick(mat.id, s.id)}>
+                      <button style={S.iconBtn} onClick={() => {
+                        if (window.confirm(`این چوب (${s.length} سانت × ${s.qty} عدد) حذف بشه؟ این کار قابل بازگشت نیست.`)) {
+                          onDeleteStick(mat.id, s.id);
+                        }
+                      }}>
                         <Trash2 size={12} color="#e08a8a" />
                       </button>
                     </div>
@@ -2398,7 +2413,11 @@ function MaterialCard({
               </button>
               <button
                 style={{ ...S.chip, color: "#e08a8a" }}
-                onClick={() => onDelete(mat.id)}
+                onClick={() => {
+                  if (window.confirm(`متریال «${mat.name}» کامل حذف بشه؟ همه‌ی بچ‌ها/خریدهاش هم از بین می‌رن. این کار قابل بازگشت نیست.`)) {
+                    onDelete(mat.id);
+                  }
+                }}
               >
                 <Trash2 size={12} />
               </button>

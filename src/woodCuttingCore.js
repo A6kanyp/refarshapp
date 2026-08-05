@@ -689,7 +689,24 @@ export function optimizeCutting(sticks, requiredPiecesObj, kerf = 0.3) {
     bins.forEach((bin, idx) => {
       if (bin.unfulfilled) return;
       const placement = getPieceCostInBin(bin, piece);
-      if (r2(bin.remaining) >= placement.cost) {
+      // فیکس باگ واقعی (تأیید شده با تست: چوب ۲۰۰ سانتی + ۸ تکه‌ی ۲۵ سانتی
+      // تک‌مایتر هم‌جهت → قبلاً remaining=7.6 نشون می‌داد یعنی ۲۰۷.۶ سانت
+      // پذیرفته می‌شد روی یه چوب ۲۰۰ سانتی!): تخفیف overlap موقع جفت‌شدن
+      // مایترها (`cost = length - thickness + K`) باعث می‌شه «هزینه»ی
+      // حسابداری‌شده کمتر از طول فیزیکی واقعی تکه بشه؛ چک قبلی فقط رو همون
+      // هزینه‌ی تخفیف‌خورده بود، پس می‌شد چندین تکه رو زنجیره کرد و مجموع
+      // طول فیزیکی واقعی‌شون از طول چوب رد بزنه. الان علاوه بر هزینه‌ی
+      // تخفیف‌خورده، مجموع طول خامِ (بدون تخفیف) تکه‌ها هم باید توی چوب جا
+      // بشه — این یه محدودیت فیزیکی مطلقه که تخفیف overlap نمی‌تونه نقضش کنه.
+      const rawUsedIfPlaced = (bin.rawUsed || 0) + toNum(piece.length);
+      // کرف (پهنای برش اره) همیشه واقعاً از متریال کم می‌شه، حتی سر یه اتصال
+      // مایترِ «جفت‌شده» که تخفیف ضخامت می‌گیره — چون تخفیف ضخامت فقط
+      // هم‌پوشانیِ هندسیِ خودِ برش‌های کج رو مدل می‌کنه، نه اینکه اره لازم
+      // نیست از وسطشون رد بشه. پس حداقل فیزیکیِ مطلق = مجموع طول خام + کرفِ
+      // هر اتصال (صرف‌نظر از تخفیف)، و این هیچ‌وقت نباید از طول چوب رد بزنه.
+      const jointsIfPlaced = bin.cuts.length; // اضافه‌شدن این تکه یعنی یه اتصال جدید با آخرین تکه
+      const minPhysicalIfPlaced = rawUsedIfPlaced + jointsIfPlaced * K;
+      if (r2(bin.remaining) >= placement.cost && minPhysicalIfPlaced <= (bin.stockLength || 0) + 0.01) {
         // Straight (non-mitered) pieces have no material benefit from any
         // particular neighbor, so give a small preference to keep them
         // grouped next to other straight pieces already on the stick.
@@ -720,11 +737,14 @@ export function optimizeCutting(sticks, requiredPiecesObj, kerf = 0.3) {
   // مقایسه‌ی چیدمان‌های مختلف همون تکه‌ها روی یه چوب — استفاده در پاس بازچینی زیر.
   const evaluateSequence = (piecesSeq, stockLength) => {
     let remaining = stockLength;
+    let rawUsed = 0;
     const cuts = [];
     for (const p of piecesSeq) {
       const placement = getPieceCostInBin({ cuts }, p);
       remaining = r2(remaining - placement.cost);
-      if (remaining < 0) return null;
+      rawUsed = r2(rawUsed + toNum(p.length));
+      const minPhysical = rawUsed + cuts.length * K;
+      if (remaining < 0 || minPhysical > stockLength + 0.01) return null;
       cuts.push({
         ...p,
         miterLeft: placement.finalMiterLeft,
@@ -774,6 +794,7 @@ export function optimizeCutting(sticks, requiredPiecesObj, kerf = 0.3) {
     if (bestBinIdx !== -1) {
       const bin = bins[bestBinIdx];
       bin.remaining = r2(bin.remaining - bestPlacement.cost);
+      bin.rawUsed = r2((bin.rawUsed || 0) + toNum(piece.length));
       bin.cuts.push({ 
         ...piece, 
         miterLeft: bestPlacement.finalMiterLeft, 
@@ -827,6 +848,7 @@ export function optimizeCutting(sticks, requiredPiecesObj, kerf = 0.3) {
       bins.push({ 
         stockLength: stock.length, 
         remaining: r2(stock.length - bestStockPlacement.cost), 
+        rawUsed: r2(toNum(piece.length)),
         cuts: [{ 
           ...piece, 
           miterLeft: bestStockPlacement.finalMiterLeft, 

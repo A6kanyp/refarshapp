@@ -1316,7 +1316,7 @@ export default function WoodCuttingTab({ stickyTop, materials, products, persist
                           kerfVal={kerfVal}
                           wasteLength={endScrap}
                           thickness={thicknessKey}
-                          targetWidthPx={Math.max(80, Math.max(0, (plankContainerWidth || 300) - 28) * 0.98)}
+                          targetWidthPx={Math.max(80, Math.max(0, (plankContainerWidth || 300) - 28) * 0.98) * plankGlobalScale}
                         />
                     </div>
                   );
