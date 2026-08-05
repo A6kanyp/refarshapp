@@ -1381,12 +1381,18 @@ export function BasketPanel({ basket, onRemove, onConfirm, onClose, customers, o
           </div>
 
           {showPrint && (() => {
+            // باگ واقعی (گزارش کاربر): قبلاً اینجا همیشه finalPrice=originalPrice و
+            // discountPct=0 هاردکد بود — یعنی توی پیش‌نمایش/ذخیره‌ی عکس/PDF، تخفیفی
+            // که بالای سبد خرید وارد شده بود اصلاً روی تک‌تک قلم‌ها اعمال نمی‌شد
+            // (فقط جمع کل درست بود، نه ردیف‌ها). الان دقیقاً همون توزیع نسبی‌ای که
+            // handleConfirmAction برای enrichedBasket استفاده می‌کنه، اینجا هم اعمال شد.
             const mappedItems = basket.map(p => {
               const orig = toNum(p.salePrice);
-              const final = effectivePrice(p);
-              const pct = p.discountPercent != null && toNum(p.discountPercent) > 0
-                ? toNum(p.discountPercent)
-                : (orig > 0 && final < orig ? Math.round((1 - final / orig) * 100) : 0);
+              const base = effectivePrice(p); // پایه: قیمتی که تخفیف تک‌محصولیِ از قبل موجود روش اعمال شده
+              const share = discountAmount > 0 && baseTotal > 0 ? base / baseTotal : 0;
+              const itemDisc = discountAmount > 0 ? Math.round(discountAmount * share) : 0;
+              const final = Math.max(0, base - itemDisc);
+              const pct = orig > 0 && final < orig ? Math.round((1 - final / orig) * 100) : 0;
               return {
                 name: p.name,
                 code: fmtCode(p.code),
@@ -1843,8 +1849,17 @@ export function ProductEditor({
           } else if (raw.length === 0) {
             showToast(`عکسی با کد ${codeStr} پیدا نشد — پوشه‌ی عکس محصولات کلاً خالیه (هیچ فایلی توش دیده نمی‌شه)`, "error");
           } else {
-            const sample = raw.slice(0, 5).join("، ");
-            showToast(`عکسی با کد ${codeStr} پیدا نشد. فایل‌هایی که توی پوشه دیده می‌شن: ${sample}${raw.length > 5 ? ` (+${raw.length - 5} تای دیگه)` : ""}`, "error");
+            // تشخیصیِ خیلی دقیق‌تر (دور بعدی): به‌جای فقط لیست خام، مستقیم چک
+            // می‌کنیم آیا اصلاً فایلی با همین ۴رقم کد شروع می‌شه یا نه — اگه
+            // بود ولی match نشد، یعنی فرمت شماره/پسوندش فرق داره (نه این‌که
+            // کلاً غایب باشه)؛ این تفاوت رو دقیق نشون می‌ده
+            const almostMatches = raw.filter((f) => f.startsWith(codeStr));
+            if (almostMatches.length > 0) {
+              showToast(`فایل‌هایی که با کد ${codeStr} شروع می‌شن پیدا شدن ولی فرمتشون match نشد: ${almostMatches.join("، ")} (باید دقیقاً ${codeStr}+۲رقم دیگه باشه، مثلاً ${codeStr}01.jpg)`, "error");
+            } else {
+              const sample = raw.slice(0, 5).join("، ");
+              showToast(`هیچ فایلی که با ${codeStr} شروع بشه توی پوشه نیست. نمونه از چیزهایی که هست: ${sample}${raw.length > 5 ? ` (+${raw.length - 5} تای دیگه)` : ""}`, "error");
+            }
           }
         }
         return;
@@ -3053,6 +3068,14 @@ export function CatalogTab({
           saleDate: p.saleDate || todayISO(),
           settled: !!settled,
           settleDate: settled ? todayISO() : null,
+          // باگ واقعی (گزارش کاربر): قبلاً این فیلدها اصلاً اینجا کپی نمی‌شدن —
+          // یعنی تخفیفی که بالای سبد خرید وارد شده بود، لحظه‌ی ثبت نهایی فروش
+          // بی‌صدا گم می‌شد (محصول با قیمت کامل sold ثبت می‌شد)
+          ...(inBasket.discountedPrice != null ? {
+            discountPercent: inBasket.discountPercent,
+            discountAmount: inBasket.discountAmount,
+            discountedPrice: inBasket.discountedPrice,
+          } : {}),
         };
       });
       return { ...d, products: newProducts, customers: customersList };
@@ -3682,9 +3705,20 @@ export default function ProductTab({
       }
       const finalSaleDate = saleDate || todayISO();
       const ids = new Set(items.map((p) => p.id));
-      const updatedProducts = d.products.map((p) =>
-        ids.has(p.id) ? { ...p, status: "sold", saleDate: finalSaleDate, buyerName: customerName, buyerCustomerId: custId, location: custId || p.location, settled } : p
-      );
+      const itemById = new Map(items.map((p) => [p.id, p]));
+      const updatedProducts = d.products.map((p) => {
+        if (!ids.has(p.id)) return p;
+        const src = itemById.get(p.id);
+        return {
+          ...p, status: "sold", saleDate: finalSaleDate, buyerName: customerName, buyerCustomerId: custId, location: custId || p.location, settled,
+          // باگ واقعی: تخفیف وارد‌شده توی سبد خرید هیچ‌وقت روی محصول ثبت‌شده نمی‌نشست
+          ...(src && src.discountedPrice != null ? {
+            discountPercent: src.discountPercent,
+            discountAmount: src.discountAmount,
+            discountedPrice: src.discountedPrice,
+          } : {}),
+        };
+      });
       return { ...d, products: updatedProducts, customers: customersList };
     });
     setBasket([]);
