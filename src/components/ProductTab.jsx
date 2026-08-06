@@ -3180,7 +3180,10 @@ export function CatalogTab({
     return groups;
   }, [filtered, groupedView, productTypes]);
 
-  const allProductsForLightbox = products.filter((p) => p.image);
+  // آیتم جدید کاربر: ناوبری بزرگ‌نمایی باید دقیقاً به همون ترتیبی بره که خودِ
+  // تب الان نشون می‌ده (سورت فعال + فیلترهای اعمال‌شده)، نه فقط ترتیب خام کد —
+  // قبلاً از products خام (بدون سورت/فیلتر) استفاده می‌شد
+  const allProductsForLightbox = filtered.filter((p) => p.image);
 
   return (
     <div style={{ padding: "0 0 100px" }} dir="rtl">
@@ -3816,8 +3819,6 @@ export default function ProductTab({
     notify && notify("محصول به گالری منتقل شد");
   };
 
-  const productListForLightbox = Object.values(groups).flat().filter((p) => p.image);
-
   const filterFn = (p) => {
     if (search.trim() && !p.name?.includes(search) && !String(p.code).includes(search) && !(p.dims && p.dims.includes(search)))
       return false;
@@ -3841,6 +3842,11 @@ export default function ProductTab({
     }
     return locMatch;
   };
+
+  // آیتم جدید کاربر: ناوبری بزرگ‌نمایی باید سورت/فیلترهای فعال تب رو رعایت کنه،
+  // نه فقط ترتیب خام کد — قبلاً از groups خام (فقط سورت‌شده، بدون فیلتر جستجو/
+  // وضعیت/نوع/مکان) استفاده می‌شد. الان همون filterFn که خودِ رندر ازش استفاده می‌کنه اعمال می‌شه.
+  const productListForLightbox = Object.values(groups).flat().filter(filterFn).filter((p) => p.image);
 
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const toggleGroup = (name) => setCollapsedGroups(prev => ({ ...prev, [name]: !prev[name] }));
