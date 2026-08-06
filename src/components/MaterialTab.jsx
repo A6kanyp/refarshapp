@@ -406,20 +406,27 @@ export function BulkApplyMaterialPage({ material, products = [], allMaterials = 
   };
 
   const [distributionMode, setDistributionMode] = useState(() => {
+    const usesAreaRatio = material.type === "area" || material.type === "fabric" || material.type === "linear" || material.type === "ratio";
     if (initialLinked.length > 0) {
-      // اگه همه‌ی لینک‌های قبلی با یه حالت توزیع مشخص (مساوی/نسبت‌مساحت) ذخیره شده بودن، همونو یادآوری کن
+      // اگه همه‌ی لینک‌های قبلی با یه حالت توزیع مشخص (مساوی/نسبت‌مساحت/دستی) ذخیره شده بودن، همونو یادآوری کن
       const modes = new Set();
       initialLinked.forEach(p => {
         const li = (p.lineItems || []).find(l => l.materialId === material.id);
         if (li?.distributionMode) modes.add(li.distributionMode);
       });
       if (modes.size === 1) return [...modes][0];
+      // فیکس باگ: قبلاً وقتی هیچ حالتی ثبت نشده بود (چون خودِ فیلد تا این
+      // فیکس هیچ‌جا واقعاً روی لاین‌آیتم نوشته نمی‌شد)، این‌جا همیشه بی‌قید
+      // و شرط «دستی» برمی‌گشت — یعنی حتی اگه دفعه‌ی قبل با «نسبت مساحت» یا
+      // «مساوی» کار کرده بودی، دفعه‌ی بعد که باز می‌کردی می‌رفت رو دستی.
+      // اگه چیزی ثبت نشده (دیتای قدیمی) یا حالت‌ها ناهمگون بودن، همون
+      // پیش‌فرض منطقیِ نوع متریال رو برگردون، نه همیشه دستی.
+      if (modes.size === 0) return usesAreaRatio ? "area" : "equal";
       return "manual";
     }
     // برای انواع مساحتی/فرش/خطی/نسبتی، پیش‌فرض منطقی‌تر توزیع بر اساس نسبت
     // مساحت واقعی محصولاته، نه تقسیم مساوی؛ فقط برای نوع ابزار/ثابت (که
     // مساحت معنی نداره) توزیع مساوی پیش‌فرض می‌مونه
-    const usesAreaRatio = material.type === "area" || material.type === "fabric" || material.type === "linear" || material.type === "ratio";
     return usesAreaRatio ? "area" : "equal";
   });
 
