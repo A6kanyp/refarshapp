@@ -1703,7 +1703,14 @@ export function ProductEditor({
     ...l, 
     lineItems: l.lineItems.map((li) => {
       if (li.id === id) {
-        if (li.deductedAt) return { ...li, pendingUnlock: true, _toRemove: true };
+        // فیکس باگ واقعی: قبلاً حتی برای متریال قفل‌شده هم `_toRemove: true`
+        // ست می‌شد، که باعث می‌شد بلافاصله از لیست (فیلتر `!li._toRemove`
+        // پایین‌تر) مخفی بشه — یعنی کاربر اصلاً نمی‌دید که «در انتظار
+        // آزادسازی»ه، انگار حذف شده. الان دقیقاً مثل دکمه‌ی آزادسازی رفتار
+        // می‌کنه: فقط pendingUnlock ست می‌شه، توی لیست می‌مونه با همون
+        // برچسب «در انتظار آزادسازی»، و واقعاً حذف نمی‌شه تا از دکمه‌ی
+        // رفرش (نگه‌داشتن) آزاد بشه.
+        if (li.deductedAt) return { ...li, pendingUnlock: true };
         return { ...li, _toRemove: true };
       }
       return li;
