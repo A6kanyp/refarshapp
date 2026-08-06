@@ -2563,6 +2563,7 @@ export default function App() {
                   customPct: null,
                   useAreaRatio: false,
                   pendingSessionId: bulkSubmissionId,
+                  distributionMode: distributionMode || null,
                 };
                 if (restPortions.length) {
                   extraLineItemsForP.push(...restPortions.map(portion => ({
@@ -2581,6 +2582,7 @@ export default function App() {
                     woodLocked: false,
                     customPct: null,
                     pendingSessionId: bulkSubmissionId,
+                    distributionMode: distributionMode || null,
                   })));
                 }
                 return updatedFirst;
@@ -2646,6 +2648,7 @@ export default function App() {
                     woodLocked: false,
                     customPct: null,
                     pendingSessionId: bulkSubmissionId,
+                    distributionMode: distributionMode || null,
                   });
                 });
               }
