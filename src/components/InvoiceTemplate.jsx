@@ -36,7 +36,12 @@ function InvoiceItemImage({ filename }) {
   }
   return (
     <div style={{ width: "42px", height: "42px", margin: "0 auto", borderRadius: "6px", overflow: "hidden", border: "1px solid #ddd", background: "#f0f0f0" }}>
-      <img src={src} style={{ width: "100%", height: "100%", objectFit: "cover" }} referrerPolicy="no-referrer" alt="" />
+      {/* html2canvas پشتیبانی قابل‌اعتمادی از object-fit روی <img> نداره (یه
+          محدودیت شناخته‌شده‌ش — معمولاً به‌جای crop، عکس رو stretch می‌کنه)،
+          ولی background-size:cover رو درست رعایت می‌کنه. برای همین به‌جای
+          <img>، از یه div با background-image استفاده شد تا خروجی ذخیره‌شده
+          دقیقاً مثل پیش‌نمایش (کراپ‌شده، بدون کش‌آمدن) باشه. */}
+      <div style={{ width: "100%", height: "100%", backgroundImage: `url("${src}")`, backgroundSize: "cover", backgroundPosition: "center", backgroundRepeat: "no-repeat" }} />
     </div>
   );
 }
@@ -122,6 +127,19 @@ else {
   const galleryStockValue = sumFinal(availableItems);
   // تخفیف واقعی فقط روی آیتم‌های غیرِ هدیه حساب می‌شه؛ هدیه‌ها جدا (به‌عنوان «هدیه»، نه تخفیف) گزارش می‌شن
   const totalDiscount = sumOriginal(nonGiftSoldItems) - sumFinal(nonGiftSoldItems);
+  const totalDiscountBase = sumOriginal(nonGiftSoldItems);
+  // درصد تخفیف کلی (برای نمایش توی جمع، به‌جای تکرار درصد زیر تک‌تک محصولات)
+  const totalDiscountPct = totalDiscountBase > 0 ? Math.round((totalDiscount / totalDiscountBase) * 100) : 0;
+  // اگه همه‌ی محصولاتِ فروخته‌شده‌ی غیرِهدیه دقیقاً یه درصد تخفیف یکسان دارن، یعنی
+  // این از یه تخفیفِ کلیِ سبد خرید اومده (نه تخفیف دستیِ جداگونه‌ی هر محصول) — پس
+  // به‌جای تکرارِ همون درصد زیر تک‌تک ردیف‌ها، فقط توی جمع کلی نشون داده می‌شه
+  const uniformDiscountPct = (() => {
+    const withDiscount = nonGiftSoldItems.filter((i) => toNum(i.discountPct) > 0);
+    if (withDiscount.length === 0) return null;
+    if (withDiscount.length !== nonGiftSoldItems.length) return null;
+    const first = toNum(withDiscount[0].discountPct);
+    return withDiscount.every((i) => toNum(i.discountPct) === first) ? first : null;
+  })();
   const totalGiftValue = sumOriginal(giftSoldItems);
   const finalPayable = Math.max(0, sumFinal(soldUnsettledItems) - toNum(rawDepositAmount));
   const depositAmount = toNum(rawDepositAmount);
@@ -370,7 +388,7 @@ else {
               <td style={{ textAlign: "left", fontWeight: "700", color: "#111", verticalAlign: "middle" }}>
                 {item.discountPct >= 100 ? (
                   <span style={{ textDecoration: "line-through", color: "#999", fontSize: "11px" }}>{fmt(item.originalPrice)} ت</span>
-                ) : item.discountPct > 0 ? (
+                ) : item.discountPct > 0 && uniformDiscountPct == null ? (
                   <div style={{ textAlign: "left" }}>
                     <div style={{ textDecoration: "line-through", color: "#999", fontSize: "10px", fontWeight: "normal", lineHeight: 1.6 }}>{fmt(item.originalPrice)}</div>
                     <div>
@@ -449,7 +467,7 @@ else {
               )}
               {totalDiscount > 0 && (
                 <div className="invoice-summary-row" style={{ color: "#d32f2f" }}>
-                  <span>مجموع تخفیف‌ها:</span>
+                  <span>مجموع تخفیف‌ها{totalDiscountPct > 0 ? ` (٪${totalDiscountPct})` : ""}:</span>
                   <strong>{fmt(totalDiscount)} تومان</strong>
                 </div>
               )}
@@ -490,7 +508,7 @@ else {
               )}
               {totalDiscount > 0 && (
                 <div className="invoice-summary-row" style={{ color: "#d32f2f" }}>
-                  <span>مجموع تخفیف‌ها:</span>
+                  <span>مجموع تخفیف‌ها{totalDiscountPct > 0 ? ` (٪${totalDiscountPct})` : ""}:</span>
                   <strong>{fmt(totalDiscount)} تومان</strong>
                 </div>
               )}

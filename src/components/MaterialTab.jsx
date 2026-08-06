@@ -1408,6 +1408,7 @@ function MaterialCard({
   const [newPurchaseLabel, setNewPurchaseLabel] = useState("");
   const [newBatch, setNewBatch] = useState({ label: "", width: "", height: "", qty: "1", unitPrice: "", totalCost: "", date: todayISO() });
   const [expandedBatchId, setExpandedBatchId] = useState(null);
+  const [expandedStickId, setExpandedStickId] = useState(null);
   const [expandedProcId, setExpandedProcId] = useState(null);
   const [newStick, setNewStick] = useState({ length: "", qty: 1, date: todayISO() });
   const [showLinkedProducts, setShowLinkedProducts] = useState(false);
@@ -2198,7 +2199,7 @@ function MaterialCard({
               <div style={S.sectionTitle}>چوب‌های موجود</div>
               {(mat.sticks || []).map((s) => {
                 const totalLength = toNum(s.length) * toNum(s.qty);
-                const isOpen = expandedBatchId === s.id;
+                const isOpen = expandedStickId === s.id;
                 return (
                   <div
                     key={s.id}
@@ -2212,7 +2213,7 @@ function MaterialCard({
                   >
                     <div
                       style={{ display: "flex", gap: 6, alignItems: "center", cursor: "pointer" }}
-                      onClick={() => setExpandedBatchId(isOpen ? null : s.id)}
+                      onClick={() => setExpandedStickId(isOpen ? null : s.id)}
                     >
                       {isOpen ? <ChevronUp size={13} color="#888" /> : <ChevronDown size={13} color="#888" />}
                       <span style={{ fontSize: 10, color: "#666", flex: 1 }}>
@@ -2223,6 +2224,7 @@ function MaterialCard({
                         e.stopPropagation();
                         if (window.confirm(`این چوب (${s.length} سانت × ${s.qty} عدد) حذف بشه؟ این کار قابل بازگشت نیست.`)) {
                           onDeleteStick(mat.id, s.id);
+                          if (isOpen) setExpandedStickId(null);
                         }
                       }}>
                         <Trash2 size={12} color="#e08a8a" />
