@@ -620,7 +620,7 @@ export default function InvoicePrint({
             }}
             title="ذخیره PDF در Documents/refarsh/factor/pdf"
           >
-            {savingAction === "pdf" ? <RefreshCw size={15} className="animate-spin" /> : <FileDown size={15} />}
+            {savingAction === "pdf" ? <RefreshCw size={15} className="animate-spin" /> : <Download size={15} />}
           </button>
 
           {/* Save as Image → آبی (ذخیره‌ی خودکار در Documents/refarsh/factor) */}
@@ -642,7 +642,7 @@ export default function InvoicePrint({
             }}
             title="ذخیره تصویر در Documents/refarsh/factor"
           >
-            {savingAction === "image" ? <RefreshCw size={15} className="animate-spin" /> : <Download size={15} />}
+            {savingAction === "image" ? <RefreshCw size={15} className="animate-spin" /> : <FileDown size={15} />}
           </button>
 
           {/* Copy Invoice Text */}
@@ -677,7 +677,7 @@ export default function InvoicePrint({
             }}
             title="اشتراک PDF"
           >
-            {savingAction === "sharePdf" ? <RefreshCw size={15} className="animate-spin" /> : <FileDown size={15} />}
+            {savingAction === "sharePdf" ? <RefreshCw size={15} className="animate-spin" /> : <Download size={15} />}
           </button>
 
           {/* Share Image → مشکی */}
@@ -692,7 +692,7 @@ export default function InvoicePrint({
             }}
             title="اشتراک تصویر"
           >
-            {savingAction === "shareImage" ? <RefreshCw size={15} className="animate-spin" /> : <Download size={15} />}
+            {savingAction === "shareImage" ? <RefreshCw size={15} className="animate-spin" /> : <FileDown size={15} />}
           </button>
         </div>
       </div>

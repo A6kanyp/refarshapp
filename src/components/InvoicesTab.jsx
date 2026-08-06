@@ -887,9 +887,6 @@ export default function InvoicesTab({
                           ))}
                         </div>
                         <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                          <button style={{ ...S.btn, fontSize: 10, padding: "5px 10px", background: "#1c1c1c", color: "#bbb", border: "1px solid #2a2a2a" }} onClick={() => handleTriggerPrint(inv, false)}>
-                            <Eye size={11} style={{ marginLeft: 3 }} /> پیش‌نمایش گرافیکی
-                          </button>
                           <button style={{ ...S.btn, fontSize: 10, padding: "5px 10px", background: "#1d3a24", color: "#5fd180" }} onClick={() => handleTriggerPrint(inv, true)}>
                             <Printer size={11} style={{ marginLeft: 3 }} /> چاپ فوری A4
                           </button>
