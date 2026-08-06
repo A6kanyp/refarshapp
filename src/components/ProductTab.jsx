@@ -2189,7 +2189,7 @@ export function ProductEditor({
                     (وب‌ویوی اندروید) قابل‌اعتماد نیست، پس به‌جاش دو دکمه‌ی کوچیک
                     جابجایی چپ/راست اضافه شد؛ عکسِ اول همیشه آیکون/جلد محصوله */}
                 {arr.length > 1 && (
-                  <div style={{ position: "absolute", top: 2, left: 2, display: "flex", gap: 2 }}>
+                  <div style={{ position: "absolute", bottom: 2, left: 2, display: "flex", gap: 2, zIndex: 2 }}>
                     {i > 0 && (
                       <button
                         type="button"
