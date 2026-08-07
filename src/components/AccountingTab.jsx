@@ -1225,46 +1225,42 @@ function AllInvoicesModal({ invoices, onClose, setData, notify, customers, onVie
                       overflow: "hidden",
                     }}
                   >
-                    {/* Invoice Item Row Header */}
+                    {/* Invoice Item Row Header — دو ردیف مرتب: خط اول نام+دکمه‌های آیکونی،
+                        خط دوم تاریخ/تعداد/وضعیت/مبلغ/فلش — قبلاً همه با هم توی یه ردیف
+                        بودن (دکمه‌های متن‌دار «مشاهده»/«چاپ» + قیمت + وضعیت + فلش) و جا کم می‌آورد */}
                     <div
                       style={{
                         padding: "10px 12px",
                         display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
+                        flexDirection: "column",
+                        gap: 6,
                         cursor: "pointer",
                         userSelect: "none",
                       }}
                       onClick={() => toggleExpand(inv.id)}
                     >
-                      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                        <div style={{ fontSize: 11.5, fontWeight: 600, color: "#eee" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                        <div style={{ fontSize: 11.5, fontWeight: 600, color: "#eee", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           فاکتور مشتری: {inv.buyerName}
                         </div>
-                        <div style={{ fontSize: 9.5, color: "#666" }}>
-                          تاریخ: {fmtDate(inv.date)} · {inv.items.length} آیتم
-                        </div>
-                      </div>
-
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ display: "flex", gap: 4, marginRight: 8, marginLeft: 8 }} onClick={(e) => e.stopPropagation()}>
+                        <div style={{ display: "flex", gap: 4, flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
                           <button
                             style={{
                               ...T.chip,
                               color: "#7aa8d8",
                               border: "1px solid #1a324d",
                               background: "#0d1a29",
-                              fontSize: 9,
-                              padding: "4px 8px",
+                              width: 26,
+                              height: 26,
+                              padding: 0,
                               display: "flex",
                               alignItems: "center",
-                              gap: 3
+                              justifyContent: "center",
                             }}
                             onClick={() => onViewInvoice?.(inv)}
                             title="مشاهده فاکتور"
                           >
-                            <Eye size={10} />
-                            <span>مشاهده</span>
+                            <Eye size={12} />
                           </button>
                           <button
                             style={{
@@ -1272,28 +1268,30 @@ function AllInvoicesModal({ invoices, onClose, setData, notify, customers, onVie
                               color: "#5fd180",
                               border: "1px solid #1d3a24",
                               background: "#0d1f14",
-                              fontSize: 9,
-                              padding: "4px 8px",
+                              width: 26,
+                              height: 26,
+                              padding: 0,
                               display: "flex",
                               alignItems: "center",
-                              gap: 3
+                              justifyContent: "center",
                             }}
                             onClick={() => onPrintInvoice?.(inv)}
                             title="چاپ فاکتور"
                           >
-                            <Printer size={10} />
-                            <span>چاپ</span>
+                            <Printer size={12} />
                           </button>
                         </div>
-                        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                        <div style={{ fontSize: 9.5, color: "#666" }}>
+                          {fmtDate(inv.date)} · {inv.items.length} آیتم · <span style={{ color: inv.allSettled ? "#5fd180" : "#e08a8a" }}>{inv.allSettled ? "✓ تسویه شده" : "✗ تسویه نشده"}</span>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                           <div style={{ fontSize: 12, fontWeight: 700, color: "#5fd180" }}>
                             {fmt(inv.total)} ت
                           </div>
-                          <div style={{ fontSize: 8.5, color: inv.allSettled ? "#5fd180" : "#e08a8a" }}>
-                            {inv.allSettled ? "✓ تسویه شده" : "✗ تسویه نشده"}
-                          </div>
+                          {isExpanded ? <ChevronUp size={14} color="#666" /> : <ChevronDown size={14} color="#666" />}
                         </div>
-                        {isExpanded ? <ChevronUp size={14} color="#666" /> : <ChevronDown size={14} color="#666" />}
                       </div>
                     </div>
 
