@@ -165,6 +165,8 @@ function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onTogg
           padding: "2px 10px",
           fontSize: 10,
           position: "relative",
+          minWidth: 42,
+          justifyContent: "center",
           ...style,
         }}
         onClick={() => setShowPopup((v) => !v)}
