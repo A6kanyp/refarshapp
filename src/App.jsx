@@ -156,7 +156,7 @@ function PinScreen({ onUnlock, onCancel }) {
   );
 }
 
-function RefreshLockButton({ onQuickRefresh, onHoldRefresh, onUndoRefresh, onResetFilters, onCancelPendingLocks, onCancelPendingUnlocks, hasPending }) {
+function RefreshLockButton({ onQuickRefresh, onHoldRefresh, onUndoRefresh, onResetFilters, onCancelPendingLocks, onCancelPendingUnlocks, hasPending, hasLockCandidates, hasUnlockCandidates, lockLogCount = 0, unlockLogCount = 0 }) {
   const holdTimer = useRef(null);
   const didHold = useRef(false);
   const lastTapRef = useRef(0);
@@ -223,7 +223,12 @@ function RefreshLockButton({ onQuickRefresh, onHoldRefresh, onUndoRefresh, onRes
   const rowBtnStyle = {
     display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
     padding: "10px 6px", borderRadius: 10, cursor: "pointer", fontFamily: "inherit", fontSize: 10, border: "1px solid #2a2a2a", flex: 1,
+    position: "relative",
   };
+  // نقطه‌ی رنگی کوچیک بالا-چپِ دکمه — طبق دستور صریح مالک، ۴ حالت جدا
+  const Dot = ({ color }) => (
+    <span style={{ position: "absolute", top: 5, left: 6, width: 7, height: 7, borderRadius: "50%", background: color, boxShadow: "0 0 0 2px #101010" }} />
+  );
 
   return (
     <>
@@ -239,55 +244,60 @@ function RefreshLockButton({ onQuickRefresh, onHoldRefresh, onUndoRefresh, onRes
         <div style={{ padding: 10 }}>
           <div style={{ fontSize: 10, color: "#888", textAlign: "center", marginBottom: 8 }}>چه کاری انجام بشه؟</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {/* ردیف ۱: قفل / آزاد */}
+            {/* ردیف ۱: قفل (قرمز) / آزاد (آبی) — طبق دستور صریح مالک، رنگ‌بندی جدید */}
             <div style={{ display: "flex", gap: 6 }}>
               <button
-                style={{ ...rowBtnStyle, background: "#1d3a24", color: "#5fd180" }}
+                style={{ ...rowBtnStyle, background: "#3a1414", color: "#e08a8a" }}
                 onClick={() => { setShowHoldPopup(false); onHoldRefresh?.("lock"); }}
               >
+                {hasLockCandidates && <Dot color="#e05a5a" />}
                 <Lock size={15} />
                 قفل
               </button>
               <button
-                style={{ ...rowBtnStyle, background: "#3a2414", color: "#e0a35a" }}
+                style={{ ...rowBtnStyle, background: "#12233a", color: "#7ec7e8" }}
                 onClick={() => { setShowHoldPopup(false); onHoldRefresh?.("unlock"); }}
               >
+                {hasUnlockCandidates && <Dot color="#4aa3e0" />}
                 <Unlock size={15} />
                 آزاد
               </button>
             </div>
-            {/* ردیف ۲: Undo قفل / Undo آزاد — طبق دستور کاربر: پس‌زمینه‌ی دکمه عوض
-                نشه (همون خاکستری خنثی می‌مونه)، فقط آیکون و رنگش با ردیف ۱ (قفل=سبز،
-                آزاد=نارنجی) یکی بشه؛ متن هم ساده «Undo» برای هردو (نه Undo قفل/Undo آزاد) */}
+            {/* ردیف ۲: Undo قفل / Undo آزاد — نقطه‌ی زرد یعنی «چیزی برای Undo هست»؛
+                بعد از خودِ Undo محو می‌شه چون صف خالی می‌شه */}
             <div style={{ display: "flex", gap: 6 }}>
               <button
-                style={{ ...rowBtnStyle, background: "#1c1c1c", color: "#5fd180" }}
+                style={{ ...rowBtnStyle, background: "#1c1c1c", color: "#e08a8a" }}
                 onClick={() => { setShowHoldPopup(false); onUndoRefresh?.("lock"); }}
               >
+                {lockLogCount > 0 && <Dot color="#e0c23a" />}
                 <Lock size={15} />
                 Undo
               </button>
               <button
-                style={{ ...rowBtnStyle, background: "#1c1c1c", color: "#e0a35a" }}
+                style={{ ...rowBtnStyle, background: "#1c1c1c", color: "#7ec7e8" }}
                 onClick={() => { setShowHoldPopup(false); onUndoRefresh?.("unlock"); }}
               >
+                {unlockLogCount > 0 && <Dot color="#e0c23a" />}
                 <Unlock size={15} />
                 Undo
               </button>
             </div>
-            {/* ردیف ۳: لغو معلق‌ها / لغو منتظرآزادها — همون منطق: پس‌زمینه ثابت،
-                آیکون/رنگ مثل قفل=سبز و آزاد=نارنجی، متن ساده «لغو» برای هردو */}
+            {/* ردیف ۳: لغو معلق‌ها / لغو منتظرآزادها — فقط وقتی چیزی برای لغو هست
+                فعاله، وگرنه کمرنگ و غیرفعال (طبق دستور صریح مالک) */}
             <div style={{ display: "flex", gap: 6 }}>
               <button
-                style={{ ...rowBtnStyle, background: "#1c1c1c", color: "#5fd180" }}
-                onClick={() => { setShowHoldPopup(false); onCancelPendingLocks?.(); }}
+                disabled={!hasLockCandidates}
+                style={{ ...rowBtnStyle, background: "#1c1c1c", color: hasLockCandidates ? "#e08a8a" : "#555", opacity: hasLockCandidates ? 1 : 0.5, cursor: hasLockCandidates ? "pointer" : "default" }}
+                onClick={() => { if (!hasLockCandidates) return; setShowHoldPopup(false); onCancelPendingLocks?.(); }}
               >
                 <Lock size={15} />
                 لغو
               </button>
               <button
-                style={{ ...rowBtnStyle, background: "#1c1c1c", color: "#e0a35a" }}
-                onClick={() => { setShowHoldPopup(false); onCancelPendingUnlocks?.(); }}
+                disabled={!hasUnlockCandidates}
+                style={{ ...rowBtnStyle, background: "#1c1c1c", color: hasUnlockCandidates ? "#7ec7e8" : "#555", opacity: hasUnlockCandidates ? 1 : 0.5, cursor: hasUnlockCandidates ? "pointer" : "default" }}
+                onClick={() => { if (!hasUnlockCandidates) return; setShowHoldPopup(false); onCancelPendingUnlocks?.(); }}
               >
                 <Unlock size={15} />
                 لغو
@@ -313,7 +323,7 @@ function RefreshLockButton({ onQuickRefresh, onHoldRefresh, onUndoRefresh, onRes
 }
 
 // ── ManagementPanelModal ──
-function ManagementPanelModal({ onClose, children, onQuickRefresh, onHoldRefresh, onUndoRefresh, onResetFilters, onCancelPendingLocks, onCancelPendingUnlocks, hasPending, onOpenBusinessCardManager, activeTab, isAnyModalOpen, hideScrollButton, refreshResetTick, refreshProblemTabs = [] }) {
+function ManagementPanelModal({ onClose, children, onQuickRefresh, onHoldRefresh, onUndoRefresh, onResetFilters, onCancelPendingLocks, onCancelPendingUnlocks, hasPending, hasLockCandidates, hasUnlockCandidates, lockLogCount, unlockLogCount, onOpenBusinessCardManager, activeTab, isAnyModalOpen, hideScrollButton, refreshResetTick, refreshProblemTabs = [] }) {
   const [isPanelUnlocked, setIsPanelUnlocked] = useState(false);
   const headerRef = useRef(null);
 
@@ -448,6 +458,10 @@ function ManagementPanelModal({ onClose, children, onQuickRefresh, onHoldRefresh
               onCancelPendingLocks={onCancelPendingLocks}
               onCancelPendingUnlocks={onCancelPendingUnlocks}
               hasPending={hasPending}
+              hasLockCandidates={hasLockCandidates}
+              hasUnlockCandidates={hasUnlockCandidates}
+              lockLogCount={lockLogCount}
+              unlockLogCount={unlockLogCount}
             />
           )}
         </div>
@@ -2084,6 +2098,44 @@ export default function App() {
   }, [data.products, resolveLineCost]);
 
   // ── تشخیص pending changes ──
+  // طبق دستور مالک: بج/فعال‌بودن دکمه‌های قفل و آزاد باید کاملاً جدا باشن،
+  // نه یه فلگ ترکیبی مشترک — پس این دو تا رو جدا کردیم
+  const hasUnlockCandidates = useMemo(() => {
+    if ((pendingBulkChanges || []).some((c) => c.action === "unlock")) return true;
+    if ((data.materials || []).some((m) => (m.pendingReleaseCredits || []).length > 0)) return true;
+    return (data.products || []).some((p) =>
+      (p?.lineItems || []).some((li) => li.materialId && li.pendingUnlock)
+    );
+  }, [data.products, data.materials, pendingBulkChanges]);
+
+  const hasLockCandidates = useMemo(() => {
+    if ((pendingBulkChanges || []).some((c) => c.action === "lock")) return true;
+    return (data.products || []).some((p) =>
+      (p?.lineItems || []).some((li) => {
+        if (!li.materialId || li.pendingUnlock || li.deductedAt) return false;
+
+        if (li.pct != null && toNum(li.pct) > 0) return true;
+
+        if (li.pct == null && !li.batchId && !li.useAreaRatio && toNum(li.cost) > 0 && (li.woodCuts || []).length === 0) {
+          const mat = data.materials.find((m) => m.id === li.materialId);
+          if (mat && mat.type !== "fabric") return true;
+        }
+
+        if ((li.woodCuts || []).length > 0 && !li.woodLocked) return true;
+
+        if (li.batchId) {
+          const mat = data.materials.find((m) => m.id === li.materialId);
+          if (mat) {
+            const batch = mat.batches?.find(b => b.id === li.batchId);
+            if (batch) return true;
+          }
+        }
+
+        return false;
+      })
+    );
+  }, [data.products, data.materials, pendingBulkChanges]);
+
   const hasPendingMaterialChanges = useMemo(() => {
     if ((pendingBulkChanges || []).length > 0) return true;
     if ((data.materials || []).some((m) => (m.pendingReleaseCredits || []).length > 0)) return true;
@@ -2804,7 +2856,10 @@ export default function App() {
   // پشته‌ی عملیات‌های قفل/آزادسازیِ آخرین پاسِ رفرش، برای Undo آیتم‌به‌آیتم
   // (نه یه اسنپ‌شات از کل state — چون یه پاس می‌تونه چند آیتم مستقل رو با هم
   // قفل/آزاد کنه و دابل‌تپ فقط باید «آخرین یکی» رو برگردونه، نه همه رو با هم)
-  const undoOperationsRef = useRef([]);
+  // انواع عملیات که «قفل» حساب می‌شن در مقابل «آزادسازی» — برای تفکیک صف/Undو
+  // قفل از صف/Undo آزاد (بازطراحی طبق دستور صریح مالک)
+  const LOCK_OP_KINDS = useRef(new Set(["batchBulkLock", "poolLock", "woodLock", "batchAreaLock"])).current;
+  const isLockOp = useCallback((op) => LOCK_OP_KINDS.has(op.kind), [LOCK_OP_KINDS]);
 
   const handleHoldRefresh = useCallback((mode = "both") => {
     // ── ۱. شناسایی آیتم‌های آماده قفل و آماده آزادسازی (فقط برای پیام «چیزی نیست») ──
@@ -2855,17 +2910,20 @@ export default function App() {
     // عملیات با یه passId مشترک (یکی برای کل همین پاس) تگ می‌شه تا Undo
     // بتونه کل پاس رو یک‌جا و درست برگردونه
     const passId = uid();
-    const taggedOps = (result.operations || []).map((op) => ({ ...op, __passId: passId }));
-
-    // پشته‌ی Undo: قبلاً اینجا با = جایگزین می‌شد (نه اضافه)، یعنی فقط آخرین
-    // پاسِ قفل/آزادسازی قابل‌بازگشت بود — هر پاس قبلی‌تر که با هولد دیگه‌ای
-    // انجام می‌شد، عملیات‌های پاس قبلش کاملاً از بین می‌رفت. الان به یه پشته‌ی
-    // واقعیِ تجمیعی تبدیل شد (سقف ۵۰ عملیات) تا واقعاً بشه چند قدم Undo رفت،
-    // نه فقط داخل یه پاس
-    undoOperationsRef.current = [...undoOperationsRef.current, ...taggedOps].slice(-50);
+    const taggedOps = (result.operations || []).map((op) => ({ ...op, __passId: passId, __id: uid(), __ts: Date.now() }));
+    const lockOps = taggedOps.filter((op) => LOCK_OP_KINDS.has(op.kind));
+    const unlockOps = taggedOps.filter((op) => !LOCK_OP_KINDS.has(op.kind));
 
     setPendingBulkChanges([]);
-    setData((d) => ({ ...d, materials: result.materials, products: result.products }));
+    setData((d) => ({
+      ...d,
+      materials: result.materials,
+      products: result.products,
+      // دیتابیس، نه حافظه‌ی موقت — سقف ۲۰۰ تا برای هرکدوم تا اندازه‌ی فایل دیتابیس
+      // بی‌نهایت رشد نکنه، ولی برای «چندین‌بار Undo» جای کافی هست
+      lockLog: [...(d.lockLog || []), ...lockOps].slice(-200),
+      unlockLog: [...(d.unlockLog || []), ...unlockOps].slice(-200),
+    }));
 
     // ── ۳. توست نهایی — بر اساس نتیجه‌ی واقعیِ همان محاسبه‌ای که ذخیره شد ──
     const { lockedCount, releasedCount } = result;
@@ -2880,52 +2938,77 @@ export default function App() {
     }
   }, [data.products, data.materials, pendingBulkChanges, showToast, setData]);
 
-  // انواع عملیات که «قفل» حساب می‌شن در مقابل «آزادسازی» — برای تفکیک Undo
-  // قفل از Undo آزاد (بازطراحی ۷دکمه‌ای، طبق دستور صریح مالک: قبلاً چندتا نشست
-  // موازی روی یه Undo مشترک و مبهم کار کرده بودن و تداخل می‌شد)
-  const LOCK_OP_KINDS = useRef(new Set(["batchBulkLock", "poolLock", "woodLock", "batchAreaLock"])).current;
-  const isLockOp = useCallback((op) => LOCK_OP_KINDS.has(op.kind), [LOCK_OP_KINDS]);
-
-  // ── بازگردانی (Undo) — حالا با فیلتر نوع (قفل/آزاد) ──
-  // بدون آرگومان: رفتار قدیمی (آخرین پاس، هر نوعی). با "lock"/"unlock": فقط
-  // آخرین پاسی که حداقل یه عملیات از همون نوع داشت رو پیدا می‌کنه، و فقط
-  // عملیات‌های هم‌نوعِ همون پاس رو برمی‌گردونه (نه کل پاس رو، اگه پاس مخلوط
-  // "both" بوده باشه) — این دقیقاً همون چیزیه که ابهام/تداخل قبلی رو حل می‌کنه.
-  const handleUndoRefresh = useCallback((filterMode) => {
-    const ops = undoOperationsRef.current;
-    const matchesMode = (op) => !filterMode || (filterMode === "lock" ? isLockOp(op) : !isLockOp(op));
-
-    let lastIdx = -1;
-    for (let i = ops.length - 1; i >= 0; i--) {
-      if (matchesMode(ops[i])) { lastIdx = i; break; }
+  // ── بازگردانی (Undo) — با صف‌های جدا و چک استثنا قبل از هر بازگردانی ──
+  // طبق دستور صریح مالک: قفل و آزادسازی صف کاملاً جدا دارن (نه فقط فیلترشده از
+  // یه صف مشترک)، توی خودِ دیتابیس ذخیره می‌شن (نه حافظه)، و قبل از برگردوندن
+  // هر آیتم چک می‌شه که آیا از وقتی ثبت شده دستی تغییر نکرده — اگه (مثلاً) یه
+  // چیزی که قفل شده بود رو کاربر خودش دستی آزاد کرده، Undo قفل نباید دوباره
+  // چیزی رو خراب کنه، فقط بی‌صدا ردش می‌کنه (انگار خودش قبلاً Undo شده)
+  const isLineItemStillLocked = (products, productId, lineItemId, materialId) => {
+    const p = products.find((x) => x.id === productId);
+    if (!p) return false;
+    const li = (p.lineItems || []).find((x) => x.id === lineItemId);
+    if (!li) return false;
+    return li.materialId === materialId && !!li.deductedAt && !li.pendingUnlock;
+  };
+  const materialHasBeenRelocked = (products, materialId, exceptProductId, exceptLineItemId) => {
+    for (const p of products) {
+      for (const li of (p.lineItems || [])) {
+        if (li.materialId !== materialId || !li.deductedAt || li.pendingUnlock) continue;
+        if (p.id === exceptProductId && li.id === exceptLineItemId) continue;
+        return true; // یا همون محصول با آیتم جدید، یا جای دیگه (۱۰۰٪) دوباره قفل شده
+      }
     }
-    if (lastIdx === -1) {
-      const msg = filterMode === "lock" ? "چیزی برای بازگردانیِ قفل وجود ندارد"
-        : filterMode === "unlock" ? "چیزی برای بازگردانیِ آزادسازی وجود ندارد"
-        : "چیزی برای بازگردانی وجود ندارد";
+    return false;
+  };
+
+  const handleUndoRefresh = useCallback((filterMode) => {
+    const logKey = filterMode === "lock" ? "lockLog" : "unlockLog";
+    const ops = data[logKey] || [];
+    if (ops.length === 0) {
+      const msg = filterMode === "lock" ? "چیزی برای بازگردانیِ قفل وجود ندارد" : "چیزی برای بازگردانیِ آزادسازی وجود ندارد";
       showToast({ text: msg, type: "error", fontSize: 9 });
       return;
     }
-    const lastPassId = ops[lastIdx].__passId;
-    // همه‌ی عملیات‌های هم‌نوعِ همین پاس (به ترتیب معکوس، جدیدترین اول)
-    const passOpsIdx = [];
-    for (let i = ops.length - 1; i >= 0; i--) {
-      if (ops[i].__passId === lastPassId && matchesMode(ops[i])) passOpsIdx.push(i);
-    }
-    const passOps = passOpsIdx.map((i) => ops[i]);
+    const lastPassId = ops[ops.length - 1].__passId;
+    const passOps = ops.filter((op) => op.__passId === lastPassId); // ترتیب اصلی: قدیمی‌تر اول
+    const keepOps = ops.filter((op) => op.__passId !== lastPassId);
 
     let materials = data.materials;
     let products = data.products;
+    let revertedCount = 0;
+    let skippedCount = 0;
+
     for (const op of passOps) {
+      if (filterMode === "lock") {
+        const matId = op.materialId;
+        let stillValid;
+        if (op.kind === "batchBulkLock") {
+          stillValid = (op.itemOps || []).some((io) => isLineItemStillLocked(products, io.productId, io.lineItemId, matId));
+        } else {
+          stillValid = isLineItemStillLocked(products, op.productId, op.lineItemId, matId);
+        }
+        if (!stillValid) { skippedCount++; continue; }
+      } else {
+        const matId = op.materialId || (op.prevLi && op.prevLi.materialId);
+        if (materialHasBeenRelocked(products, matId, op.productId, op.lineItemId)) { skippedCount++; continue; }
+      }
       const r = reverseOperation(materials, products, op);
       materials = r.materials;
       products = r.products;
+      revertedCount++;
     }
-    const removeSet = new Set(passOpsIdx);
-    undoOperationsRef.current = ops.filter((_, i) => !removeSet.has(i));
-    setData((d) => ({ ...d, materials, products }));
-    showToast({ text: passOps.length > 1 ? `${toPersianDigits(passOps.length)} مورد بازگردانی شد` : "عملیات بازگردانی انجام شد", type: "success", fontSize: 9 });
-  }, [data.materials, data.products, setData, showToast, isLockOp]);
+
+    setData((d) => ({ ...d, materials, products, [logKey]: keepOps }));
+
+    if (revertedCount === 0) {
+      showToast({ text: `${toPersianDigits(skippedCount)} مورد قبلاً دستی تغییر کرده بود، ردش کردیم`, type: "error", fontSize: 9 });
+    } else if (skippedCount > 0) {
+      showToast({ text: `${toPersianDigits(revertedCount)} مورد بازگردانی شد، ${toPersianDigits(skippedCount)} مورد قبلاً دستی تغییر کرده بود`, type: "success", fontSize: 9 });
+    } else {
+      showToast({ text: revertedCount > 1 ? `${toPersianDigits(revertedCount)} مورد بازگردانی شد` : "عملیات بازگردانی انجام شد", type: "success", fontSize: 9 });
+    }
+  }, [data.materials, data.products, data.lockLog, data.unlockLog, setData, showToast]);
 
   // ── لغو صف انتظار (نه Undo!) — ردیف ۳ از طراحی جدید ──
   // این‌ها هیچ عملیات واقعاً انجام‌شده‌ای رو برنمی‌گردونن؛ فقط نیتِ صف‌شده‌ای
@@ -3840,6 +3923,25 @@ export default function App() {
       wsInvoiceDrafts["!cols"] = [{ wch: 22 }, { wch: 50 }, { wch: 20 }];
       wsInvoiceDrafts["!views"] = [{ RTL: true, showGridLines: true }];
 
+      // ── صف قفل / صف آزادسازی (برای Undo — دستور صریح مالک: باید توی اکسل هم باشه) ──
+      const lockLogList = data.lockLog || [];
+      const wsLockRows = [["شناسه (ID)", "پاس", "نوع عملیات", "شناسه متریال", "زمان", "اطلاعات کامل (Raw JSON)"]];
+      lockLogList.forEach((op) => {
+        wsLockRows.push([op.__id || "", op.__passId || "", op.kind || "", op.materialId || "", op.__ts || "", JSON.stringify(op || {})]);
+      });
+      const wsLockLog = XLSX.utils.aoa_to_sheet(wsLockRows);
+      wsLockLog["!cols"] = [{ wch: 22 }, { wch: 22 }, { wch: 16 }, { wch: 22 }, { wch: 16 }, { wch: 50 }];
+      wsLockLog["!views"] = [{ RTL: true, showGridLines: true }];
+
+      const unlockLogList = data.unlockLog || [];
+      const wsUnlockRows = [["شناسه (ID)", "پاس", "نوع عملیات", "شناسه متریال", "زمان", "اطلاعات کامل (Raw JSON)"]];
+      unlockLogList.forEach((op) => {
+        wsUnlockRows.push([op.__id || "", op.__passId || "", op.kind || "", op.materialId || "", op.__ts || "", JSON.stringify(op || {})]);
+      });
+      const wsUnlockLog = XLSX.utils.aoa_to_sheet(wsUnlockRows);
+      wsUnlockLog["!cols"] = [{ wch: 22 }, { wch: 22 }, { wch: 16 }, { wch: 22 }, { wch: 16 }, { wch: 50 }];
+      wsUnlockLog["!views"] = [{ RTL: true, showGridLines: true }];
+
       // ── Build Workbook ──
       const wb = XLSX.utils.book_new();
       wb.Workbook = { Views: [{ RTL: true }] };
@@ -3853,6 +3955,8 @@ export default function App() {
       XLSX.utils.book_append_sheet(wb, wsAuditLog, "ردپای تغییرات");
       XLSX.utils.book_append_sheet(wb, wsProductTypes, "انواع محصول");
       XLSX.utils.book_append_sheet(wb, wsInvoiceDrafts, "پیش‌نویس فاکتور");
+      XLSX.utils.book_append_sheet(wb, wsLockLog, "صف قفل");
+      XLSX.utils.book_append_sheet(wb, wsUnlockLog, "صف آزادسازی");
       const wbBinary = XLSX.write(wb, { type: "array", bookType: "xlsx" });
       const wbBlob = new Blob([wbBinary], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       await saveFile(wbBlob, `refarsh-backup-${todayISO()}.xlsx`);
@@ -4215,6 +4319,8 @@ export default function App() {
         let equipmentSheet = null;
         let workshopLinksSheet = null;
         let auditLogSheet = null;
+        let lockLogSheet = null;
+        let unlockLogSheet = null;
 
         wb.SheetNames.forEach((name) => {
           if (name.includes("انواع")) productTypesSheet = wb.Sheets[name];
@@ -4223,6 +4329,8 @@ export default function App() {
           else if (name.includes("تجهیز")) equipmentSheet = wb.Sheets[name];
           else if (name.includes("کارگاه") || name.includes("لینک")) workshopLinksSheet = wb.Sheets[name];
           else if (name.includes("ردپا") || name.includes("audit")) auditLogSheet = wb.Sheets[name];
+          else if (name.includes("صف قفل")) lockLogSheet = wb.Sheets[name];
+          else if (name.includes("صف آزادسازی") || name.includes("صف آزاد")) unlockLogSheet = wb.Sheets[name];
           else if (name.includes("محصول")) productsSheet = wb.Sheets[name];
           else if (name.includes("متریال")) materialsSheet = wb.Sheets[name];
           else if (name.includes("برش")) sessionsSheet = wb.Sheets[name];
@@ -4694,6 +4802,8 @@ export default function App() {
         const importedProductTypes = [];
         // پیش‌نویس فاکتور
         const importedInvoiceDrafts = [];
+        const importedLockLog = [];
+        const importedUnlockLog = [];
         try {
         if (businessCardsSheet) {
           const bcRows = XLSX.utils.sheet_to_json(businessCardsSheet, { header: 1, defval: "" });
@@ -4819,6 +4929,21 @@ export default function App() {
             }
           });
         }
+        // صف قفل/آزادسازی (برای Undo) — ستون آخر (index 5) همیشه Raw JSON کامل عملیاته
+        if (lockLogSheet) {
+          const rows = XLSX.utils.sheet_to_json(lockLogSheet, { header: 1, defval: "" });
+          rows.forEach((row, idx) => {
+            if (idx === 0 || !row[5]) return;
+            try { const op = JSON.parse(row[5]); if (op && typeof op === "object" && op.__id) importedLockLog.push(op); } catch (_) {}
+          });
+        }
+        if (unlockLogSheet) {
+          const rows = XLSX.utils.sheet_to_json(unlockLogSheet, { header: 1, defval: "" });
+          rows.forEach((row, idx) => {
+            if (idx === 0 || !row[5]) return;
+            try { const op = JSON.parse(row[5]); if (op && typeof op === "object" && op.__id) importedUnlockLog.push(op); } catch (_) {}
+          });
+        }
         } catch (sectionErr) {
           console.error("import: کارت‌ویزیت/تجهیزات/لینک‌کارگاه/ردپا/انواع‌محصول/پیش‌نویس‌فاکتور", sectionErr);
           sectionErrors.push(`بخش‌های تکمیلی (کارت‌ویزیت/تجهیزات/...): ${sectionErr?.message || sectionErr}`);
@@ -4832,6 +4957,8 @@ export default function App() {
           sessions: importedSessions,
           productTypes: importedProductTypes,
           invoiceDrafts: importedInvoiceDrafts,
+          lockLog: importedLockLog,
+          unlockLog: importedUnlockLog,
           businessCards: importedBusinessCards,
           myBusinessCard: importedMyBusinessCard,
           equipment: importedEquipment,
@@ -4868,6 +4995,8 @@ export default function App() {
         sessions: importedSessions = [],
         productTypes: importedProductTypes = [],
         invoiceDrafts: importedInvoiceDrafts = [],
+        lockLog: importedLockLog = [],
+        unlockLog: importedUnlockLog = [],
         businessCards: importedBusinessCards = [],
         myBusinessCard: importedMyBusinessCard = null,
         equipment: importedEquipment = [],
@@ -5103,6 +5232,14 @@ export default function App() {
         const finalAudit = [...(importedAuditLog || []), ...(current.auditLog || [])]
           .filter((entry, i, arr) => entry && arr.findIndex((e) => e.id === entry.id) === i)
           .slice(0, 300);
+        const finalLockLog = [...(current.lockLog || []), ...(importedLockLog || [])]
+          .filter((op, i, arr) => op && arr.findIndex((x) => x.__id === op.__id) === i)
+          .sort((a, b) => (a.__ts || 0) - (b.__ts || 0))
+          .slice(-200);
+        const finalUnlockLog = [...(current.unlockLog || []), ...(importedUnlockLog || [])]
+          .filter((op, i, arr) => op && arr.findIndex((x) => x.__id === op.__id) === i)
+          .sort((a, b) => (a.__ts || 0) - (b.__ts || 0))
+          .slice(-200);
 
         return {
           ...current,
@@ -5112,6 +5249,8 @@ export default function App() {
           woodCuttingSessions: finalSessions,
           productTypes: finalTypes,
           invoiceDrafts: finalInvs,
+          lockLog: finalLockLog,
+          unlockLog: finalUnlockLog,
           businessCards: finalCards,
           myBusinessCard: finalMyCard,
           equipment: finalEquipment,
@@ -5138,6 +5277,8 @@ export default function App() {
         sessions = [],
         productTypes = [],
         invoiceDrafts = [],
+        lockLog = [],
+        unlockLog = [],
         businessCards = [],
         myBusinessCard = null,
         equipment = [],
@@ -5153,6 +5294,12 @@ export default function App() {
           woodCuttingSessions: sessions,
           productTypes: productTypes.length ? productTypes : (d.productTypes || []),
           invoiceDrafts: invoiceDrafts.length ? invoiceDrafts : (d.invoiceDrafts || []),
+          lockLog: lockLog.length
+            ? [...(d.lockLog || []), ...lockLog].filter((op, idx, arr) => arr.findIndex((x) => x.__id === op.__id) === idx).sort((a, b) => (a.__ts || 0) - (b.__ts || 0)).slice(-200)
+            : (d.lockLog || []),
+          unlockLog: unlockLog.length
+            ? [...(d.unlockLog || []), ...unlockLog].filter((op, idx, arr) => arr.findIndex((x) => x.__id === op.__id) === idx).sort((a, b) => (a.__ts || 0) - (b.__ts || 0)).slice(-200)
+            : (d.unlockLog || []),
           businessCards: businessCards.length ? businessCards : (d.businessCards || []),
           myBusinessCard: myBusinessCard || d.myBusinessCard,
           equipment: equipment.length ? equipment : (d.equipment || []),
@@ -5238,6 +5385,15 @@ export default function App() {
             auditLog: mergedAuditLog,
             productTypes: mergeById(d.productTypes || [], incoming.productTypes || []),
             invoiceDrafts: mergeById(d.invoiceDrafts || [], incoming.invoiceDrafts || []),
+            // صف‌های قفل/آزادسازی هم باید توی ایمپورت/اکسپورت حفظ بشن (دستور صریح مالک)
+            lockLog: [...(d.lockLog || []), ...(incoming.lockLog || [])]
+              .filter((op, idx, arr) => arr.findIndex((x) => x.__id === op.__id) === idx)
+              .sort((a, b) => (a.__ts || 0) - (b.__ts || 0))
+              .slice(-200),
+            unlockLog: [...(d.unlockLog || []), ...(incoming.unlockLog || [])]
+              .filter((op, idx, arr) => arr.findIndex((x) => x.__id === op.__id) === idx)
+              .sort((a, b) => (a.__ts || 0) - (b.__ts || 0))
+              .slice(-200),
           };
         });
       } catch { notify("فایل بکاپ معتبر نیست"); }
@@ -5303,6 +5459,10 @@ export default function App() {
         onUndoRefresh={handleUndoRefresh}
         onCancelPendingLocks={handleCancelPendingLocks}
         onCancelPendingUnlocks={handleCancelPendingUnlocks}
+        hasLockCandidates={hasLockCandidates}
+        hasUnlockCandidates={hasUnlockCandidates}
+        lockLogCount={(data.lockLog || []).length}
+        unlockLogCount={(data.unlockLog || []).length}
         onResetFilters={handleResetFilters}
         refreshProblemTabs={refreshProblemTabs}
         workshopLinks={data.workshopLinks || []}
@@ -5353,6 +5513,10 @@ export default function App() {
           onCancelPendingLocks={handleCancelPendingLocks}
           onCancelPendingUnlocks={handleCancelPendingUnlocks}
           hasPending={hasPendingMaterialChanges}
+          hasLockCandidates={hasLockCandidates}
+          hasUnlockCandidates={hasUnlockCandidates}
+          lockLogCount={(data.lockLog || []).length}
+          unlockLogCount={(data.unlockLog || []).length}
           onOpenBusinessCardManager={() => setShowBusinessCardEditor(true)}
           activeTab={activeTab}
           isAnyModalOpen={isAnyModalOpen}
