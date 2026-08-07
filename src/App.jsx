@@ -2606,15 +2606,19 @@ export default function App() {
                 }
                 const portions = splitCostAcrossBatches(cost);
                 const [firstPortion, ...restPortions] = portions;
+                // همون فیکس بالا: سهم مؤثر رو به‌عنوان customPct ذخیره کن تا
+                // موقع reopen قابل یادآوریه، نه همیشه null
+                const effectiveSharePct = combinedRemainingForPreview > 0 ? (cost / combinedRemainingForPreview) * 100 : 0;
                 const updatedFirst = {
                   ...li,
                   cost: firstPortion.cost,
                   batchId: firstPortion.batchId,
                   includeWastage: !!includeWastage,
                   pct: null,
-                  customPct: null,
+                  customPct: Math.round(effectiveSharePct * 10) / 10,
                   useAreaRatio: false,
                   pendingSessionId: bulkSubmissionId,
+                  distributionMode: distributionMode || null,
                 };
                 if (restPortions.length) {
                   extraLineItemsForP.push(...restPortions.map(portion => ({
@@ -2631,8 +2635,9 @@ export default function App() {
                     deductedAt: null,
                     woodCuts: null,
                     woodLocked: false,
-                    customPct: null,
+                    customPct: Math.round(effectiveSharePct * 10) / 10,
                     pendingSessionId: bulkSubmissionId,
+                    distributionMode: distributionMode || null,
                   })));
                 }
                 return updatedFirst;
@@ -2681,6 +2686,15 @@ export default function App() {
                 }
 
                 const portions = splitCostAcrossBatches(cost);
+                // فیکس باگ واقعی: قبلاً همیشه customPct:null ذخیره می‌شد برای
+                // آیتم‌های مبتنی‌بر بچ (رایج‌ترین حالت مساحتی/فرش)، پس موقع
+                // باز کردن دوباره‌ی بولک هیچ سهمی برای یادآوری وجود نداشت و
+                // همیشه با تقسیم مساوی نمایش داده می‌شد — صرف‌نظر از این‌که
+                // واقعاً مساوی/نسبتی/دستی بوده. الان سهم مؤثر (که همین بالا
+                // برای محاسبه‌ی cost استفاده شد) به‌عنوان customPct ذخیره
+                // می‌شه — فقط برای یادآوریِ UI، خودِ هزینه‌ی واقعی همچنان از
+                // رو مساحت/بچ محاسبه می‌شه، نه از این درصد.
+                const effectiveSharePct = combinedRemainingForPreview > 0 ? (cost / combinedRemainingForPreview) * 100 : 0;
                 portions.forEach(portion => {
                   lineItems.push({
                     id: uid(),
@@ -2696,8 +2710,9 @@ export default function App() {
                     deductedAt: null,
                     woodCuts: null,
                     woodLocked: false,
-                    customPct: null,
+                    customPct: Math.round(effectiveSharePct * 10) / 10,
                     pendingSessionId: bulkSubmissionId,
+                    distributionMode: distributionMode || null,
                   });
                 });
               }

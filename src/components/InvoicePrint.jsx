@@ -17,7 +17,16 @@ import { useToast } from "../contexts/ToastContext";
 // img های داخل کلون finish بشن (یا حداکثر ۲ ثانیه، که گیر نکنه اگه عکسی offline/خراب بود)
 function waitForImagesToLoad(container, maxWaitMs = 2000) {
   const imgs = Array.from(container.querySelectorAll("img"));
-  if (imgs.length === 0) return Promise.resolve();
+  // آیتم جدید: تصاویر آیتم فاکتور از <img>+object-fit به یه div با
+  // background-image تغییر کردن (چون html2canvas پشتیبانی قابل‌اعتمادی از
+  // object-fit نداره) — ولی این یعنی دیگه توسط querySelectorAll("img") بالا
+  // پیدا نمی‌شن و صبر نمی‌کردیم تا واقعاً دیکود بشن، پس ممکن بود عکس اول یه
+  // جعبه‌ی خالی بیفته توی عکس/PDF ذخیره‌شده. الان این‌ها رو هم جدا پیدا و باهاشون صبر می‌کنیم.
+  const bgEls = Array.from(container.querySelectorAll("*")).filter((el) => {
+    const bg = el.style?.backgroundImage;
+    return bg && bg.startsWith('url("');
+  });
+  if (imgs.length === 0 && bgEls.length === 0) return Promise.resolve();
   const imgPromises = imgs.map((img) => {
     if (img.complete && img.naturalWidth > 0) return Promise.resolve();
     return new Promise((resolve) => {
@@ -25,9 +34,61 @@ function waitForImagesToLoad(container, maxWaitMs = 2000) {
       img.addEventListener("error", resolve, { once: true });
     });
   });
+  const bgPromises = bgEls.map((el) => {
+    const match = el.style.backgroundImage.match(/^url\("(.+)"\)$/);
+    const url = match ? match[1] : null;
+    if (!url) return Promise.resolve();
+    return new Promise((resolve) => {
+      const probe = new Image();
+      probe.onload = resolve;
+      probe.onerror = resolve;
+      probe.src = url;
+    });
+  });
   const timeoutPromise = new Promise((resolve) => setTimeout(resolve, maxWaitMs));
-  return Promise.race([Promise.all(imgPromises), timeoutPromise]);
+  return Promise.race([Promise.all([...imgPromises, ...bgPromises]), timeoutPromise]);
 }
+
+// بهینه‌سازی سرعت (طبق پیشنهاد کاربر/Copilot): عکس محصولات موقع آپلود تا ۱۲۸۰px
+// فشرده می‌شن (برای کیفیت زوم لازمه)، ولی توی فاکتور فقط ~۶۰-۱۰۰px نمایش داده
+// می‌شن — دادن یه عکس ۱۲۸۰px به html2canvas برای رندر یه thumbnail کوچیک باعث
+// می‌شه decode/rasterize کند بشه. چون این فقط رو کلونِ یک‌بارمصرف (نه DOM واقعی)
+// اجرا می‌شه، ریسکی برای نمایش زنده‌ی اپ نداره. فقط background-imageهای همون
+// المان‌های آیتم فاکتور رو کوچیک می‌کنه (نه لوگو/سربرگ که خودشون کوچیکن).
+async function shrinkClonedItemImages(clonedPaper, targetPx = 220) {
+  const bgEls = Array.from(clonedPaper.querySelectorAll("*")).filter((el) => {
+    const bg = el.style?.backgroundImage;
+    return bg && bg.startsWith('url("');
+  });
+  if (bgEls.length === 0) return;
+  await Promise.all(bgEls.map((el) => new Promise((resolve) => {
+    const match = el.style.backgroundImage.match(/^url\("(.+)"\)$/);
+    const url = match ? match[1] : null;
+    if (!url) return resolve();
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const scale = Math.min(1, targetPx / Math.max(img.naturalWidth, img.naturalHeight));
+        if (scale >= 0.95) return resolve(); // از قبل کوچیکه، لازم نیست دوباره رندر کنیم
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const smallDataUrl = canvas.toDataURL("image/jpeg", 0.82);
+        el.style.backgroundImage = `url("${smallDataUrl}")`;
+      } catch (_) {
+        // اگه به هر دلیلی (CORS و...) کوچیک‌کردن شکست خورد، همون عکس اصلی
+        // می‌مونه — کندتره ولی درست کار می‌کنه، بهتر از خراب‌شدن فاکتوره
+      }
+      resolve();
+    };
+    img.onerror = () => resolve();
+    img.src = url;
+  })));
+}
+
 
 // باگ واقعی: عکس محصولات توی فاکتور از یه هوک async (useResolvedImageSrc در
 // InvoiceTemplate.jsx) میان که lookup از IndexedDB/فایل‌سیستم می‌زنه. اگه کاربر
@@ -106,7 +167,7 @@ export default function InvoicePrint({
     cloneContainer.appendChild(clonedPaper);
 
     // Let clone render (و مهم‌تر: صبر کن img های کپی‌شده واقعاً لود بشن)
-    waitForImagesToLoad(clonedPaper).then(() => {
+    shrinkClonedItemImages(clonedPaper).then(() => waitForImagesToLoad(clonedPaper)).then(() => {
       html2canvas(clonedPaper, {
         scale: getSaveQualityScale(2), // 2x scale is perfect for PDF resolution — قابل تنظیم دستی (تب همگام‌سازی)
         useCORS: true,
@@ -236,7 +297,7 @@ export default function InvoicePrint({
     cloneContainer.appendChild(clonedPaper);
 
     // صبر کن img های کپی‌شده واقعاً لود بشن (نه صرفاً یه timeout ثابت)
-    waitForImagesToLoad(clonedPaper).then(() => {
+    shrinkClonedItemImages(clonedPaper).then(() => waitForImagesToLoad(clonedPaper)).then(() => {
       html2canvas(clonedPaper, {
         scale: getSaveQualityScale(2), // قابل تنظیم دستی (تب همگام‌سازی) — پیش‌فرض همون ۲ی قبلی
         useCORS: true,
@@ -283,6 +344,7 @@ export default function InvoicePrint({
     clonedPaper.style.transform = "none";
     clonedPaper.style.width = "794px";
     cloneContainer.appendChild(clonedPaper);
+    await shrinkClonedItemImages(clonedPaper);
     await waitForImagesToLoad(clonedPaper);
     try {
       const canvas = await html2canvas(clonedPaper, {
@@ -558,7 +620,7 @@ export default function InvoicePrint({
             }}
             title="ذخیره PDF در Documents/refarsh/factor/pdf"
           >
-            {savingAction === "pdf" ? <RefreshCw size={15} className="animate-spin" /> : <FileDown size={15} />}
+            {savingAction === "pdf" ? <RefreshCw size={15} className="animate-spin" /> : <Download size={15} />}
           </button>
 
           {/* Save as Image → آبی (ذخیره‌ی خودکار در Documents/refarsh/factor) */}
@@ -580,7 +642,7 @@ export default function InvoicePrint({
             }}
             title="ذخیره تصویر در Documents/refarsh/factor"
           >
-            {savingAction === "image" ? <RefreshCw size={15} className="animate-spin" /> : <Download size={15} />}
+            {savingAction === "image" ? <RefreshCw size={15} className="animate-spin" /> : <FileDown size={15} />}
           </button>
 
           {/* Copy Invoice Text */}
@@ -615,7 +677,7 @@ export default function InvoicePrint({
             }}
             title="اشتراک PDF"
           >
-            {savingAction === "sharePdf" ? <RefreshCw size={15} className="animate-spin" /> : <FileDown size={15} />}
+            {savingAction === "sharePdf" ? <RefreshCw size={15} className="animate-spin" /> : <Download size={15} />}
           </button>
 
           {/* Share Image → مشکی */}
@@ -630,7 +692,7 @@ export default function InvoicePrint({
             }}
             title="اشتراک تصویر"
           >
-            {savingAction === "shareImage" ? <RefreshCw size={15} className="animate-spin" /> : <Download size={15} />}
+            {savingAction === "shareImage" ? <RefreshCw size={15} className="animate-spin" /> : <FileDown size={15} />}
           </button>
         </div>
       </div>

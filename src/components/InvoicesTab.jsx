@@ -722,7 +722,7 @@ export default function InvoicesTab({
               هیچ فاکتوری با شرایط فیلتر شده یافت نشد.
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 480, overflowY: "auto", paddingLeft: 2 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingLeft: 2 }}>
               {filteredInvoices.map((inv) => {
                 const isExpanded = expandedInvoiceId === inv.id;
                 return (
@@ -846,7 +846,8 @@ export default function InvoicesTab({
                         ) : (
                           <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
                             <input
-                              autoFocus placeholder="جستجوی محصول موجود..."
+                              placeholder="جستجوی محصول موجود..."
+                              onFocus={(e) => e.target.select()}
                               value={addItemQuery} onChange={(e) => setAddItemQuery(e.target.value)}
                               style={{ ...S.input, width: "100%", height: 30 }}
                             />
@@ -878,21 +879,13 @@ export default function InvoicesTab({
 
                     {isExpanded && editingId !== inv.id && (
                       <div style={{ padding: "10px 12px", background: "#0a0a0a", borderTop: "1px solid #1e1e1e" }}>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 10 }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
                           {inv.items.map(p => (
                             <div key={p.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#888", paddingBottom: 4, borderBottom: "1px dashed #151515" }}>
                               <span>#{fmtCode(p.code)} {p.name}</span>
                               <span style={{ color: "#aaa" }}>{fmt(toNum(p.salePrice))} ت</span>
                             </div>
                           ))}
-                        </div>
-                        <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                          <button style={{ ...S.btn, fontSize: 10, padding: "5px 10px", background: "#1c1c1c", color: "#bbb", border: "1px solid #2a2a2a" }} onClick={() => handleTriggerPrint(inv, false)}>
-                            <Eye size={11} style={{ marginLeft: 3 }} /> پیش‌نمایش گرافیکی
-                          </button>
-                          <button style={{ ...S.btn, fontSize: 10, padding: "5px 10px", background: "#1d3a24", color: "#5fd180" }} onClick={() => handleTriggerPrint(inv, true)}>
-                            <Printer size={11} style={{ marginLeft: 3 }} /> چاپ فوری A4
-                          </button>
                         </div>
                       </div>
                     )}

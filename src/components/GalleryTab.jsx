@@ -158,6 +158,8 @@ function SortButton({ sortOrder, setSortOrder, modes }) {
           padding: "2px 10px",
           fontSize: 10,
           position: "relative",
+          minWidth: 42,
+          justifyContent: "center",
         }}
         onClick={() => setShowPopup((v) => !v)}
       >
@@ -924,33 +926,35 @@ function CustomerCard({
               )}
             </div>
           </div>
-          <button
-            style={{ ...T.iconBtn, width: 32, height: 32, justifyContent: "center" }}
-            title={stat.hidden ? "نمایش دادن (از حالت مخفی خارج کن)" : "مخفی کن (از لیست‌های انتخاب/ارجاع حذف می‌شه)"}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (setData) {
-                setData((d) => ({
-                  ...d,
-                  customers: (d.customers || []).map((c) => (c.id === stat.id ? { ...c, hidden: !c.hidden } : c)),
-                }));
-              }
-            }}
-          >
-            {stat.hidden ? <EyeOff size={12} color="#555" /> : <Eye size={12} color="#555" />}
-          </button>
-          <button
-            style={{ ...T.iconBtn, width: 32, height: 32, justifyContent: "center" }}
-            onClick={(e) => { e.stopPropagation(); onEdit(stat); }}
-          >
-            <Edit3 size={12} color="#555" />
-          </button>
-          <button
-            style={{ ...T.iconBtn, width: 32, height: 32, justifyContent: "center" }}
-            onClick={(e) => { e.stopPropagation(); onRequestDelete(stat.id); }}
-          >
-            <Trash2 size={12} color="#e08a8a" />
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+            <button
+              style={{ ...T.iconBtn, width: 26, height: 26, justifyContent: "center" }}
+              title={stat.hidden ? "نمایش دادن (از حالت مخفی خارج کن)" : "مخفی کن (از لیست‌های انتخاب/ارجاع حذف می‌شه)"}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (setData) {
+                  setData((d) => ({
+                    ...d,
+                    customers: (d.customers || []).map((c) => (c.id === stat.id ? { ...c, hidden: !c.hidden } : c)),
+                  }));
+                }
+              }}
+            >
+              {stat.hidden ? <EyeOff size={12} color="#555" /> : <Eye size={12} color="#555" />}
+            </button>
+            <button
+              style={{ ...T.iconBtn, width: 26, height: 26, justifyContent: "center" }}
+              onClick={(e) => { e.stopPropagation(); onEdit(stat); }}
+            >
+              <Edit3 size={12} color="#555" />
+            </button>
+            <button
+              style={{ ...T.iconBtn, width: 26, height: 26, justifyContent: "center" }}
+              onClick={(e) => { e.stopPropagation(); onRequestDelete(stat.id); }}
+            >
+              <Trash2 size={12} color="#e08a8a" />
+            </button>
+          </div>
           {open ? <ChevronUp size={13} color="#444" /> : <ChevronDown size={13} color="#444" />}
         </div>
 

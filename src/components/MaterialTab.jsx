@@ -165,6 +165,8 @@ function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onTogg
           padding: "2px 10px",
           fontSize: 10,
           position: "relative",
+          minWidth: 42,
+          justifyContent: "center",
           ...style,
         }}
         onClick={() => setShowPopup((v) => !v)}
@@ -406,20 +408,27 @@ export function BulkApplyMaterialPage({ material, products = [], allMaterials = 
   };
 
   const [distributionMode, setDistributionMode] = useState(() => {
+    const usesAreaRatio = material.type === "area" || material.type === "fabric" || material.type === "linear" || material.type === "ratio";
     if (initialLinked.length > 0) {
-      // اگه همه‌ی لینک‌های قبلی با یه حالت توزیع مشخص (مساوی/نسبت‌مساحت) ذخیره شده بودن، همونو یادآوری کن
+      // اگه همه‌ی لینک‌های قبلی با یه حالت توزیع مشخص (مساوی/نسبت‌مساحت/دستی) ذخیره شده بودن، همونو یادآوری کن
       const modes = new Set();
       initialLinked.forEach(p => {
         const li = (p.lineItems || []).find(l => l.materialId === material.id);
         if (li?.distributionMode) modes.add(li.distributionMode);
       });
       if (modes.size === 1) return [...modes][0];
+      // فیکس باگ: قبلاً وقتی هیچ حالتی ثبت نشده بود (چون خودِ فیلد تا این
+      // فیکس هیچ‌جا واقعاً روی لاین‌آیتم نوشته نمی‌شد)، این‌جا همیشه بی‌قید
+      // و شرط «دستی» برمی‌گشت — یعنی حتی اگه دفعه‌ی قبل با «نسبت مساحت» یا
+      // «مساوی» کار کرده بودی، دفعه‌ی بعد که باز می‌کردی می‌رفت رو دستی.
+      // اگه چیزی ثبت نشده (دیتای قدیمی) یا حالت‌ها ناهمگون بودن، همون
+      // پیش‌فرض منطقیِ نوع متریال رو برگردون، نه همیشه دستی.
+      if (modes.size === 0) return usesAreaRatio ? "area" : "equal";
       return "manual";
     }
     // برای انواع مساحتی/فرش/خطی/نسبتی، پیش‌فرض منطقی‌تر توزیع بر اساس نسبت
     // مساحت واقعی محصولاته، نه تقسیم مساوی؛ فقط برای نوع ابزار/ثابت (که
     // مساحت معنی نداره) توزیع مساوی پیش‌فرض می‌مونه
-    const usesAreaRatio = material.type === "area" || material.type === "fabric" || material.type === "linear" || material.type === "ratio";
     return usesAreaRatio ? "area" : "equal";
   });
 
@@ -1408,6 +1417,10 @@ function MaterialCard({
   const [newPurchaseLabel, setNewPurchaseLabel] = useState("");
   const [newBatch, setNewBatch] = useState({ label: "", width: "", height: "", qty: "1", unitPrice: "", totalCost: "", date: todayISO() });
   const [expandedBatchId, setExpandedBatchId] = useState(null);
+  // آیتم کاربر: فرم ویرایش بچ‌ها قبلاً هر keystroke رو مستقیم commit می‌کرد
+  // (بدون دکمه‌ی لغو/ذخیره، بدون حالت درفت) — الان تغییرات توی یه درفت لوکال
+  // می‌مونن تا کاربر صریحاً «ذخیره» یا «لغو» بزنه
+  const [batchDraft, setBatchDraft] = useState(null); // { matId, batchId, ...fields }
   const [expandedStickId, setExpandedStickId] = useState(null);
   const [expandedProcId, setExpandedProcId] = useState(null);
   const [newStick, setNewStick] = useState({ length: "", qty: 1, date: todayISO() });
@@ -1929,7 +1942,15 @@ function MaterialCard({
                 >
                   <div
                     style={{ display: "flex", gap: 6, alignItems: "center", cursor: "pointer" }}
-                    onClick={() => setExpandedBatchId(isOpen ? null : b.id)}
+                    onClick={() => {
+                      if (isOpen) {
+                        setExpandedBatchId(null);
+                        setBatchDraft(null);
+                      } else {
+                        setExpandedBatchId(b.id);
+                        setBatchDraft({ matId: mat.id, batchId: b.id, label: b.label || "", width: b.width || "", height: b.height || "", qty: b.qty || 1, unitPrice: b.unitPrice ?? null, totalCost: b.totalCost ?? null, date: b.date || todayISO(), pattern: b.pattern || "" });
+                      }
+                    }}
                   >
                     {isOpen ? <ChevronUp size={13} color="#888" /> : <ChevronDown size={13} color="#888" />}
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -1961,14 +1982,18 @@ function MaterialCard({
                       <Trash2 size={12} color="#e08a8a" />
                     </button>
                   </div>
-                  {isOpen && (
+                  {isOpen && (() => {
+                    const draft = (batchDraft && batchDraft.batchId === b.id) ? batchDraft : { matId: mat.id, batchId: b.id, label: b.label || "", width: b.width || "", height: b.height || "", qty: b.qty || 1, unitPrice: b.unitPrice ?? null, totalCost: b.totalCost ?? null, date: b.date || todayISO(), pattern: b.pattern || "" };
+                    const setDraft = (patch) => setBatchDraft({ ...draft, ...patch });
+                    const hasChanges = draft.label !== (b.label || "") || draft.width !== (b.width || "") || draft.height !== (b.height || "") || draft.qty !== (b.qty || 1) || draft.unitPrice !== (b.unitPrice ?? null) || draft.totalCost !== (b.totalCost ?? null) || draft.date !== (b.date || todayISO()) || draft.pattern !== (b.pattern || "");
+                    return (
                     <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid #1e1e1e" }}>
                       <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
                         <input onFocus={(e) => e.target.select()}
                           style={{ ...S.input, flex: 1 }}
                           placeholder="عنوان بچ"
-                          value={b.label}
-                          onChange={(e) => onUpdateBatch(mat.id, b.id, { label: e.target.value })}
+                          value={draft.label}
+                          onChange={(e) => setDraft({ label: e.target.value })}
                         />
                       </div>
                       <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
@@ -1976,29 +2001,29 @@ function MaterialCard({
                           style={{ ...S.input, flex: 1 }}
                           type="text"
                           placeholder="عرض (سانت)"
-                          value={b.width || ""}
-                          onChange={(e) => onUpdateBatch(mat.id, b.id, { width: toNum(e.target.value) })}
+                          value={draft.width}
+                          onChange={(e) => setDraft({ width: toNum(e.target.value) })}
                         />
                         <span style={{ color: "#555", alignSelf: "center" }}>×</span>
                         <input onFocus={(e) => e.target.select()}
                           style={{ ...S.input, flex: 1 }}
                           type="text"
                           placeholder="ارتفاع (سانت)"
-                          value={b.height || ""}
-                          onChange={(e) => onUpdateBatch(mat.id, b.id, { height: toNum(e.target.value) })}
+                          value={draft.height}
+                          onChange={(e) => setDraft({ height: toNum(e.target.value) })}
                         />
                         <input
                           style={{ ...S.input, flex: 1, minWidth: 55 }}
                           type="text"
                           placeholder="تعداد"
-                          value={b.qty || 1}
+                          value={draft.qty}
                           onFocus={(e) => e.target.select()}
                           onChange={(e) => {
                             const q = Math.max(1, toNum(e.target.value));
-                            const u = toNum(b.unitPrice);
+                            const u = toNum(draft.unitPrice);
                             const patch = { qty: q };
                             if (u > 0) patch.totalCost = Math.round(q * u);
-                            onUpdateBatch(mat.id, b.id, patch);
+                            setDraft(patch);
                           }}
                         />
                       </div>
@@ -2007,34 +2032,34 @@ function MaterialCard({
                           style={{ ...S.input, flex: 1.4, minWidth: 80 }}
                           type="text"
                           placeholder="مبلغ واحد"
-                          value={b.unitPrice ? formatPriceInput(b.unitPrice) : (b.totalCost && b.qty ? formatPriceInput(Math.round(toNum(b.totalCost) / Math.max(1, toNum(b.qty)))) : "")}
+                          value={draft.unitPrice ? formatPriceInput(draft.unitPrice) : (draft.totalCost && draft.qty ? formatPriceInput(Math.round(toNum(draft.totalCost) / Math.max(1, toNum(draft.qty)))) : "")}
                           onChange={(e) => {
                             const u = e.target.value === "" ? null : parsePriceInput(e.target.value);
-                            const q = Math.max(1, toNum(b.qty) || 1);
+                            const q = Math.max(1, toNum(draft.qty) || 1);
                             const patch = { unitPrice: u };
                             if (u != null) patch.totalCost = Math.round(q * u);
-                            onUpdateBatch(mat.id, b.id, patch);
+                            setDraft(patch);
                           }}
                         />
                         <input onFocus={(e) => e.target.select()}
                           style={{ ...S.input, flex: 1.4, minWidth: 80 }}
                           type="text"
                           placeholder="مبلغ کل"
-                          value={b.totalCost ? formatPriceInput(b.totalCost) : ""}
+                          value={draft.totalCost ? formatPriceInput(draft.totalCost) : ""}
                           onChange={(e) => {
                             const total = e.target.value === "" ? null : parsePriceInput(e.target.value);
-                            const q = Math.max(1, toNum(b.qty) || 1);
+                            const q = Math.max(1, toNum(draft.qty) || 1);
                             const patch = { totalCost: total };
                             if (total != null && q > 0) patch.unitPrice = Math.round(total / q);
-                            onUpdateBatch(mat.id, b.id, patch);
+                            setDraft(patch);
                           }}
                         />
                       </div>
                       <div>
                         <div style={{ fontSize: 8.5, color: "#666", marginBottom: 4 }}>تاریخ بچ</div>
                         <JalaliDatePicker
-                          value={b.date || todayISO()}
-                          onChange={(val) => onUpdateBatch(mat.id, b.id, { date: val })}
+                          value={draft.date}
+                          onChange={(val) => setDraft({ date: val })}
                         />
                       </div>
                       {mat.type === "fabric" && (
@@ -2044,16 +2069,41 @@ function MaterialCard({
                             style={{ ...S.input }}
                             type="text"
                             placeholder="طرح"
-                            value={b.pattern || ""}
-                            onChange={(e) => onUpdateBatch(mat.id, b.id, { pattern: e.target.value })}
+                            value={draft.pattern}
+                            onChange={(e) => setDraft({ pattern: e.target.value })}
                           />
                         </div>
                       )}
                       <div style={{ fontSize: 9, color: "#555", marginTop: 6 }}>
                         {(b.linkedProductIds || []).length} محصول لینک شده
                       </div>
+                      <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+                        <button
+                          type="button"
+                          disabled={!hasChanges}
+                          style={{ flex: 1, background: hasChanges ? "#1d3a24" : "#161616", border: "1px solid " + (hasChanges ? "#2e5c38" : "#2a2a2a"), color: hasChanges ? "#5fd180" : "#555", borderRadius: 6, padding: "8px 0", fontSize: 11, fontFamily: "inherit", cursor: hasChanges ? "pointer" : "default" }}
+                          onClick={() => {
+                            onUpdateBatch(mat.id, b.id, { label: draft.label, width: draft.width, height: draft.height, qty: draft.qty, unitPrice: draft.unitPrice, totalCost: draft.totalCost, date: draft.date, pattern: draft.pattern });
+                            setExpandedBatchId(null);
+                            setBatchDraft(null);
+                          }}
+                        >
+                          ذخیره
+                        </button>
+                        <button
+                          type="button"
+                          style={{ flex: 1, background: "#161616", border: "1px solid #2a2a2a", color: "#888", borderRadius: 6, padding: "8px 0", fontSize: 11, fontFamily: "inherit", cursor: "pointer" }}
+                          onClick={() => {
+                            setExpandedBatchId(null);
+                            setBatchDraft(null);
+                          }}
+                        >
+                          لغو
+                        </button>
+                      </div>
                     </div>
-                  )}
+                    );
+                  })()}
                 </div>
               );})}
               <div
