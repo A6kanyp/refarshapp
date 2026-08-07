@@ -126,6 +126,8 @@ function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onTogg
           padding: "2px 10px",
           fontSize: 10,
           position: "relative",
+          minWidth: 42,
+          justifyContent: "center",
           ...style,
         }}
         onClick={() => setShowPopup((v) => !v)}
@@ -1703,7 +1705,14 @@ export function ProductEditor({
     ...l, 
     lineItems: l.lineItems.map((li) => {
       if (li.id === id) {
-        if (li.deductedAt) return { ...li, pendingUnlock: true, _toRemove: true };
+        // فیکس باگ واقعی: قبلاً حتی برای متریال قفل‌شده هم `_toRemove: true`
+        // ست می‌شد، که باعث می‌شد بلافاصله از لیست (فیلتر `!li._toRemove`
+        // پایین‌تر) مخفی بشه — یعنی کاربر اصلاً نمی‌دید که «در انتظار
+        // آزادسازی»ه، انگار حذف شده. الان دقیقاً مثل دکمه‌ی آزادسازی رفتار
+        // می‌کنه: فقط pendingUnlock ست می‌شه، توی لیست می‌مونه با همون
+        // برچسب «در انتظار آزادسازی»، و واقعاً حذف نمی‌شه تا از دکمه‌ی
+        // رفرش (نگه‌داشتن) آزاد بشه.
+        if (li.deductedAt) return { ...li, pendingUnlock: true };
         return { ...li, _toRemove: true };
       }
       return li;
@@ -2176,7 +2185,7 @@ export function ProductEditor({
 
         <div style={{ padding: "12px 14px" }}>
           <div style={S.sectionLabel}>تصاویر محصول (اول = آیکون)</div>
-          <div style={{ display: "flex", gap: 8, marginBottom: 12, overflowX: "auto", paddingBottom: 4, WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 12, overflowX: "auto", paddingBottom: 4, WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
             {(local.images || (local.image ? [local.image] : [])).map((img, i, arr) => (
               <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, flexShrink: 0 }}>
                 <div style={{ width: 60, height: 60, background: "#111", borderRadius: 8, overflow: "hidden", flexShrink: 0, position: "relative", border: i === 0 ? "2px solid #8B1A1A" : "1px solid #2a2a2a" }}>
@@ -2187,10 +2196,12 @@ export function ProductEditor({
                   <button style={{ position: "absolute", top: 2, right: 2, background: "rgba(0,0,0,0.7)", border: "none", borderRadius: "50%", color: "#fff", width: 16, height: 16, fontSize: 9, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
                     onClick={() => handleRemoveImage(i)}>✕</button>
                 </div>
-                {/* جابجایی ترتیب عکس‌ها — طبق درخواست کاربر از روی خودِ عکس (که با دکمه‌ی
-                    X تداخل کلیک داشت) به یه ردیف جدا زیرِ عکس منتقل شد. drag-and-drop واقعیِ
-                    HTML5 روی صفحه‌لمسی موبایل (وب‌ویوی اندروید) قابل‌اعتماد نیست، پس به‌جاش
-                    دو دکمه‌ی کوچیک جابجایی چپ/راست؛ عکسِ اول همیشه آیکون/جلد محصوله */}
+                {/* جابجایی ترتیب عکس‌ها — drag-and-drop واقعیِ HTML5 روی صفحه‌لمسی موبایل
+                    (وب‌ویوی اندروید) قابل‌اعتماد نیست، پس به‌جاش دو دکمه‌ی کوچیک
+                    جابجایی چپ/راست اضافه شد؛ عکسِ اول همیشه آیکون/جلد محصوله.
+                    فیکس: قبلاً این دکمه‌ها گوشه‌ی پایینِ خودِ عکس (روی هم با
+                    برچسب «آیکون» و نزدیک دکمه‌ی X) بودن و تداخل کلیک داشتن؛
+                    الان کاملاً بیرون از عکس، توی یه ردیف جدا زیرش هستن. */}
                 {arr.length > 1 && (
                   <div style={{ display: "flex", gap: 4 }}>
                     <button
@@ -2202,7 +2213,7 @@ export function ProductEditor({
                         [all[i - 1], all[i]] = [all[i], all[i - 1]];
                         return { ...l, image: all[0] || null, images: all };
                       })}
-                      style={{ background: "#1c1c1c", border: "1px solid #2a2a2a", borderRadius: 4, color: i === 0 ? "#333" : "#aaa", width: 20, height: 16, fontSize: 10, cursor: i === 0 ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}
+                      style={{ background: "#1c1c1c", border: "1px solid #2a2a2a", borderRadius: 4, color: i === 0 ? "#333" : "#aaa", width: 20, height: 18, fontSize: 10, cursor: i === 0 ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", opacity: i === 0 ? 0.4 : 1 }}
                     >‹</button>
                     <button
                       type="button"
@@ -2213,7 +2224,7 @@ export function ProductEditor({
                         [all[i], all[i + 1]] = [all[i + 1], all[i]];
                         return { ...l, image: all[0] || null, images: all };
                       })}
-                      style={{ background: "#1c1c1c", border: "1px solid #2a2a2a", borderRadius: 4, color: i === arr.length - 1 ? "#333" : "#aaa", width: 20, height: 16, fontSize: 10, cursor: i === arr.length - 1 ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}
+                      style={{ background: "#1c1c1c", border: "1px solid #2a2a2a", borderRadius: 4, color: i === arr.length - 1 ? "#333" : "#aaa", width: 20, height: 18, fontSize: 10, cursor: i === arr.length - 1 ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", opacity: i === arr.length - 1 ? 0.4 : 1 }}
                     >›</button>
                   </div>
                 )}
