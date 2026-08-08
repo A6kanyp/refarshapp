@@ -143,6 +143,7 @@ export default function GlobalHeader({
   activeTab, setActiveTab,
   hasPending,
   onQuickRefresh, onHoldRefresh, onUndoRefresh, onResetFilters, onCancelPendingLocks, onCancelPendingUnlocks, refreshProblemTabs = [],
+  hasLockCandidates, hasUnlockCandidates, lockLogCount = 0, unlockLogCount = 0,
   workshopLinks, onLinksChange,
   onManagementPanel,
   basket = [],
@@ -375,47 +376,53 @@ export default function GlobalHeader({
                     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                       <div style={{ display: "flex", gap: 6 }}>
                         <button
-                          style={{ ...HS.holdRowBtn, background: "#1d3a24", color: "#5fd180" }}
+                          style={{ ...HS.holdRowBtn, background: "#3a1414", color: "#e08a8a" }}
                           onClick={() => { setShowHoldPopup(false); onHoldRefresh && onHoldRefresh("lock"); }}
                         >
+                          {hasLockCandidates && <span style={{ ...HS.pendingDot, top: 5, left: 6, right: "auto", width: 7, height: 7, background: "#e05a5a", animation: "none" }} />}
                           <Lock size={15} />
                           قفل
                         </button>
                         <button
-                          style={{ ...HS.holdRowBtn, background: "#3a2414", color: "#e0a35a" }}
+                          style={{ ...HS.holdRowBtn, background: "#12233a", color: "#7ec7e8" }}
                           onClick={() => { setShowHoldPopup(false); onHoldRefresh && onHoldRefresh("unlock"); }}
                         >
+                          {hasUnlockCandidates && <span style={{ ...HS.pendingDot, top: 5, left: 6, right: "auto", width: 7, height: 7, background: "#4aa3e0", animation: "none" }} />}
                           <Unlock size={15} />
                           آزاد
                         </button>
                       </div>
                       <div style={{ display: "flex", gap: 6 }}>
                         <button
-                          style={{ ...HS.holdRowBtn, background: "#1c1c1c", color: "#5fd180" }}
+                          style={{ ...HS.holdRowBtn, background: "#1c1c1c", color: "#e08a8a" }}
                           onClick={() => { setShowHoldPopup(false); onUndoRefresh && onUndoRefresh("lock"); }}
                         >
+                          {lockLogCount > 0 && <span style={{ ...HS.pendingDot, top: 5, left: 6, right: "auto", width: 7, height: 7, background: "#e0c23a", animation: "none" }} />}
                           <Lock size={15} />
                           Undo
                         </button>
                         <button
-                          style={{ ...HS.holdRowBtn, background: "#1c1c1c", color: "#e0a35a" }}
+                          style={{ ...HS.holdRowBtn, background: "#1c1c1c", color: "#7ec7e8" }}
                           onClick={() => { setShowHoldPopup(false); onUndoRefresh && onUndoRefresh("unlock"); }}
                         >
+                          {unlockLogCount > 0 && <span style={{ ...HS.pendingDot, top: 5, left: 6, right: "auto", width: 7, height: 7, background: "#e0c23a", animation: "none" }} />}
                           <Unlock size={15} />
                           Undo
                         </button>
                       </div>
                       <div style={{ display: "flex", gap: 6 }}>
                         <button
-                          style={{ ...HS.holdRowBtn, background: "#1c1c1c", color: "#5fd180" }}
-                          onClick={() => { setShowHoldPopup(false); onCancelPendingLocks && onCancelPendingLocks(); }}
+                          disabled={!hasLockCandidates}
+                          style={{ ...HS.holdRowBtn, background: "#1c1c1c", color: hasLockCandidates ? "#e08a8a" : "#555", opacity: hasLockCandidates ? 1 : 0.5, cursor: hasLockCandidates ? "pointer" : "default" }}
+                          onClick={() => { if (!hasLockCandidates) return; setShowHoldPopup(false); onCancelPendingLocks && onCancelPendingLocks(); }}
                         >
                           <Lock size={15} />
                           لغو
                         </button>
                         <button
-                          style={{ ...HS.holdRowBtn, background: "#1c1c1c", color: "#e0a35a" }}
-                          onClick={() => { setShowHoldPopup(false); onCancelPendingUnlocks && onCancelPendingUnlocks(); }}
+                          disabled={!hasUnlockCandidates}
+                          style={{ ...HS.holdRowBtn, background: "#1c1c1c", color: hasUnlockCandidates ? "#7ec7e8" : "#555", opacity: hasUnlockCandidates ? 1 : 0.5, cursor: hasUnlockCandidates ? "pointer" : "default" }}
+                          onClick={() => { if (!hasUnlockCandidates) return; setShowHoldPopup(false); onCancelPendingUnlocks && onCancelPendingUnlocks(); }}
                         >
                           <Unlock size={15} />
                           لغو
@@ -577,6 +584,7 @@ const HS = {
   holdRowBtn: {
     display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
     padding: "10px 6px", borderRadius: 10, cursor: "pointer", fontFamily: "inherit", fontSize: 10, border: "1px solid #2a2a2a", flex: 1,
+    position: "relative",
   },
   pendingDot: {
     position: "absolute",

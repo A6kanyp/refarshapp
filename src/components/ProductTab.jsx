@@ -85,7 +85,7 @@ function cycleSort(current) {
 }
 
 // ── دکمه سورت ──
-function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onToggleGrouped, groupByTypeActive, onGroupByType, onGroupByFabric }) {
+function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onToggleGrouped, groupByTypeActive, onGroupByType, onGroupByFabric, imageFilter, onSetImageFilter }) {
   const [showPopup, setShowPopup] = useState(false);
   const wrapRef = useRef(null);
   const baseOrder = String(sortOrder || "").replace(/_desc$/, "");
@@ -258,6 +258,37 @@ function SortButton({ sortOrder, setSortOrder, modes, style, groupedView, onTogg
             {mode.label && <span>{mode.label}</span>}
           </button>
         ))}
+        {onSetImageFilter && (
+          // آیتم جدید کاربر: بخش سوم پاپ‌آپ سورت کاتالوگ — فیلتر بر اساس وجود عکس
+          <>
+            <div style={{ borderTop: "1px solid #2a2a2a", margin: "4px 0" }} />
+            {[
+              { key: "all", label: "همه" },
+              { key: "withImage", label: "عکس‌دار" },
+              { key: "noImage", label: "بدون‌عکس" },
+            ].map((opt) => (
+              <button
+                key={opt.key}
+                style={{
+                  display: "block",
+                  width: "100%",
+                  padding: "8px 10px",
+                  background: (imageFilter || "all") === opt.key ? "#2a1414" : "transparent",
+                  border: "none",
+                  borderRadius: 4,
+                  color: (imageFilter || "all") === opt.key ? "#d88888" : "#ddd",
+                  fontSize: 11,
+                  fontFamily: "inherit",
+                  cursor: "pointer",
+                  textAlign: "right",
+                }}
+                onClick={() => onSetImageFilter(opt.key)}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </>
+        )}
       </FilterPopup>
     </div>
   );
@@ -3045,6 +3076,8 @@ export function CatalogTab({
   // (بر اساس نوع محصول)، با موجود بالا/ناموجود پایین توی هر دسته؛ یا «یکجا» (تخت)
   const [groupedView, setGroupedView] = useState(true);
   const toggleGroupedView = () => setGroupedView((v) => !v);
+  // آیتم جدید کاربر: فیلتر همه/عکس‌دار/بدون‌عکس توی همون پاپ‌آپ سورت کاتالوگ
+  const [imageFilter, setImageFilter] = useState("all");
 
   const confirmPurchase = (items, customerName, settled = true) => {
     setData((d) => {
@@ -3154,6 +3187,8 @@ export function CatalogTab({
         if (p.isDraft) return false;
         if (p.hiddenFromCatalog) return false;
         if ((typeFilter || []).length > 0 && !(typeFilter || []).includes(p.productTypeId) && !((typeFilter || []).includes("__calligraphy__") && p.isCalligraphy)) return false;
+        if (imageFilter === "withImage" && !p.image) return false;
+        if (imageFilter === "noImage" && p.image) return false;
         if (search.trim() && !p.name?.includes(search) && !String(p.code).includes(search) && !(p.dims && p.dims.includes(search))) return false;
         if (statusFilter.length > 0 && !statusFilter.includes(p.status)) return false;
         let locMatch = false;
@@ -3166,7 +3201,7 @@ export function CatalogTab({
         return locMatch;
       })
       .sort(sortFn);
-  }, [products, search, statusFilter, selectedWarehouse, selectedGalleries, sortOrder]);
+  }, [products, search, statusFilter, selectedWarehouse, selectedGalleries, sortOrder, typeFilter, imageFilter]);
 
   // آیتم جدید: دسته‌بندی بر اساس نوع محصول، با موجود(available) بالا و ناموجود(sold) پایین توی هر دسته
   const groupedCatalog = useMemo(() => {
@@ -3444,6 +3479,8 @@ export function CatalogTab({
             style={{}}
             groupedView={groupedView}
             onToggleGrouped={toggleGroupedView}
+            imageFilter={imageFilter}
+            onSetImageFilter={setImageFilter}
           />
         </div>
       </div>

@@ -846,7 +846,8 @@ export default function InvoicesTab({
                         ) : (
                           <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
                             <input
-                              autoFocus placeholder="جستجوی محصول موجود..."
+                              placeholder="جستجوی محصول موجود..."
+                              onFocus={(e) => e.target.select()}
                               value={addItemQuery} onChange={(e) => setAddItemQuery(e.target.value)}
                               style={{ ...S.input, width: "100%", height: 30 }}
                             />
@@ -878,7 +879,7 @@ export default function InvoicesTab({
 
                     {isExpanded && editingId !== inv.id && (
                       <div style={{ padding: "10px 12px", background: "#0a0a0a", borderTop: "1px solid #1e1e1e" }}>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 10 }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
                           {inv.items.map(p => (
                             <div key={p.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#888", paddingBottom: 4, borderBottom: "1px dashed #151515" }}>
                               <span>#{fmtCode(p.code)} {p.name}</span>

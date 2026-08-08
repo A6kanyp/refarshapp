@@ -1431,7 +1431,6 @@ function AllInvoicesModal({ invoices, onClose, setData, notify, customers, onVie
                             {addingItemInvId === inv.id ? (
                               <div style={{ marginBottom: 10, position: "relative" }} onClick={(e) => e.stopPropagation()}>
                                 <input onFocus={(e) => e.target.select()}
-                                  autoFocus
                                   style={{ background: "#1c1c1c", color: "#ddd", padding: "6px 10px", fontSize: 10.5, border: "1px solid #2a2a2a", borderRadius: 6, width: "100%", boxSizing: "border-box", margin: 0, fontFamily: "inherit", height: 30 }}
                                   placeholder="جستجوی نام یا کد محصول موجود..."
                                   value={addItemQuery}

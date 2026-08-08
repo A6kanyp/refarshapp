@@ -28,6 +28,47 @@ function GalleryProductThumb({ filename, size = 30 }) {
   return <img src={src} alt="" style={{ width: size, height: size, borderRadius: 5, objectFit: "cover", flexShrink: 0 }} loading="lazy" />;
 }
 
+// آیتم جدید کاربر: کلیک روی محصول توی لیست باز‌شده‌ی تب گالری — اگه عکس داشت
+// بصورت تک‌صفحه‌ای (عکس بزرگ + مشخصات زیرش، شبیه بزرگ‌نمایی کاتالوگ) باز بشه؛
+// اگه عکس نداشت فقط مشخصات بالای پاپ‌آپ بیاد و بنویسه «بدون عکس»
+function GalleryProductQuickView({ product: p, onClose }) {
+  const isLegacyInline = !!p.image && (p.image.startsWith("data:") || p.image.startsWith("http") || p.image.startsWith("/"));
+  const resolvedSrc = useResolvedImageSrc(isLegacyInline ? null : p.image, IMAGE_CATEGORIES.PRODUCT);
+  const src = isLegacyInline ? p.image : resolvedSrc;
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "#000", zIndex: 300, display: "flex", flexDirection: "column" }} onClick={onClose}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px" }} onClick={(e) => e.stopPropagation()}>
+        <span style={{ fontSize: 14, color: "#F5F0EB", fontWeight: 700 }}>#{fmtCode(p.code)} · {p.name}</span>
+        <button style={{ background: "transparent", border: "none", color: "#888", cursor: "pointer" }} onClick={onClose}><X size={20} /></button>
+      </div>
+      <div style={{ flex: 1, overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+        {p.image ? (
+          src ? (
+            <img src={src} alt="" style={{ width: "100%", display: "block" }} />
+          ) : (
+            <div style={{ width: "100%", aspectRatio: "1/1", display: "flex", alignItems: "center", justifyContent: "center", color: "#444", fontSize: 12 }}>در حال بارگذاری...</div>
+          )
+        ) : (
+          <div style={{ width: "100%", padding: "30px 0", display: "flex", alignItems: "center", justifyContent: "center", color: "#555", fontSize: 12, borderBottom: "1px solid #1a1a1a" }}>
+            بدون عکس
+          </div>
+        )}
+        <div style={{ padding: 16 }}>
+          <div style={{ fontSize: 11, color: "#888", marginBottom: 6 }}>ابعاد: {formatProductDims(p)}{qtySuffix(p)}</div>
+          <div style={{ fontSize: 11, color: "#888", marginBottom: 6 }}>وضعیت: {p.status === "sold" ? (p.settled ? "فروخته‌شده - تسویه شده" : "فروخته‌شده - تسویه‌نشده") : "موجود"}</div>
+          <div style={{ fontSize: 14, color: "#F5F0EB", fontWeight: 600, marginBottom: 6 }}>{fmt(toNum(p.discountedPrice ?? p.salePrice))} تومان</div>
+          {p.description && (
+            <>
+              <div style={{ height: 10 }} />
+              <div style={{ fontSize: 11.5, color: "#ccc", whiteSpace: "pre-wrap", lineHeight: 1.65 }}>{p.description}</div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // raw window.confirm()/confirm() is unreliable inside the mobile app webview,
 // so invoice-related confirmations use this in-app dialog instead.
 function ConfirmDialog({ title, message, confirmLabel = "تایید", onConfirm, onCancel }) {
@@ -734,6 +775,7 @@ function CustomerCard({
   onToggle,
 }) {
   const [soldPromptFor, setSoldPromptFor] = useState(null);
+  const [quickViewProduct, setQuickViewProduct] = useState(null);
   const [showColorPick, setShowColorPick] = useState(false);
   const [showPrint, setShowPrint] = useState(false);
   
@@ -1008,9 +1050,11 @@ function CustomerCard({
                 <div style={{ fontSize: 9.5, color: "#f2c94c", margin: "10px 0 6px", fontWeight: 600 }}>موجود ({held.length})</div>
                 {held.map((p) => (
                   <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderBottom: "1px solid #1a1a1a" }}>
-                    <GalleryProductThumb filename={p.image} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 11, color: "#ddd" }}>#{fmtCode(p.code)} {p.name}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0, cursor: "pointer" }} onClick={() => setQuickViewProduct(p)}>
+                      <GalleryProductThumb filename={p.image} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 11, color: "#ddd" }}>#{fmtCode(p.code)} {p.name}</div>
+                      </div>
                     </div>
                     {renderPriceCell(p, "#F5F0EB")}
                     <button
@@ -1059,7 +1103,7 @@ function CustomerCard({
                 <div style={{ fontSize: 9.5, color: "#e08a8a", margin: "10px 0 6px", fontWeight: 600 }}>تسویه نشده ({unsettled.length})</div>
                 {unsettled.map((p) => (
                   <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid #1a1a1a" }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ flex: 1, minWidth: 0, cursor: "pointer" }} onClick={() => setQuickViewProduct(p)}>
                       <div style={{ fontSize: 11, color: "#e08a8a" }}>#{fmtCode(p.code)} {p.name}</div>
                       {p.saleDate && <div style={{ fontSize: 9, color: "#555" }}>{fmtDate(p.saleDate)}</div>}
                     </div>
@@ -1110,7 +1154,7 @@ function CustomerCard({
                 <div style={{ fontSize: 9.5, color: "#5fd180", margin: "10px 0 6px", fontWeight: 600 }}>تسویه شده ({settled.length})</div>
                 {settled.map((p) => (
                   <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid #1a1a1a" }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ flex: 1, minWidth: 0, cursor: "pointer" }} onClick={() => setQuickViewProduct(p)}>
                       <div style={{ fontSize: 11, color: "#ddd" }}>#{fmtCode(p.code)} {p.name}</div>
                     </div>
                     {renderPriceCell(p, "#F5F0EB")}
@@ -1170,6 +1214,10 @@ function CustomerCard({
           onConfirm={(r) => handleMarkSold(soldPromptFor, r)}
           onCancel={() => setSoldPromptFor(null)}
         />
+      )}
+
+      {quickViewProduct && (
+        <GalleryProductQuickView product={quickViewProduct} onClose={() => setQuickViewProduct(null)} />
       )}
 
       {showInvoices && (
