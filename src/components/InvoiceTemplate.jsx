@@ -381,7 +381,7 @@ else {
                 <InvoiceItemImage filename={item.image} />
               </td>
               <td style={{ textAlign: "right" }}>
-                <div style={{ fontWeight: "700", color: "#111", fontSize: "12px" }}>{item.name}</div>
+                <div style={{ fontWeight: "700", color: "#111", fontSize: "12px", wordBreak: "keep-all" }}>{item.name}</div>
                 <div style={{ fontSize: "10px", color: "#666", marginTop: "3px" }}>شناسه کد کالا: {item.code || "—"}</div>
               </td>
               <td style={{ textAlign: "center", fontWeight: "500", whiteSpace: "nowrap", wordBreak: "keep-all" }}>{item.dims || "—"}</td>
@@ -390,7 +390,7 @@ else {
                   <span style={{ textDecoration: "line-through", color: "#999", fontSize: "11px" }}>{fmt(item.originalPrice)} ت</span>
                 ) : item.discountPct > 0 && uniformDiscountPct == null ? (
                   <div style={{ textAlign: "left" }}>
-                    <div style={{ textDecoration: "line-through", color: "#999", fontSize: "10px", fontWeight: "normal", lineHeight: 1.6 }}>{fmt(item.originalPrice)}</div>
+                    <div style={{ textDecoration: "line-through", color: "#999", fontSize: "10px", fontWeight: "normal", lineHeight: 1.2, display: "inline-block" }}>{fmt(item.originalPrice)}</div>
                     <div>
                       <span style={{ background: "#e3f2fd", border: "1px solid #64b5f6", borderRadius: "4px", padding: "1px 7px", lineHeight: 1.35, marginLeft: "6px", display: "inline-block" }}>
                         <span style={{ color: "#1565c0", fontSize: "8.5px", fontWeight: "700" }}>٪{toPersianDigits(item.discountPct)}</span>
@@ -404,15 +404,15 @@ else {
               </td>
               <td style={{ textAlign: "center", verticalAlign: "middle" }}>
                 {item.discountPct >= 100 ? (
-                  <span style={{ display: "inline-block", background: "#fce4ec", color: "#c2185b", border: "1px solid #c2185b", borderRadius: "4px", padding: "2px 7px", fontSize: "10px", fontWeight: "700" }}>
+                  <span style={{ display: "inline-block", textAlign: "center", background: "#fce4ec", color: "#c2185b", border: "1px solid #c2185b", borderRadius: "4px", padding: "2px 7px", fontSize: "10px", fontWeight: "700" }}>
                     هدیه {"\u{1F381}"}
                   </span>
                 ) : item.isAvailableInGallery ? (
-                  <span style={{ color: "#666", fontSize: "10px", fontWeight: "bold" }}>موجود در گالری</span>
+                  <span style={{ color: "#666", fontSize: "10px", fontWeight: "bold", textAlign: "center" }}>موجود در گالری</span>
                 ) : item.isSettled ? (
-                  <span className="badge-settled" style={{ display: "inline-block" }}>تسویه شده</span>
+                  <span className="badge-settled" style={{ display: "inline-block", textAlign: "center" }}>تسویه شده</span>
                 ) : (
-                  <span className="badge-pending" style={{ display: "inline-block" }}>بدهکار</span>
+                  <span className="badge-pending" style={{ display: "inline-block", textAlign: "center" }}>بدهکار</span>
                 )}
               </td>
             </tr>

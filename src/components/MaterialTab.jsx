@@ -6,7 +6,7 @@ import {
   Plus, Search, Edit3, Trash2, ChevronDown, ChevronUp,
   Eye, EyeOff, Lock, Unlock, X, RotateCcw, Package, CheckCircle2, Clock, ShoppingBag, Tag
 } from "lucide-react";
-import { toNum, fmt, fmtDate, todayISO, getProductArea, formatProductDims } from "../mathCore";
+import { toNum, fmt, fmtCode, fmtDate, todayISO, getProductArea, formatProductDims } from "../mathCore";
 import { emptyMaterial, emptyBatch, emptyStick, uid } from "../dataModels";
 import { formatPriceInput, parsePriceInput } from "../utils/formatters";
 import { pushBackHandler } from "../utils/backButton";
@@ -880,7 +880,10 @@ export function BulkApplyMaterialPage({ material, products = [], allMaterials = 
                       const isQueued = queuedReleaseIds.has(releaseKey);
                       return (
                         <div key={product.id} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, opacity: isQueued ? 0.6 : 1 }}>
-                          <span style={{ flex: 1, fontSize: 10.5, color: isQueued ? "#5b9bd5" : "#ddd", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: isQueued ? "line-through" : "none" }}>{product.name}</span>
+                          <span style={{ flex: 1, fontSize: 10.5, color: isQueued ? "#5b9bd5" : "#ddd", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: isQueued ? "line-through" : "none" }}>
+                            <span style={{ color: "#8B1A1A" }}>#{fmtCode(product.code)}</span> {product.name}
+                            {product.dims && <span style={{ color: "#666", fontSize: 9 }}> ({formatProductDims(product)})</span>}
+                          </span>
                           {isQueued ? (
                             <span style={{ fontSize: 9, color: "#5b9bd5" }}>در صف آزادسازی</span>
                           ) : (
